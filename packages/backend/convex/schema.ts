@@ -196,4 +196,9 @@ export default defineSchema({
   })
     .index("by_org", ["clerkOrgId"])
     .index("by_stripe_account", ["stripeAccountId"]),
+
+  waitlist: defineTable({
+    email: v.string(),
+    createdAt: v.number(),
+  }).index("by_email", ["email"]),
 });
