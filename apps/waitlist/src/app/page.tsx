@@ -1,7 +1,7 @@
 "use client";
 
-import { api } from "@gearboxe-market/convex/_generated/api";
 import { useMutation } from "convex/react";
+import { makeFunctionReference } from "convex/server";
 import {
   ArrowRight,
   Calendar,
@@ -23,7 +23,13 @@ function WaitlistForm({ variant = "light" }: { variant?: "light" | "dark" }) {
   const [status, setStatus] = useState<
     "idle" | "submitting" | "success" | "already" | "error"
   >("idle");
-  const joinWaitlist = useMutation(api.waitlist.join);
+  const joinWaitlist = useMutation(
+    makeFunctionReference<
+      "mutation",
+      { email: string },
+      { alreadyJoined: boolean }
+    >("waitlist:join")
+  );
 
   async function handleSubmit(e: FormEvent) {
     e.preventDefault();
