@@ -4,6 +4,7 @@
   "private": true,
   "scripts": {
     "dev": "next dev --port 3002",
+    "prebuild": "cd ../../packages/backend && npx convex codegen",
     "build": "next build",
     "start": "next start",
     "lint": "biome lint --write .",
