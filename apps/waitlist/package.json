@@ -4,7 +4,6 @@
   "private": true,
   "scripts": {
     "dev": "next dev --port 3002",
-    "prebuild": "cd ../../packages/backend && npx convex codegen",
     "build": "next build",
     "start": "next start",
     "lint": "biome lint --write .",
@@ -13,8 +12,6 @@
     "clean": "rm -rf .next"
   },
   "dependencies": {
-    "@gearboxe-market/convex": "workspace:*",
-    "@gearboxe-market/ui": "workspace:*",
     "convex": "^1.31.1",
     "lucide-react": "^0.545.0",
     "next": "16.1.3",
