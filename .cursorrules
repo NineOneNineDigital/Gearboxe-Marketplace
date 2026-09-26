@@ -34,11 +34,12 @@ This is a Next.js 15 car marketplace application with:
 
 ### File Organization
 
-- Components go in `/components/ui/` for reusable UI components
-- Page components go in `/src/app/` following App Router structure
-- Custom hooks go in `/hooks/`
-- Utility functions go in `/lib/`
-- Convex functions go in `/convex/`
+- Marketplace components go in `/apps/web/components/ui/` for reusable UI components
+- Marketplace pages go in `/apps/web/src/app/` following App Router structure
+- Internal dashboard pages go in `/apps/dashboard/src/app/`
+- Marketplace hooks go in `/apps/web/hooks/`
+- Marketplace utilities go in `/apps/web/lib/`
+- Convex functions go in `/apps/web/convex/`
 - Use kebab-case for file names, PascalCase for component names
 
 ### Component Patterns

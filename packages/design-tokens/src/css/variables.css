@@ -1,0 +1,109 @@
+/**
+ * CSS Custom Properties for Gearboxe Design System
+ *
+ * Brand: Gearboxe 2026 — "Dark by default." Light sits on Bone (#F4F1EA);
+ * dark grounds on Midnight (#0C0E12). HSL values are provided without the
+ * hsl() wrapper for Tailwind compatibility: use as hsl(var(--background)).
+ */
+
+:root {
+  /* Semantic colors — Light theme (Bone canvas) */
+  --background: 42 26% 94%; /* Bone #F4F1EA */
+  --foreground: 220 20% 6%; /* Midnight #0C0E12 */
+
+  --card: 0 0% 100%;
+  --card-foreground: 220 20% 6%;
+
+  --popover: 0 0% 100%;
+  --popover-foreground: 220 20% 6%;
+
+  --primary: 210 100% 50%; /* Torque #007FFF */
+  --primary-foreground: 0 0% 100%;
+
+  --secondary: 42 18% 90%;
+  --secondary-foreground: 220 20% 6%;
+
+  --muted: 42 18% 90%;
+  --muted-foreground: 216 9% 36%;
+
+  --accent: 42 14% 86%;
+  --accent-foreground: 220 20% 6%;
+
+  --destructive: 0 84% 60%;
+  --destructive-foreground: 0 0% 100%;
+
+  --success: 160 84% 39%; /* Emerald #10B981 */
+  --success-foreground: 0 0% 100%;
+
+  --warning: 44 89% 61%; /* Signal #F4C542 */
+  --warning-foreground: 220 20% 6%;
+
+  --border: 42 12% 84%;
+  --input: 42 12% 84%;
+  --ring: 210 100% 50%;
+
+  /* Brand palette — Gearboxe 2026 */
+  --midnight: 220 20% 6%; /* #0C0E12 */
+  --torque: 210 100% 50%; /* #007FFF */
+  --bone: 42 26% 94%; /* #F4F1EA */
+  --signal: 44 89% 61%; /* #F4C542 */
+  --gunmetal: 218 11% 19%; /* #2B2F36 */
+  --chrome: 213 8% 80%; /* #C8CCD1 */
+  --coral: 8 100% 70%; /* #FF7A66 — status: due */
+  --mint: 148 58% 52%; /* #3CCB7F — status: done */
+
+  /* Border radius */
+  --radius: 0.75rem;
+}
+
+.dark {
+  /* Semantic colors — Dark theme (Midnight chassis) */
+  --background: 220 20% 6%; /* Midnight #0C0E12 */
+  --foreground: 42 26% 94%; /* Bone #F4F1EA */
+
+  --card: 218 11% 11%; /* elevated one step above Midnight */
+  --card-foreground: 42 26% 94%;
+
+  --popover: 218 11% 11%;
+  --popover-foreground: 42 26% 94%;
+
+  --primary: 210 100% 50%; /* Torque #007FFF */
+  --primary-foreground: 0 0% 100%;
+
+  --secondary: 218 11% 19%; /* Gunmetal #2B2F36 */
+  --secondary-foreground: 42 26% 94%;
+
+  --muted: 218 11% 14%;
+  --muted-foreground: 213 8% 65%;
+
+  --accent: 218 11% 14%;
+  --accent-foreground: 42 26% 94%;
+
+  --destructive: 0 84% 60%;
+  --destructive-foreground: 0 0% 100%;
+
+  --success: 160 84% 39%;
+  --success-foreground: 0 0% 100%;
+
+  --warning: 44 89% 61%; /* Signal #F4C542 */
+  --warning-foreground: 220 20% 6%;
+
+  --border: 218 11% 16%;
+  --input: 218 11% 16%;
+  --ring: 210 100% 50%;
+}
+
+/*
+ * Accessibility: Respect user's motion preferences
+ * Disable animations for users who prefer reduced motion
+ */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}

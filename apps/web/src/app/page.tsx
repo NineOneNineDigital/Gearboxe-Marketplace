@@ -5,6 +5,7 @@ import { EventCard } from "@/components/ui/event-card";
 import { Footer } from "@/components/ui/footer";
 import { Navbar } from "@/components/ui/navbar";
 import { VehicleCard } from "@/components/ui/vehicle-card";
+import { vehicleResults } from "@/lib/vehicle-results";
 import { api } from "@/convex/_generated/api";
 import { useConvexAuth, useQuery } from "convex/react";
 import { Calendar, Car, Star, Users } from "lucide-react";
@@ -13,9 +14,9 @@ import Link from "next/link";
 export default function HomePage() {
   const { isAuthenticated } = useConvexAuth();
   const upcomingEvents = useQuery(api.events.getUpcomingEvents);
-  const featuredVehicles = useQuery(api.vehicles.getVehicles, {
-    status: "approved",
-  });
+  const featuredVehicles = vehicleResults(
+    useQuery(api.vehicles.getVehicles, { status: "approved" })
+  );
 
   // Get the next upcoming event
   const nextEvent = upcomingEvents?.[0];

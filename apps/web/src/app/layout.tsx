@@ -1,6 +1,7 @@
 import { ToastContainer } from "@/components/ui/toast-container";
 import { ConvexClientProvider } from "@/lib/convex-provider";
 import { ClerkProvider } from "@clerk/nextjs";
+import "@workspace/design-tokens/css";
 import type { Metadata } from "next";
 import "./global.css";
 

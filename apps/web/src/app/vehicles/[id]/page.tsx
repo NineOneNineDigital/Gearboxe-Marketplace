@@ -6,6 +6,7 @@ import { Navbar } from "@/components/ui/navbar";
 import { api } from "@/convex/_generated/api";
 import { useCurrentUser } from "@/hooks/useCurrentUser";
 import { useToast } from "@/hooks/useToast";
+import { vehicleResults } from "@/lib/vehicle-results";
 import { useAuth } from "@clerk/nextjs";
 import { useConvexAuth, useMutation, useQuery } from "convex/react";
 import {
@@ -62,10 +63,12 @@ export default function VehiclePage({ params }: VehiclePageProps) {
     api.registrations.getRegistrationByVehicle,
     vehicle?._id ? { vehicleId: vehicle._id as any } : "skip"
   );
-  const relatedVehicles = useQuery(api.vehicles.getVehicles, {
-    status: "approved",
-    make: vehicle?.make,
-  });
+  const relatedVehicles = vehicleResults(
+    useQuery(api.vehicles.getVehicles, {
+      status: "approved",
+      make: vehicle?.make,
+    })
+  );
   const addFavorite = useMutation(api.favorites.addFavorite);
   const removeFavorite = useMutation(api.favorites.removeFavorite);
   const isFavoritedQuery = useQuery(

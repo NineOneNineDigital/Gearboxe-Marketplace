@@ -5,6 +5,7 @@ import { Footer } from "@/components/ui/footer";
 import { Navbar } from "@/components/ui/navbar";
 import { VehicleCard } from "@/components/ui/vehicle-card";
 import { VehicleFilters } from "@/components/ui/vehicle-filters";
+import { vehicleResults } from "@/lib/vehicle-results";
 import { api } from "@/convex/_generated/api";
 import { useQuery } from "convex/react";
 import { Car, Grid, List } from "lucide-react";
@@ -21,10 +22,12 @@ export default function VehiclesPage() {
   });
   const [viewMode, setViewMode] = useState<"grid" | "list">("grid");
 
-  const vehicles = useQuery(api.vehicles.getVehicles, {
-    status: "approved",
-    ...filters,
-  });
+  const vehicles = vehicleResults(
+    useQuery(api.vehicles.getVehicles, {
+      status: "approved",
+      ...filters,
+    })
+  );
 
   const handleFiltersChange = (newFilters: typeof filters) => {
     setFilters(newFilters);

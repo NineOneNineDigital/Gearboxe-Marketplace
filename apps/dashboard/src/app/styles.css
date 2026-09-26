@@ -1,0 +1,56 @@
+:root {
+  color-scheme: light;
+  --ink: hsl(var(--foreground));
+  --dashboard-muted: hsl(var(--muted-foreground));
+  --line: hsl(var(--border));
+  --canvas: hsl(var(--background));
+  --paper: hsl(var(--card));
+  --dashboard-accent: hsl(var(--torque));
+  --deep: hsl(var(--midnight));
+}
+
+* { box-sizing: border-box; }
+html { scroll-behavior: smooth; }
+body { margin: 0; background: var(--canvas); color: var(--ink); font-family: Arial, Helvetica, sans-serif; }
+a { color: inherit; text-decoration: none; }
+.shell { display: grid; min-height: 100vh; grid-template-columns: 240px 1fr; }
+.sidebar { background: var(--deep); color: #fff; display: flex; flex-direction: column; padding: 30px 22px; }
+.brand { display: flex; align-items: center; gap: 12px; font-size: 18px; font-weight: 700; }
+.brand small { display: block; color: #b7c9bf; font-size: 10px; letter-spacing: .18em; margin-top: 2px; text-transform: uppercase; }
+.brandMark { align-items: center; background: var(--dashboard-accent); border-radius: 10px; color: var(--deep); display: flex; height: 38px; justify-content: center; width: 38px; }
+nav { display: grid; gap: 6px; margin-top: 64px; }
+nav a { border-radius: 8px; color: #bfd0c6; font-size: 14px; padding: 11px 13px; }
+nav a:hover, nav a.active { background: rgba(255, 255, 255, .1); color: #fff; }
+.environment { align-items: center; color: #aac0b4; display: flex; font-size: 11px; gap: 8px; margin: auto 0 0; }
+.environment span { background: var(--dashboard-accent); border-radius: 50%; height: 7px; width: 7px; }
+main { padding: 46px clamp(28px, 5vw, 72px) 64px; }
+header { align-items: center; display: flex; justify-content: space-between; }
+.eyebrow { color: #718078; font-size: 11px; font-weight: 700; letter-spacing: .16em; margin: 0 0 10px; text-transform: uppercase; }
+h1 { font-family: Georgia, serif; font-size: clamp(40px, 5vw, 64px); font-weight: 400; letter-spacing: -.04em; line-height: 1; margin: 0; }
+.subtitle { color: var(--dashboard-muted); margin: 14px 0 0; }
+.avatar { align-items: center; background: var(--ink); border-radius: 50%; color: white; display: flex; font-size: 12px; font-weight: 700; height: 44px; justify-content: center; width: 44px; }
+.metrics { display: grid; gap: 16px; grid-template-columns: repeat(3, 1fr); margin-top: 48px; }
+.metricCard, .workspace { background: var(--paper); border: 1px solid var(--line); border-radius: 16px; }
+.metricCard { min-height: 160px; padding: 24px; }
+.metricCard p { color: var(--dashboard-muted); font-size: 13px; margin: 0; }
+.metricCard strong { display: block; font-family: Georgia, serif; font-size: 44px; font-weight: 400; margin: 22px 0 6px; }
+.metricCard span { color: #8a958f; font-size: 11px; }
+.workspace { margin-top: 18px; padding: 30px; }
+.sectionHeading { align-items: center; display: flex; justify-content: space-between; }
+h2 { font-family: Georgia, serif; font-size: 30px; font-weight: 400; margin: 0; }
+.status { background: #edf7d8; border: 1px solid #d8e9b4; border-radius: 99px; color: #405026; font-size: 11px; padding: 7px 11px; }
+.toolGrid { display: grid; gap: 12px; grid-template-columns: repeat(2, 1fr); margin-top: 28px; }
+.toolCard { border: 1px solid var(--line); border-radius: 12px; padding: 22px; }
+.toolCard:hover { border-color: #9bad9f; }
+.toolIndex { color: #91a098; font-family: monospace; font-size: 11px; }
+.toolCard h3 { font-size: 17px; margin: 22px 0 8px; }
+.toolCard p { color: var(--dashboard-muted); font-size: 13px; line-height: 1.55; margin: 0 0 20px; }
+.comingSoon { color: #7c8981; font-size: 10px; letter-spacing: .08em; text-transform: uppercase; }
+
+@media (max-width: 800px) {
+  .shell { grid-template-columns: 1fr; }
+  .sidebar { padding: 18px 22px; }
+  .sidebar nav, .environment { display: none; }
+  main { padding-top: 32px; }
+  .metrics, .toolGrid { grid-template-columns: 1fr; }
+}
