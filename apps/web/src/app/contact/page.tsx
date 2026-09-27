@@ -108,7 +108,7 @@ export default function ContactPage() {
   };
 
   return (
-    <div className="min-h-screen bg-white flex flex-col">
+    <div className="market-page min-h-screen flex flex-col">
       <Navbar />
 
       {/* Main Content */}

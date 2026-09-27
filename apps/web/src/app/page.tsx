@@ -3,12 +3,14 @@
 import { Button } from "@/components/ui/button";
 import { EventCard } from "@/components/ui/event-card";
 import { Footer } from "@/components/ui/footer";
+import { MarketplaceSearch } from "@/components/ui/marketplace-search";
 import { Navbar } from "@/components/ui/navbar";
 import { VehicleCard } from "@/components/ui/vehicle-card";
-import { vehicleResults } from "@/lib/vehicle-results";
 import { api } from "@/convex/_generated/api";
+import { vehicleResults } from "@/lib/vehicle-results";
 import { useConvexAuth, useQuery } from "convex/react";
-import { Calendar, Car, Star, Users } from "lucide-react";
+import { ArrowDown, ArrowUpRight, Calendar, Car, FileCheck2 } from "lucide-react";
+import Image from "next/image";
 import Link from "next/link";
 
 export default function HomePage() {
@@ -18,321 +20,164 @@ export default function HomePage() {
     useQuery(api.vehicles.getVehicles, { status: "approved" })
   );
 
-  // Get the next upcoming event
+  const displayVehicles = featuredVehicles?.slice(0, 6) ?? [];
+  const heroVehicle = displayVehicles[0];
   const nextEvent = upcomingEvents?.[0];
 
-  // Get featured vehicles (first 6 approved vehicles)
-  const displayVehicles = featuredVehicles?.slice(0, 6) || [];
-
   return (
-    <div className="min-h-screen bg-white flex flex-col">
+    <div className="market-page flex min-h-screen flex-col">
       <Navbar />
 
-      {/* Main Content */}
-      <div className="flex-1">
-        {/* Hero Section */}
-        <section className="relative bg-gradient-to-br from-primary/20 via-primary/10 to-primary/5 py-24 overflow-hidden">
-          {/* Background decorative elements */}
-          <div className="absolute inset-0 bg-grid-pattern opacity-5"></div>
-          <div className="absolute top-10 left-10 w-72 h-72 bg-primary/10 rounded-full blur-3xl"></div>
-          <div className="absolute bottom-10 right-10 w-96 h-96 bg-primary/5 rounded-full blur-3xl"></div>
+      <main className="flex-1">
+        <section className="relative isolate overflow-hidden bg-[hsl(var(--midnight))] text-[hsl(var(--bone))]">
+          {heroVehicle?.photos[0] && (
+            <Image
+              src={heroVehicle.photos[0]}
+              alt=""
+              fill
+              priority
+              sizes="100vw"
+              className="-z-30 object-cover object-center opacity-70 sm:object-[68%_center]"
+            />
+          )}
+          <div className="absolute inset-0 -z-20 bg-[linear-gradient(90deg,hsl(var(--midnight))_0%,hsl(var(--midnight)/0.96)_30%,hsl(var(--midnight)/0.46)_65%,hsl(var(--midnight)/0.82)_100%)]" />
+          <div className="absolute inset-0 -z-10 bg-[linear-gradient(180deg,transparent_50%,hsl(var(--midnight))_100%)]" />
 
-          <div className="relative max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-            <div className="text-center">
-              <div className="inline-flex items-center px-4 py-2 rounded-full bg-primary/10 text-primary text-sm font-medium mb-8">
-                <Car className="w-4 h-4 mr-2" />
-                Trusted by car enthusiasts nationwide
-              </div>
-
-              <h1 className="text-5xl md:text-7xl font-bold text-gray-900 mb-6 leading-tight">
-                Find Your Next
-                <span className="text-transparent bg-clip-text bg-gradient-to-r from-primary to-primary/70 block">
-                  Dream Car
-                </span>
+          <div className="market-shell grid min-h-[590px] content-center gap-10 py-14 sm:py-20 lg:grid-cols-[1fr_0.92fr] lg:items-end">
+            <div className="max-w-2xl">
+              <p className="market-eyebrow text-[hsl(var(--chrome))]">Private-party auto marketplace</p>
+              <h1 className="mt-6 text-5xl font-semibold leading-[1.02] tracking-[-0.06em] text-white sm:text-7xl">
+                Cars from people who <span className="text-primary">care.</span>
               </h1>
-
-              <p className="text-xl text-gray-600 mb-10 max-w-3xl mx-auto leading-relaxed">
-                Connect with local car sellers and buyers at our exclusive
-                monthly popup events. Browse premium vehicles, attend curated
-                events, and find the perfect car that matches your lifestyle.
+              <p className="mt-6 max-w-xl text-base leading-8 text-[hsl(var(--chrome))]">
+                Shop owner-listed vehicles, ask questions directly, and meet
+                the car in person through the Gearboxe community.
               </p>
-
-              <div className="flex flex-col sm:flex-row gap-4 justify-center mb-12">
-                <Button
-                  asChild
-                  size="lg"
-                  className="text-lg px-10 py-4 shadow-lg hover:shadow-xl transition-all duration-300 text-white"
-                >
-                  <Link href="/vehicles" className="flex items-center">
-                    <Car className="w-5 h-5 mr-2" />
-                    Browse Vehicles
-                  </Link>
-                </Button>
-                <Button
-                  asChild
-                  variant="outline"
-                  size="lg"
-                  className="text-lg px-10 py-4 border-2 hover:bg-primary hover:text-white transition-all duration-300"
-                >
-                  <Link href="/events" className="flex items-center">
-                    <Calendar className="w-5 h-5 mr-2" />
-                    View Events
-                  </Link>
-                </Button>
+              <div className="mt-7 flex flex-wrap items-center gap-4 text-xs">
+                <Link href="/vehicles" className="inline-flex items-center gap-2 font-semibold text-white hover:text-primary">
+                  View all inventory <ArrowUpRight className="h-4 w-4" />
+                </Link>
+                <span className="h-4 w-px bg-white/20" />
+                <Link href={isAuthenticated ? "/myAccount/new-listing" : "/sign-up"} className="font-semibold text-[hsl(var(--chrome))] hover:text-white">
+                  Sell your vehicle
+                </Link>
               </div>
+            </div>
 
-              {/* Trust indicators */}
-              <div className="flex flex-wrap justify-center items-center gap-8 text-sm text-gray-500">
-                <div className="flex items-center">
-                  <Star className="w-4 h-4 text-yellow-500 mr-1" />
-                  <span>4.9/5 Rating</span>
-                </div>
-                <div className="flex items-center">
-                  <Users className="w-4 h-4 text-primary mr-1" />
-                  <span>1,200+ Members</span>
-                </div>
-                <div className="flex items-center">
-                  <Calendar className="w-4 h-4 text-primary mr-1" />
-                  <span>Monthly Events</span>
-                </div>
+            <div className="lg:pb-2">
+              <div className="mb-3 flex items-center justify-between px-1">
+                <p className="font-mono text-[9px] font-semibold uppercase tracking-[0.14em] text-[hsl(var(--chrome))]">Search the marketplace</p>
+                {featuredVehicles && <span className="text-xs text-[hsl(var(--chrome))]">{featuredVehicles.length} available</span>}
               </div>
+              <MarketplaceSearch />
+              {heroVehicle && (
+                <Link href={`/vehicles/${heroVehicle._id}`} className="mt-4 flex items-center justify-between border-t border-white/15 px-1 pt-4 text-xs text-[hsl(var(--chrome))] hover:text-white">
+                  <span><span className="mr-2 text-primary">Featured</span>{heroVehicle.year} {heroVehicle.make} {heroVehicle.model}</span>
+                  <ArrowUpRight className="h-4 w-4" />
+                </Link>
+              )}
             </div>
           </div>
+          <div className="market-ruler absolute inset-x-0 bottom-0 opacity-60" />
         </section>
 
-        {/* Next Event Section */}
-        {nextEvent && (
-          <section className="py-20 bg-white">
-            <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-              <div className="text-center mb-16">
-                <div className="inline-flex items-center px-4 py-2 rounded-full bg-primary/10 text-primary text-sm font-medium mb-6">
-                  <Calendar className="w-4 h-4 mr-2" />
-                  Don't Miss Out
-                </div>
+        <div className="border-b border-black/10 bg-white">
+          <div className="market-shell flex min-h-20 flex-wrap items-center gap-x-7 gap-y-3 py-4">
+            <span className="font-mono text-[9px] font-semibold uppercase tracking-[0.13em] text-muted-foreground">Browse popular makes</span>
+            {["BMW", "Porsche", "Ford", "Toyota", "Mercedes-Benz"].map((make) => (
+              <Link key={make} href={`/vehicles?make=${encodeURIComponent(make)}`} className="rounded-full border border-black/10 px-4 py-2 text-xs font-semibold transition-colors hover:border-primary hover:text-primary">
+                {make}
+              </Link>
+            ))}
+            <Link href="/vehicles" className="ml-auto hidden items-center gap-2 text-xs font-semibold hover:text-primary sm:inline-flex">All makes <ArrowUpRight className="h-4 w-4" /></Link>
+          </div>
+        </div>
 
-                <h2 className="text-4xl md:text-5xl font-bold text-gray-900 mb-6">
-                  Next Upcoming Event
-                </h2>
-                <p className="text-xl text-gray-600 max-w-2xl mx-auto leading-relaxed">
-                  Join us at our next exclusive car market event. Connect with
-                  fellow enthusiasts, discover amazing vehicles, and be part of
-                  the community.
+        <section className="bg-[hsl(var(--bone))] py-16 text-[hsl(var(--midnight))] sm:py-20">
+          <div className="market-shell">
+            <div className="grid gap-8 lg:grid-cols-[1.35fr_0.65fr] lg:items-end">
+              <div>
+                <p className="market-eyebrow">Fresh inventory</p>
+                <h2 className="market-section-title mt-6">Recently listed.</h2>
+              </div>
+              <div className="lg:justify-self-end">
+                <p className="max-w-sm text-sm leading-7 text-[hsl(var(--gunmetal))]">
+                  Browse vehicles from the Gearboxe community. Every listing
+                  starts with the owner and the story behind the car.
                 </p>
+                <Link href="/vehicles" className="mt-5 inline-flex items-center gap-3 text-xs font-semibold hover:text-primary">
+                  View every vehicle <ArrowUpRight className="h-4 w-4" />
+                </Link>
               </div>
-
-              <div className="max-w-3xl mx-auto">
-                <div className="transform hover:scale-105 transition-all duration-300">
-                  <EventCard event={nextEvent} showRegister={true} />
-                </div>
-              </div>
-            </div>
-          </section>
-        )}
-
-        {/* Featured Vehicles */}
-        <section className="py-20 bg-white">
-          <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-            <div className="text-center mb-16">
-              <div className="inline-flex items-center px-4 py-2 rounded-full bg-primary/10 text-primary text-sm font-medium mb-6">
-                <Star className="w-4 h-4 mr-2" />
-                Curated Selection
-              </div>
-
-              <h2 className="text-4xl md:text-5xl font-bold text-gray-900 mb-6">
-                Featured Vehicles
-              </h2>
-              <p className="text-xl text-gray-600 max-w-2xl mx-auto leading-relaxed">
-                Handpicked premium vehicles from our community of trusted
-                sellers. Each car is carefully vetted for quality and
-                authenticity.
-              </p>
             </div>
 
             {featuredVehicles === undefined ? (
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8 mb-12">
-                {[...Array(6)].map((_, i) => (
-                  <div key={i} className="animate-pulse">
-                    <div className="bg-gray-200 rounded-lg h-48 mb-4"></div>
-                    <div className="space-y-2">
-                      <div className="h-4 bg-gray-200 rounded w-3/4"></div>
-                      <div className="h-3 bg-gray-200 rounded w-1/2"></div>
-                      <div className="h-3 bg-gray-200 rounded w-1/3"></div>
-                    </div>
-                  </div>
+              <div className="mt-12 grid gap-6 md:grid-cols-2 lg:grid-cols-3">
+                {[0, 1, 2].map((item) => (
+                  <div key={item} className="h-[430px] animate-pulse rounded-xl bg-black/5" />
                 ))}
               </div>
             ) : displayVehicles.length > 0 ? (
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8 mb-12">
+              <div className="mt-12 grid gap-6 md:grid-cols-2 lg:grid-cols-3">
                 {displayVehicles.map((vehicle) => (
-                  <div
-                    key={vehicle._id}
-                    className="transform hover:scale-105 transition-all duration-300"
-                  >
-                    <VehicleCard vehicle={vehicle} />
-                  </div>
+                  <VehicleCard key={vehicle._id} vehicle={vehicle} />
                 ))}
               </div>
             ) : (
-              <div className="text-center py-20 bg-gray-50 rounded-2xl border border-gray-200">
-                <div className="w-24 h-24 bg-primary/10 rounded-full flex items-center justify-center mx-auto mb-8">
-                  <Car className="h-12 w-12 text-primary" />
-                </div>
-                <h3 className="text-2xl font-semibold text-gray-900 mb-4">
-                  No vehicles available yet
-                </h3>
-                <p className="text-gray-600 mb-8 max-w-md mx-auto">
-                  We're working on bringing you amazing vehicles from our
-                  community. Check back soon or attend our next event to see
-                  what's available.
-                </p>
-                <div className="flex flex-col sm:flex-row gap-4 justify-center">
-                  <Button
-                    asChild
-                    variant="outline"
-                    className="border-2 hover:bg-primary hover:text-white transition-all duration-300"
-                  >
-                    <Link href="/events" className="flex items-center">
-                      <Calendar className="w-4 h-4 mr-2" />
-                      Attend Next Event
-                    </Link>
-                  </Button>
-                  <Button
-                    asChild
-                    className="bg-primary hover:bg-primary/90 text-white"
-                  >
-                    <Link
-                      href="/myAccount/new-listing"
-                      className="flex items-center"
-                    >
-                      <Car className="w-4 h-4 mr-2" />
-                      List Your Vehicle
-                    </Link>
-                  </Button>
-                </div>
-              </div>
-            )}
-
-            {displayVehicles.length > 0 && (
-              <div className="text-center">
-                <Button
-                  asChild
-                  variant="outline"
-                  size="lg"
-                  className="text-lg px-8 py-4 border-2 hover:bg-primary hover:text-white transition-all duration-300"
-                >
-                  <Link href="/vehicles" className="flex items-center">
-                    <Car className="w-5 h-5 mr-2" />
-                    View All Vehicles
-                  </Link>
-                </Button>
+              <div className="market-grid mt-12 rounded-2xl border border-black/10 bg-white/50 px-6 py-20 text-center">
+                <Car className="mx-auto h-9 w-9 text-primary" />
+                <h3 className="mt-5 text-2xl font-semibold">The first cars are pulling in.</h3>
+                <p className="mx-auto mt-3 max-w-md text-sm leading-6 text-[hsl(var(--gunmetal))]">Create a listing or check back soon as the Gearboxe community grows.</p>
               </div>
             )}
           </div>
         </section>
 
-        {/* CTA Section */}
-        <section className="relative py-24 bg-gradient-to-br from-primary via-primary to-primary/90 overflow-hidden">
-          {/* Background decorative elements */}
-          <div className="absolute inset-0 bg-grid-pattern opacity-10"></div>
-          <div className="absolute top-0 left-0 w-full h-full bg-gradient-to-r from-white/5 to-transparent"></div>
-
-          <div className="relative max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 text-center">
-            <div className="inline-flex items-center px-4 py-2 rounded-full bg-white/20 text-white text-sm font-medium mb-8">
-              <Star className="w-4 h-4 mr-2" />
-              Join Our Community
-            </div>
-
-            <h2 className="text-4xl md:text-5xl font-bold text-white mb-6">
-              Ready to Sell Your Car?
-            </h2>
-            <p className="text-xl text-white/90 mb-12 max-w-3xl mx-auto leading-relaxed">
-              Join our exclusive community of car enthusiasts and showcase your
-              vehicle at our curated events. Get direct exposure to serious
-              buyers and sell your car faster than traditional methods.
-            </p>
-
-            <div className="flex flex-col sm:flex-row gap-4 justify-center mb-12">
-              {isAuthenticated ? (
-                <Button
-                  asChild
-                  size="lg"
-                  variant="secondary"
-                  className="text-lg px-10 py-4 shadow-lg hover:shadow-xl transition-all duration-300"
-                >
-                  <Link
-                    href="/myAccount/new-listing"
-                    className="flex items-center"
-                  >
-                    <Car className="w-5 h-5 mr-2" />
-                    List Your Car
-                  </Link>
-                </Button>
-              ) : (
-                <Button
-                  asChild
-                  size="lg"
-                  variant="secondary"
-                  className="text-lg px-10 py-4 shadow-lg hover:shadow-xl transition-all duration-300"
-                >
-                  <Link href="/sign-up" className="flex items-center">
-                    <Users className="w-5 h-5 mr-2" />
-                    Get Started
-                  </Link>
-                </Button>
-              )}
-
-              <Button
-                asChild
-                size="lg"
-                variant="outline"
-                className="text-lg px-10 py-4 border-2 border-white text-white hover:bg-white hover:text-primary transition-all duration-300"
-              >
-                <Link href="/events" className="flex items-center">
-                  <Calendar className="w-5 h-5 mr-2" />
-                  Attend Event
-                </Link>
+        <section className="market-grid border-y border-border bg-background py-20 sm:py-24">
+          <div className="market-shell grid gap-10 lg:grid-cols-[0.8fr_1.2fr] lg:items-center">
+            <div>
+              <p className="market-eyebrow">Meet the market</p>
+              <h2 className="market-section-title mt-6">See the cars. Meet the owners.</h2>
+              <p className="mt-6 max-w-md text-sm leading-7 text-muted-foreground">
+                Gearboxe Market events bring private sellers and interested
+                buyers together around the vehicles themselves.
+              </p>
+              <Button asChild variant="outline" className="mt-7">
+                <Link href="/events">Explore events <Calendar className="h-4 w-4" /></Link>
               </Button>
             </div>
+            {nextEvent ? (
+              <div className="max-w-xl lg:justify-self-end"><EventCard event={nextEvent} /></div>
+            ) : (
+              <div className="rounded-2xl border border-border bg-card p-10 lg:justify-self-end">
+                <p className="font-mono text-[9px] uppercase tracking-[0.14em] text-muted-foreground">Next gathering</p>
+                <h3 className="mt-4 text-2xl font-semibold">Event details coming soon.</h3>
+              </div>
+            )}
+          </div>
+        </section>
 
-            {/* Benefits */}
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-8 max-w-4xl mx-auto">
-              <div className="text-center">
-                <div className="w-16 h-16 bg-white/20 rounded-full flex items-center justify-center mx-auto mb-4">
-                  <Users className="h-8 w-8 text-white" />
-                </div>
-                <h3 className="text-lg font-semibold text-white mb-2">
-                  Direct Access
-                </h3>
-                <p className="text-white/80 text-sm">
-                  Connect directly with serious buyers
-                </p>
+        <section className="bg-[hsl(var(--midnight))] py-20 text-[hsl(var(--bone))] sm:py-24">
+          <div className="market-shell grid gap-10 lg:grid-cols-2 lg:items-end">
+            <div>
+              <p className="market-eyebrow text-[hsl(var(--chrome))]">The Gearboxe difference</p>
+              <h2 className="market-section-title mt-6 text-white">Ownership context belongs with the car.</h2>
+            </div>
+            <div className="grid gap-4 sm:grid-cols-2">
+              <div className="rounded-xl border border-white/10 bg-white/[0.04] p-6">
+                <FileCheck2 className="h-5 w-5 text-primary" />
+                <h3 className="mt-5 text-base font-semibold">More than a spec sheet</h3>
+                <p className="mt-2 text-xs leading-6 text-[hsl(var(--chrome))]">Listings built around the details enthusiasts actually want to know.</p>
               </div>
-              <div className="text-center">
-                <div className="w-16 h-16 bg-white/20 rounded-full flex items-center justify-center mx-auto mb-4">
-                  <Calendar className="h-8 w-8 text-white" />
-                </div>
-                <h3 className="text-lg font-semibold text-white mb-2">
-                  Curated Events
-                </h3>
-                <p className="text-white/80 text-sm">
-                  Monthly events with verified sellers
-                </p>
-              </div>
-              <div className="text-center">
-                <div className="w-16 h-16 bg-white/20 rounded-full flex items-center justify-center mx-auto mb-4">
-                  <Star className="h-8 w-8 text-white" />
-                </div>
-                <h3 className="text-lg font-semibold text-white mb-2">
-                  Quality Assured
-                </h3>
-                <p className="text-white/80 text-sm">
-                  All vehicles are pre-screened
-                </p>
+              <div className="rounded-xl border border-white/10 bg-white/[0.04] p-6">
+                <ArrowDown className="h-5 w-5 text-primary" />
+                <h3 className="mt-5 text-base font-semibold">A direct connection</h3>
+                <p className="mt-2 text-xs leading-6 text-[hsl(var(--chrome))]">Talk to the owner, ask better questions, and meet around the car.</p>
               </div>
             </div>
           </div>
         </section>
-      </div>
+      </main>
 
       <Footer />
     </div>

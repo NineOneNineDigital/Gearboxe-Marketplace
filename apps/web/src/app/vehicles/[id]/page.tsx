@@ -4,13 +4,13 @@ import { Button } from "@/components/ui/button";
 import { Footer } from "@/components/ui/footer";
 import { Navbar } from "@/components/ui/navbar";
 import { api } from "@/convex/_generated/api";
+import type { Id } from "@/convex/_generated/dataModel";
 import { useCurrentUser } from "@/hooks/useCurrentUser";
 import { useToast } from "@/hooks/useToast";
 import { vehicleResults } from "@/lib/vehicle-results";
 import { useAuth } from "@clerk/nextjs";
 import { useConvexAuth, useMutation, useQuery } from "convex/react";
 import {
-  Award,
   Calendar,
   Car,
   ChevronLeft,
@@ -22,10 +22,7 @@ import {
   Mail,
   MapPin,
   Share2,
-  Shield,
-  Star,
   User,
-  Users,
   X,
 } from "lucide-react";
 import Head from "next/head";
@@ -35,9 +32,9 @@ import { notFound } from "next/navigation";
 import { use, useCallback, useEffect, useState } from "react";
 
 interface VehiclePageProps {
-  params: {
+  params: Promise<{
     id: string;
-  };
+  }>;
 }
 
 export default function VehiclePage({ params }: VehiclePageProps) {
@@ -53,7 +50,7 @@ export default function VehiclePage({ params }: VehiclePageProps) {
   const { toast } = useToast();
 
   const vehicle = useQuery(api.vehicles.getVehicleById, {
-    id: unwrappedParams.id as any,
+    id: unwrappedParams.id as Id<"vehicles">,
   });
   const seller = useQuery(
     api.users.getUserById,
@@ -61,7 +58,7 @@ export default function VehiclePage({ params }: VehiclePageProps) {
   );
   const vehicleEvent = useQuery(
     api.registrations.getRegistrationByVehicle,
-    vehicle?._id ? { vehicleId: vehicle._id as any } : "skip"
+    vehicle?._id ? { vehicleId: vehicle._id } : "skip"
   );
   const relatedVehicles = vehicleResults(
     useQuery(api.vehicles.getVehicles, {
@@ -74,7 +71,7 @@ export default function VehiclePage({ params }: VehiclePageProps) {
   const isFavoritedQuery = useQuery(
     api.favorites.isFavorited,
     convexUser?._id && vehicle?._id
-      ? { userId: convexUser._id, vehicleId: vehicle._id as any }
+      ? { userId: convexUser._id, vehicleId: vehicle._id }
       : "skip"
   );
 
@@ -150,9 +147,9 @@ export default function VehiclePage({ params }: VehiclePageProps) {
   // Loading state
   if (vehicle === undefined) {
     return (
-      <div className="min-h-screen bg-gradient-to-br from-gray-50 to-white flex flex-col">
+      <div className="market-page min-h-screen flex flex-col">
         <Navbar />
-        <div className="flex-1 max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+        <div className="market-shell flex-1 py-8 sm:py-10">
           <div className="animate-pulse">
             <div className="h-6 bg-gray-200 rounded w-1/4 mb-6"></div>
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
@@ -235,7 +232,7 @@ export default function VehiclePage({ params }: VehiclePageProps) {
       if (isFavorited) {
         await removeFavorite({
           userId: convexUser._id,
-          vehicleId: vehicle._id as any,
+          vehicleId: vehicle._id,
         });
         setIsFavorited(false);
         toast({
@@ -245,7 +242,7 @@ export default function VehiclePage({ params }: VehiclePageProps) {
       } else {
         await addFavorite({
           userId: convexUser._id,
-          vehicleId: vehicle._id as any,
+          vehicleId: vehicle._id,
         });
         setIsFavorited(true);
         toast({
@@ -268,9 +265,9 @@ export default function VehiclePage({ params }: VehiclePageProps) {
   // Loading state
   if (vehicle === undefined) {
     return (
-      <div className="min-h-screen bg-gradient-to-br from-gray-50 to-white flex flex-col">
+      <div className="market-page min-h-screen flex flex-col">
         <Navbar />
-        <div className="flex-1 max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+        <div className="market-shell flex-1 py-8 sm:py-10">
           <div className="animate-pulse">
             <div className="h-6 bg-gray-200 rounded w-1/4 mb-6"></div>
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
@@ -347,10 +344,10 @@ export default function VehiclePage({ params }: VehiclePageProps) {
         />
       </Head>
 
-      <div className="min-h-screen bg-gradient-to-br from-gray-50 to-white flex flex-col">
+      <div className="market-page min-h-screen flex flex-col">
         <Navbar />
 
-        <div className="flex-1 max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+        <div className="market-shell flex-1 py-8 sm:py-10">
           {/* Breadcrumb */}
           <div className="flex items-center space-x-2 text-sm text-gray-600 mb-6">
             <Link
@@ -364,11 +361,11 @@ export default function VehiclePage({ params }: VehiclePageProps) {
             <span className="font-medium">{vehicle.title}</span>
           </div>
 
-          <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+          <div className="grid grid-cols-1 gap-8 lg:grid-cols-[minmax(0,1fr)_360px]">
             {/* Main Content */}
-            <div className="lg:col-span-2 space-y-8">
+            <div className="flex min-w-0 flex-col gap-6">
               {/* Vehicle Header */}
-              <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
+              <div className="order-2 rounded-xl border border-black/10 bg-white p-6 shadow-sm">
                 <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between mb-4">
                   <div className="flex-1">
                     <h1 className="text-3xl font-bold text-gray-900 mb-2">
@@ -393,7 +390,7 @@ export default function VehiclePage({ params }: VehiclePageProps) {
                     </div>
                   </div>
 
-                  {/* Action Buttons */}
+                  {/* Listing actions */}
                   <div className="flex items-center space-x-2 mt-4 sm:mt-0">
                     <div className="relative" data-share-menu>
                       <Button
@@ -459,21 +456,11 @@ export default function VehiclePage({ params }: VehiclePageProps) {
                   </div>
                 </div>
 
-                {/* Price */}
-                <div className="flex items-center justify-between">
-                  <div className="text-4xl font-bold text-primary">
-                    {formatPrice(vehicle.price)}
-                  </div>
-                  <div className="flex items-center space-x-2 text-sm text-gray-600">
-                    <Shield className="h-4 w-4" />
-                    <span>Verified Listing</span>
-                  </div>
-                </div>
               </div>
 
               {/* Main Photo */}
               {vehicle.photos.length > 0 && (
-                <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
+                <div className="order-1 overflow-hidden rounded-xl border border-black/10 bg-white shadow-sm">
                   <div className="relative">
                     <Image
                       src={vehicle.photos[currentPhotoIndex]}
@@ -542,7 +529,7 @@ export default function VehiclePage({ params }: VehiclePageProps) {
               )}
 
               {/* Vehicle Details */}
-              <div className="bg-white rounded-xl shadow-sm border border-gray-200">
+              <div className="order-3 rounded-xl border border-black/10 bg-white shadow-sm">
                 <div className="p-6">
                   <h2 className="text-xl font-semibold text-gray-900">
                     Vehicle Details
@@ -626,23 +613,23 @@ export default function VehiclePage({ params }: VehiclePageProps) {
                       </div>
                     </div>
 
-                    {/* Features & Highlights */}
+                    {/* Marketplace context */}
                     <div>
-                      <h3 className="text-lg font-semibold text-gray-900 mb-4">
-                        Key Features
+                      <h3 className="mb-4 text-lg font-semibold text-gray-900">
+                        Buying context
                       </h3>
-                      <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
+                      <div className="grid gap-3 sm:grid-cols-3">
                         <div className="flex items-center space-x-2 text-sm text-gray-600">
-                          <Shield className="h-4 w-4 text-green-500" />
-                          <span>Verified Listing</span>
+                          <User className="h-4 w-4 text-primary" />
+                          <span>Private seller</span>
                         </div>
                         <div className="flex items-center space-x-2 text-sm text-gray-600">
-                          <Award className="h-4 w-4 text-blue-500" />
-                          <span>Quality Assured</span>
+                          <Mail className="h-4 w-4 text-primary" />
+                          <span>Direct messaging</span>
                         </div>
                         <div className="flex items-center space-x-2 text-sm text-gray-600">
-                          <Users className="h-4 w-4 text-purple-500" />
-                          <span>Community Verified</span>
+                          <Calendar className="h-4 w-4 text-primary" />
+                          <span>In-person viewing</span>
                         </div>
                       </div>
                     </div>
@@ -652,7 +639,29 @@ export default function VehiclePage({ params }: VehiclePageProps) {
             </div>
 
             {/* Sidebar */}
-            <div className="space-y-6">
+            <div className="space-y-6 lg:sticky lg:top-5 lg:self-start">
+              <div className="rounded-xl border border-black/10 bg-white p-6 shadow-[0_16px_44px_hsl(var(--midnight)/0.08)]">
+                <p className="font-mono text-[9px] font-semibold uppercase tracking-[0.13em] text-muted-foreground">Asking price</p>
+                <p className="market-metric mt-2 text-4xl font-semibold tracking-[-0.05em] text-[hsl(var(--midnight))]">
+                  {formatPrice(vehicle.price)}
+                </p>
+                <div className="my-5 border-t border-black/10" />
+                {isAuthenticated || isSignedIn ? (
+                  <Button asChild size="lg" className="w-full">
+                    <Link href={`/myAccount/messages/${vehicle._id}/${vehicle.userId}`}>
+                      <Mail className="h-4 w-4" /> Message seller
+                    </Link>
+                  </Button>
+                ) : (
+                  <Button asChild size="lg" className="w-full">
+                    <Link href="/sign-in">Sign in to contact seller</Link>
+                  </Button>
+                )}
+                <p className="mt-4 text-center text-[11px] leading-5 text-muted-foreground">
+                  Gearboxe Market connects buyers and private sellers directly.
+                </p>
+              </div>
+
               {/* Seller Info */}
               {seller && (
                 <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
@@ -664,38 +673,20 @@ export default function VehiclePage({ params }: VehiclePageProps) {
                       <h3 className="font-semibold text-gray-900">
                         {seller.name}
                       </h3>
-                      <div className="flex items-center space-x-1 text-sm text-gray-600">
-                        <Star className="h-4 w-4 fill-yellow-400 text-yellow-400" />
-                        <span>Verified Seller</span>
-                      </div>
+                      <p className="text-sm text-gray-600">Private seller</p>
                     </div>
                   </div>
 
                   <div className="space-y-3 mb-6">
-                    <div className="flex items-center space-x-2 text-sm text-gray-600">
-                      <Mail className="h-4 w-4" />
-                      <span>{vehicle.contactInfo}</span>
-                    </div>
                     <div className="flex items-center space-x-2 text-sm text-gray-600">
                       <MapPin className="h-4 w-4" />
                       <span>Local Seller</span>
                     </div>
                   </div>
 
-                  {isAuthenticated || isSignedIn ? (
-                    <Button asChild className="w-full text-white">
-                      <Link
-                        href={`/myAccount/messages/${vehicle._id}/${vehicle.userId}`}
-                      >
-                        <Mail className="h-4 w-4 mr-2" />
-                        Message Seller
-                      </Link>
-                    </Button>
-                  ) : (
-                    <Button asChild className="w-full text-white">
-                      <Link href="/sign-in">Sign In to Contact Seller</Link>
-                    </Button>
-                  )}
+                  <p className="border-t border-gray-100 pt-4 text-xs leading-5 text-gray-500">
+                    Ask about ownership history, maintenance, condition, and availability before arranging a meeting.
+                  </p>
                 </div>
               )}
 

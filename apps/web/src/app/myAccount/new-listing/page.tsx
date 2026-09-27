@@ -166,7 +166,7 @@ export default function NewListingPage() {
   const isStep2Valid = formData.description && formData.contactInfo;
 
   return (
-    <div className="min-h-screen bg-white flex flex-col">
+    <div className="market-page min-h-screen flex flex-col">
       <Navbar />
 
       <div className="flex-1 max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12">

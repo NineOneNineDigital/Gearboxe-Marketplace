@@ -20,9 +20,13 @@ import { useEffect, useRef, useState } from "react";
 
 interface UserDropdownProps {
   afterSignOutUrl?: string;
+  inverse?: boolean;
 }
 
-export function UserDropdown({ afterSignOutUrl = "/" }: UserDropdownProps) {
+export function UserDropdown({
+  afterSignOutUrl = "/",
+  inverse = false,
+}: UserDropdownProps) {
   const [isOpen, setIsOpen] = useState(false);
   const dropdownRef = useRef<HTMLDivElement>(null);
   const { signOut } = useAuth();
@@ -49,7 +53,7 @@ export function UserDropdown({ afterSignOutUrl = "/" }: UserDropdownProps) {
   }, []);
 
   const handleSignOut = async () => {
-    await signOut();
+    await signOut({ redirectUrl: afterSignOutUrl });
     setIsOpen(false);
   };
 
@@ -110,7 +114,11 @@ export function UserDropdown({ afterSignOutUrl = "/" }: UserDropdownProps) {
         variant="ghost"
         size="sm"
         onClick={() => setIsOpen(!isOpen)}
-        className="flex items-center space-x-2 px-3 py-2 h-auto hover:bg-gray-100 hover:text-gray-900"
+        className={`flex h-auto items-center space-x-2 px-3 py-2 ${
+          inverse
+            ? "text-[hsl(var(--bone))] hover:bg-white/10 hover:text-white"
+            : "hover:bg-gray-100 hover:text-gray-900"
+        }`}
       >
         {/* User Avatar */}
         <div className="w-8 h-8 bg-primary rounded-full flex items-center justify-center">
@@ -119,16 +127,28 @@ export function UserDropdown({ afterSignOutUrl = "/" }: UserDropdownProps) {
 
         {/* User Name */}
         <div className="hidden sm:block text-left">
-          <div className="text-sm font-medium text-gray-900">
+          <div
+            className={`text-sm font-medium ${
+              inverse ? "text-[hsl(var(--bone))]" : "text-gray-900"
+            }`}
+          >
             {user?.fullName || "User"}
           </div>
-          <div className="text-xs text-gray-500">
+          <div
+            className={`text-xs ${
+              inverse ? "text-[hsl(var(--chrome))]" : "text-gray-500"
+            }`}
+          >
             {user?.emailAddresses?.[0]?.emailAddress || ""}
           </div>
         </div>
 
         {/* Dropdown Arrow */}
-        <ChevronDown className="h-4 w-4 text-gray-500" />
+        <ChevronDown
+          className={`h-4 w-4 ${
+            inverse ? "text-[hsl(var(--chrome))]" : "text-gray-500"
+          }`}
+        />
       </Button>
 
       {/* Dropdown Menu */}

@@ -113,7 +113,7 @@ export default function MessagesPage() {
     }) || [];
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-gray-50 to-gray-100 flex flex-col">
+    <div className="market-page min-h-screen flex flex-col">
       <Navbar />
 
       <div className="flex-1 w-full max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">

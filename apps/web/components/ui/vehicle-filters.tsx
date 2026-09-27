@@ -11,22 +11,25 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { Filter, X } from "lucide-react";
-import { useState } from "react";
+import { SlidersHorizontal, X } from "lucide-react";
+import { useEffect, useState } from "react";
+
+export interface VehicleFilterValues {
+  make?: string;
+  model?: string;
+  minPrice?: number;
+  maxPrice?: number;
+  minYear?: number;
+  maxYear?: number;
+}
 
 interface VehicleFiltersProps {
-  onFiltersChange: (filters: {
-    make?: string;
-    model?: string;
-    minPrice?: number;
-    maxPrice?: number;
-    minYear?: number;
-    maxYear?: number;
-  }) => void;
+  onFiltersChange: (filters: VehicleFilterValues) => void;
+  values?: VehicleFilterValues;
   className?: string;
 }
 
-const makes = [
+export const vehicleMakes = [
   "Acura",
   "Audi",
   "BMW",
@@ -66,6 +69,7 @@ const years = Array.from({ length: 30 }, (_, i) => currentYear - i);
 
 export function VehicleFilters({
   onFiltersChange,
+  values,
   className,
 }: VehicleFiltersProps) {
   const [filters, setFilters] = useState({
@@ -77,7 +81,23 @@ export function VehicleFilters({
     maxYear: "any",
   });
 
-  const [isExpanded, setIsExpanded] = useState(false);
+  useEffect(() => {
+    setFilters({
+      make: values?.make ?? "all",
+      model: values?.model ?? "",
+      minPrice: values?.minPrice?.toString() ?? "",
+      maxPrice: values?.maxPrice?.toString() ?? "",
+      minYear: values?.minYear?.toString() ?? "any",
+      maxYear: values?.maxYear?.toString() ?? "any",
+    });
+  }, [
+    values?.make,
+    values?.model,
+    values?.minPrice,
+    values?.maxPrice,
+    values?.minYear,
+    values?.maxYear,
+  ]);
 
   const handleFilterChange = (key: string, value: string) => {
     const newFilters = { ...filters, [key]: value };
@@ -126,12 +146,12 @@ export function VehicleFilters({
   });
 
   return (
-    <Card className={className}>
-      <CardHeader className="pb-3">
+    <Card className={`border-black/10 bg-white shadow-none ${className ?? ""}`}>
+      <CardHeader className="border-b border-black/10 pb-4">
         <div className="flex items-center justify-between">
           <CardTitle className="text-lg flex items-center space-x-2">
-            <Filter className="h-5 w-5" />
-            <span>Filters</span>
+            <SlidersHorizontal className="h-4 w-4 text-primary" />
+            <span className="text-base">Filter inventory</span>
           </CardTitle>
           <div className="flex items-center space-x-2">
             {hasActiveFilters && (
@@ -140,20 +160,13 @@ export function VehicleFilters({
                 Clear
               </Button>
             )}
-            <Button
-              variant="ghost"
-              size="sm"
-              onClick={() => setIsExpanded(!isExpanded)}
-            >
-              {isExpanded ? "Collapse" : "Expand"}
-            </Button>
           </div>
         </div>
       </CardHeader>
 
-      <CardContent className="space-y-4">
+      <CardContent className="space-y-5 p-5">
         {/* Basic filters - always visible */}
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <div className="grid grid-cols-1 gap-5">
           <div className="space-y-2">
             <Label htmlFor="make">Make</Label>
             <Select
@@ -165,7 +178,7 @@ export function VehicleFilters({
               </SelectTrigger>
               <SelectContent>
                 <SelectItem value="all">All Makes</SelectItem>
-                {makes.map((make) => (
+                {vehicleMakes.map((make) => (
                   <SelectItem key={make} value={make}>
                     {make}
                   </SelectItem>
@@ -185,10 +198,11 @@ export function VehicleFilters({
           </div>
         </div>
 
-        {/* Advanced filters - collapsible */}
-        {isExpanded && (
-          <div className="space-y-4 pt-4 border-t">
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <div className="space-y-4 border-t border-black/10 pt-5">
+          <p className="font-mono text-[9px] font-semibold uppercase tracking-[0.12em] text-muted-foreground">
+            Price range
+          </p>
+            <div className="grid grid-cols-1 gap-4 xl:grid-cols-2">
               <div className="space-y-2">
                 <Label htmlFor="minPrice">Min Price</Label>
                 <Input
@@ -216,53 +230,49 @@ export function VehicleFilters({
               </div>
             </div>
 
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <div className="space-y-2">
-                <Label htmlFor="minYear">Min Year</Label>
-                <Select
-                  value={filters.minYear}
-                  onValueChange={(value) =>
-                    handleFilterChange("minYear", value)
-                  }
-                >
-                  <SelectTrigger>
-                    <SelectValue placeholder="Select year" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="any">Any Year</SelectItem>
-                    {years.map((year) => (
-                      <SelectItem key={year} value={year.toString()}>
-                        {year}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
+        </div>
 
-              <div className="space-y-2">
-                <Label htmlFor="maxYear">Max Year</Label>
-                <Select
-                  value={filters.maxYear}
-                  onValueChange={(value) =>
-                    handleFilterChange("maxYear", value)
-                  }
-                >
-                  <SelectTrigger>
-                    <SelectValue placeholder="Select year" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="any">Any Year</SelectItem>
-                    {years.map((year) => (
-                      <SelectItem key={year} value={year.toString()}>
-                        {year}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
+        <div className="space-y-4 border-t border-black/10 pt-5">
+          <p className="font-mono text-[9px] font-semibold uppercase tracking-[0.12em] text-muted-foreground">
+            Model year
+          </p>
+          <div className="grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-1 xl:grid-cols-2">
+            <div className="space-y-2">
+              <Label htmlFor="minYear">From</Label>
+              <Select
+                value={filters.minYear}
+                onValueChange={(value) => handleFilterChange("minYear", value)}
+              >
+                <SelectTrigger id="minYear">
+                  <SelectValue placeholder="Any year" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="any">Any year</SelectItem>
+                  {years.map((year) => (
+                    <SelectItem key={year} value={year.toString()}>{year}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="maxYear">To</Label>
+              <Select
+                value={filters.maxYear}
+                onValueChange={(value) => handleFilterChange("maxYear", value)}
+              >
+                <SelectTrigger id="maxYear">
+                  <SelectValue placeholder="Any year" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="any">Any year</SelectItem>
+                  {years.map((year) => (
+                    <SelectItem key={year} value={year.toString()}>{year}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
             </div>
           </div>
-        )}
+        </div>
       </CardContent>
     </Card>
   );

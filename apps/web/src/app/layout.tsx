@@ -3,7 +3,20 @@ import { ConvexClientProvider } from "@/lib/convex-provider";
 import { ClerkProvider } from "@clerk/nextjs";
 import "@workspace/design-tokens/css";
 import type { Metadata } from "next";
+import { Azeret_Mono, Plus_Jakarta_Sans } from "next/font/google";
 import "./global.css";
+
+const jakarta = Plus_Jakarta_Sans({
+  subsets: ["latin"],
+  variable: "--font-jakarta",
+  display: "swap",
+});
+
+const azeret = Azeret_Mono({
+  subsets: ["latin"],
+  variable: "--font-azeret-mono",
+  display: "swap",
+});
 
 export const metadata: Metadata = {
   title: "Gearboxe Market",
@@ -22,7 +35,7 @@ export default function RootLayout({
       signUpFallbackRedirectUrl="/myAccount"
     >
       <html lang="en">
-        <body className="antialiased">
+        <body className={`${jakarta.variable} ${azeret.variable} antialiased`}>
           <ConvexClientProvider>
             {children}
             <ToastContainer />
