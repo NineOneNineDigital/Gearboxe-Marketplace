@@ -1,3 +1,4 @@
+import { publicVehicle } from "./lib/vehicleVisibility";
 import { v } from "convex/values";
 import { internalMutation, mutation, query } from "./_generated/server";
 import {
@@ -44,7 +45,7 @@ export const completeRegistration = internalMutation({
     if (vehicle.userId !== user._id) {
       throw new Error("The registered user must own the vehicle");
     }
-    if (vehicle.status !== "approved") {
+    if ((vehicle.status !== "approved" && vehicle.status !== "active")) {
       throw new Error("Only approved vehicles can be registered");
     }
     if (duplicate) return duplicate._id;
@@ -91,7 +92,7 @@ export const getVehiclesByEvent = query({
         .map((registration) => ctx.db.get(registration.vehicleId))
     );
     return vehicles.flatMap((vehicle) =>
-      vehicle?.status === "approved" ? [vehicle] : []
+      (vehicle?.status === "approved" || vehicle?.status === "active") ? [publicVehicle(vehicle)] : []
     );
   },
 });
@@ -119,7 +120,7 @@ export const getCheckoutContext = query({
     ]);
 
     if (!event || !vehicle) throw new Error("Event or vehicle not found");
-    if (vehicle.userId !== user._id || vehicle.status !== "approved") {
+    if (vehicle.userId !== user._id || (vehicle.status !== "approved" && vehicle.status !== "active")) {
       throw new Error("Only your approved vehicles can be registered");
     }
     if (event.date <= Date.now()) throw new Error("Event has ended");

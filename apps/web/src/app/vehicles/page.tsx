@@ -36,7 +36,7 @@ export default function VehiclesPage() {
   }, []);
 
   const vehicles = vehicleResults(
-    useQuery(api.vehicles.getVehicles, { status: "approved", ...filters })
+    useQuery(api.vehicles.getVehicles, { ...filters })
   );
   const sortedVehicles = useMemo(() => {
     if (!vehicles) return vehicles;
@@ -69,7 +69,7 @@ export default function VehiclesPage() {
         </section>
 
         <section className="bg-[hsl(var(--bone))] py-10 text-[hsl(var(--midnight))] sm:py-14">
-          <div className="market-shell grid grid-cols-1 gap-8 lg:grid-cols-[280px_minmax(0,1fr)]">
+          <div className="market-shell grid grid-cols-1 gap-5 lg:grid-cols-[260px_minmax(0,1fr)]">
             <aside className="lg:sticky lg:top-5 lg:self-start">
               <div className="mb-4 flex items-center gap-2 font-mono text-[10px] font-semibold uppercase tracking-[0.12em] text-[hsl(var(--gunmetal))] lg:hidden">
                 <SlidersHorizontal className="h-4 w-4 text-primary" /> Search controls
@@ -125,14 +125,14 @@ export default function VehiclesPage() {
               </div>
 
               {sortedVehicles === undefined ? (
-                <div className="grid gap-6 md:grid-cols-2 xl:grid-cols-3">
+                <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
                   {[0, 1, 2, 3, 4, 5].map((item) => (
-                    <div key={item} className="h-[430px] animate-pulse rounded-xl bg-black/5" />
+                    <div key={item} className="h-[500px] animate-pulse rounded-xl bg-black/5" />
                   ))}
                 </div>
               ) : sortedVehicles.length > 0 ? (
-                <div className={viewMode === "grid" ? "grid gap-6 md:grid-cols-2 xl:grid-cols-3" : "grid gap-4"}>
-                  {sortedVehicles.map((vehicle) => <VehicleCard key={vehicle._id} vehicle={vehicle} layout={viewMode} />)}
+                <div className={viewMode === "grid" ? "grid gap-4 md:grid-cols-2 xl:grid-cols-3" : "grid gap-3"}>
+                  {sortedVehicles.map((vehicle) => <VehicleCard key={vehicle._id} vehicle={vehicle} layout={viewMode} showAvailability />)}
                 </div>
               ) : (
                 <div className="market-grid rounded-2xl border border-black/10 bg-white/50 px-6 py-20 text-center">

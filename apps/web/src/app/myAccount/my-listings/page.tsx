@@ -51,6 +51,9 @@ function MyListingsContent() {
     api.registrations.getRegistrationsByUser,
     currentUser?._id ? { userId: currentUser._id } : "skip"
   );
+  const changeStatus = useMutation(api.vehicles.changeVehicleStatus);
+  const [actionError, setActionError] = useState("");
+  const [updatingId, setUpdatingId] = useState<string | null>(null);
   const deleteVehicle = useMutation(api.vehicles.deleteVehicle);
 
   if (isLoading) {
@@ -81,9 +84,16 @@ function MyListingsContent() {
     }
   };
 
+  const handleStatus = async (id: Id<"vehicles">, status: "draft" | "pending" | "active" | "reserved" | "sold" | "archived") => {
+    setActionError(""); setUpdatingId(id);
+    try { await changeStatus({ id, status }); }
+    catch (error) { setActionError(error instanceof Error ? error.message : "Unable to update listing."); }
+    finally { setUpdatingId(null); }
+  };
+
   const getStatusIcon = (status: string) => {
     switch (status) {
-      case "approved":
+      case "active":
         return <CheckCircle className="h-5 w-5 text-green-600" />;
       case "pending":
         return <Clock className="h-5 w-5 text-yellow-600" />;
@@ -96,7 +106,7 @@ function MyListingsContent() {
 
   const getStatusColor = (status: string) => {
     switch (status) {
-      case "approved":
+      case "active":
         return "bg-green-100 text-green-800";
       case "pending":
         return "bg-yellow-100 text-yellow-800";
@@ -136,13 +146,13 @@ function MyListingsContent() {
             <div className="flex items-center">
               <CheckCircle className="h-5 w-5 text-green-600 mr-2" />
               <p className="text-green-800">
-                Your listing has been created successfully! It will be reviewed
-                by our team.
+                Your listing has been saved successfully. Submitted listings will be reviewed by our team.
               </p>
             </div>
           </div>
         )}
 
+        {actionError && <p className="mb-4 text-red-700" role="alert">{actionError}</p>}
         {/* Listings Grid */}
         {userVehicles && userVehicles.length > 0 ? (
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
@@ -222,7 +232,7 @@ function MyListingsContent() {
                       {vehicle.year} {vehicle.make} {vehicle.model}
                     </p>
                     <div className="flex justify-between items-center text-sm text-gray-600 mb-4">
-                      <span>{vehicle.mileage.toLocaleString()} miles</span>
+                      <span>{vehicle.mileage.toLocaleString()} {vehicle.mileageUnit ?? "mi"}</span>
                       <span className="font-semibold text-primary text-lg">
                         ${vehicle.price.toLocaleString()}
                       </span>
@@ -246,6 +256,18 @@ function MyListingsContent() {
                       </div>
                     )}
 
+                    {vehicle.moderationReason && <p className="text-sm mb-3">Moderation reason: {vehicle.moderationReason}</p>}
+                    <details className="text-sm mb-3"><summary>Listing history</summary><ol className="space-y-2 mt-2">{vehicle.moderationHistory?.map((entry, index) => <li key={index}>{new Date(entry.createdAt).toLocaleString()}: {entry.fromStatus ?? "new"} → {entry.toStatus}. {entry.reason}</li>)}</ol></details>
+                    <div className="flex flex-wrap gap-2 mb-3">
+                      {!["sold", "archived"].includes(vehicle.status) && <Button asChild size="sm" variant="outline"><Link href={`/myAccount/new-listing?edit=${vehicle._id}`}>Edit listing</Link></Button>}
+                      {vehicle.status === "pending" && <Button size="sm" variant="outline" disabled={updatingId === vehicle._id} onClick={() => handleStatus(vehicle._id, "draft")}>Return to draft</Button>}
+                      {vehicle.status === "archived" && <Button size="sm" variant="outline" disabled={updatingId === vehicle._id} onClick={() => handleStatus(vehicle._id, "draft")}>Restore draft</Button>}
+                      {vehicle.status === "draft" && <Button size="sm" disabled={updatingId === vehicle._id} onClick={() => handleStatus(vehicle._id, "pending")}>Submit for review</Button>}
+                      {["active", "approved"].includes(vehicle.status) && <Button size="sm" disabled={updatingId === vehicle._id} onClick={() => handleStatus(vehicle._id, "reserved")}>Mark reserved</Button>}
+                      {vehicle.status === "reserved" && <Button size="sm" disabled={updatingId === vehicle._id} onClick={() => handleStatus(vehicle._id, "active")}>Release reservation</Button>}
+                      {["active", "approved", "reserved"].includes(vehicle.status) && <Button size="sm" disabled={updatingId === vehicle._id} onClick={() => handleStatus(vehicle._id, "sold")}>Mark sold</Button>}
+                      {vehicle.status !== "archived" && <Button size="sm" variant="outline" disabled={updatingId === vehicle._id} onClick={() => handleStatus(vehicle._id, "archived")}>Archive</Button>}
+                    </div>
                     {/* Actions */}
                     <div className="flex space-x-2">
                       <Button

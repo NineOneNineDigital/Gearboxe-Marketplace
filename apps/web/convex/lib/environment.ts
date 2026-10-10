@@ -58,15 +58,16 @@ export function validateEnvironment(env: Environment, profile: Profile) {
     if (profile === "web-runtime") {
       const clerkMode = env.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY?.startsWith("pk_live_") ? "live" : "test";
       key("CLERK_SECRET_KEY", [`sk_${clerkMode}_`]);
-      key("STRIPE_WEBHOOK_SECRET", ["whsec_"]);
+      if (mode !== "development" || env.STRIPE_WEBHOOK_SECRET) key("STRIPE_WEBHOOK_SECRET", ["whsec_"]);
     }
   } else {
     origin("CLERK_JWT_ISSUER_DOMAIN");
     key("CLERK_WEBHOOK_SECRET", ["whsec_"]);
   }
   if (profile !== "web-build") {
-    key("STRIPE_SECRET_KEY", [`sk_${stripeMode}_`, `rk_${stripeMode}_`]);
-    const price = required("EVENT_REGISTRATION_PRICE_CENTS");
+    const optionalLocalPayments = mode === "development" && profile === "web-runtime";
+    if (!optionalLocalPayments || env.STRIPE_SECRET_KEY) key("STRIPE_SECRET_KEY", [`sk_${stripeMode}_`, `rk_${stripeMode}_`]);
+    const price = optionalLocalPayments ? env.EVENT_REGISTRATION_PRICE_CENTS?.trim() : required("EVENT_REGISTRATION_PRICE_CENTS");
     if (price && (!/^\d+$/.test(price) || !Number.isSafeInteger(Number(price)) || Number(price) <= 0)) {
       errors.push("EVENT_REGISTRATION_PRICE_CENTS must be a positive integer");
     }

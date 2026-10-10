@@ -16,11 +16,12 @@ import {
 import { Textarea } from "@/components/ui/textarea";
 import { api } from "@/convex/_generated/api";
 import { useCurrentUser } from "@/hooks/useCurrentUser";
-import { useMutation } from "convex/react";
+import { useAction, useMutation, useQuery } from "convex/react";
 import { Car, Upload } from "lucide-react";
-import { redirect, useRouter } from "next/navigation";
-import { useState } from "react";
+import { redirect, useRouter, useSearchParams } from "next/navigation";
+import { Suspense, useEffect, useState } from "react";
 import Image from "next/image";
+import type { Id } from "@/convex/_generated/dataModel";
 
 const makes = [
   "Acura",
@@ -58,12 +59,24 @@ const makes = [
 ];
 
 const currentYear = new Date().getFullYear();
-const years = Array.from({ length: 30 }, (_, i) => currentYear - i);
 
 export default function NewListingPage() {
+  return <Suspense fallback={<p className="p-8">Loading listing...</p>}><ListingForm /></Suspense>;
+}
+
+function ListingForm() {
+  const editId = useSearchParams().get("edit");
+  const existing = useQuery(api.vehicles.getVehicleById, editId ? { id: editId as Id<"vehicles"> } : "skip");
+  const updateVehicle = useMutation(api.vehicles.updateVehicle);
+  const changeStatus = useMutation(api.vehicles.changeVehicleStatus);
   const router = useRouter();
   const { isLoading, isAuthenticated, user: currentUser } = useCurrentUser();
   const createVehicle = useMutation(api.vehicles.createVehicle);
+
+  const decodeVin = useAction(api.vin.decodeVin);
+  const [isDecoding, setIsDecoding] = useState(false);
+  const [errorMessage, setErrorMessage] = useState("");
+  const [vinMessage, setVinMessage] = useState("Not verified");
 
   const [step, setStep] = useState(1);
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -77,8 +90,35 @@ export default function NewListingPage() {
     vin: "",
     description: "",
     contactInfo: "",
+    trim: "", bodyStyle: "", engine: "", transmission: "", drivetrain: "", fuelType: "",
+    exteriorColor: "", interiorColor: "", mileageUnit: "mi" as "mi" | "km", odometerStatus: "actual" as "actual" | "exempt" | "not_actual",
+    titleStatus: "unknown" as "clean" | "rebuilt" | "salvage" | "flood" | "lemon" | "other" | "unknown", sellerState: "", condition: "good" as "excellent" | "good" | "fair" | "poor", mechanicalIssues: "",
+    accidentDisclosure: "unknown", damageDisclosure: "unknown", numberOfOwners: "",
+    serviceRecords: "unknown" as "available" | "partial" | "unavailable" | "unknown", modifications: "", sellerType: "private" as "private" | "dealer", location: "", locationState: "", postalCode: "",
+    features: "", negotiable: false,
     photos: [] as string[],
   });
+
+  useEffect(() => {
+    if (!existing) return;
+    setFormData((prev) => ({
+      ...prev, title: existing.title, make: existing.make, model: existing.model,
+      year: existing.year ? String(existing.year) : "", mileage: String(existing.mileage), price: String(existing.price),
+      vin: existing.vin ?? "", description: existing.description, contactInfo: existing.contactInfo,
+      photos: existing.photos, trim: existing.trim ?? "", bodyStyle: existing.bodyStyle ?? "",
+      engine: existing.engine ?? "", transmission: existing.transmission ?? "", drivetrain: existing.drivetrain ?? "",
+      fuelType: existing.fuelType ?? "", exteriorColor: existing.exteriorColor ?? "", interiorColor: existing.interiorColor ?? "",
+      mileageUnit: existing.mileageUnit ?? "mi", odometerStatus: existing.odometerStatus ?? "actual",
+      titleStatus: existing.titleStatus ?? "unknown", sellerState: existing.sellerState ?? "",
+      condition: existing.condition ?? "good", mechanicalIssues: existing.mechanicalIssues ?? "",
+      accidentDisclosure: existing.accidentDisclosure ?? "unknown", damageDisclosure: existing.damageDisclosure ?? "unknown",
+      numberOfOwners: existing.numberOfOwners ? String(existing.numberOfOwners) : "", serviceRecords: existing.serviceRecords ?? "unknown",
+      modifications: existing.modifications ?? "", sellerType: existing.sellerType ?? "private",
+      location: existing.location?.city ?? "", locationState: existing.location?.state ?? "", postalCode: existing.location?.postalCode ?? "",
+      features: existing.features?.join("\n") ?? "", negotiable: existing.negotiable ?? false,
+    }));
+    setVinMessage(existing.vinVerificationStatus === "decoded" ? "VIN decoded with Auto.dev" : "Not verified");
+  }, [existing]);
 
   if (isLoading) {
     return (
@@ -108,7 +148,7 @@ export default function NewListingPage() {
   }
 
   const handleInputChange = (field: string, value: string) => {
-    setFormData((prev) => ({ ...prev, [field]: value }));
+    setFormData((prev) => ({ ...prev, [field]: field === "sellerState" || field === "locationState" ? value.toUpperCase() : value }));
   };
 
   const handlePhotoUpload = (event: React.ChangeEvent<HTMLInputElement>) => {
@@ -126,27 +166,68 @@ export default function NewListingPage() {
     }
   };
 
-  const handleSubmit = async () => {
+  const handleDecode = async () => {
+    const vin = formData.vin.trim().toUpperCase();
+    setIsDecoding(true);
+    setErrorMessage("");
+    try {
+      const result = await decodeVin({ vin });
+      setFormData((prev) => {
+        if (prev.vin.trim().toUpperCase() !== vin) return prev;
+        return { ...prev, vin: result.vin, make: result.make, model: result.model,
+          year: result.year ? String(result.year) : prev.year,
+          trim: result.trim ?? prev.trim, bodyStyle: result.bodyStyle ?? prev.bodyStyle,
+          engine: result.engine ?? prev.engine, transmission: result.transmission ?? prev.transmission,
+          drivetrain: result.drivetrain ?? prev.drivetrain, fuelType: result.fuelType ?? prev.fuelType };
+      });
+      setVinMessage("VIN decoded with Auto.dev. Review the decoded specifications before submitting.");
+    } catch (error) {
+      setErrorMessage(error instanceof Error ? error.message : "VIN decoding failed. Please try again.");
+    } finally { setIsDecoding(false); }
+  };
+
+  const handleSubmit = async (status: "draft" | "pending" = "pending") => {
     if (!currentUser) return;
 
+    setErrorMessage("");
     setIsSubmitting(true);
     try {
-      const vehicleId = await createVehicle({
+      const values = {
         title: formData.title,
         make: formData.make,
         model: formData.model,
-        year: parseInt(formData.year),
-        mileage: parseInt(formData.mileage),
-        price: parseFloat(formData.price),
-        vin: formData.vin || undefined,
+        year: formData.year ? Number(formData.year) : 0,
+        mileage: formData.mileage ? Number(formData.mileage) : 0,
+        price: formData.price ? Number(formData.price) : 0,
+        vin: formData.vin.trim().toUpperCase() || undefined,
+        trim: formData.trim, bodyStyle: formData.bodyStyle, engine: formData.engine,
+        transmission: formData.transmission, drivetrain: formData.drivetrain, fuelType: formData.fuelType,
+        exteriorColor: formData.exteriorColor, interiorColor: formData.interiorColor,
+        mileageUnit: formData.mileageUnit, odometerStatus: formData.odometerStatus, titleStatus: formData.titleStatus,
+        sellerState: formData.sellerState, condition: formData.condition,
+        mechanicalIssues: formData.mechanicalIssues, accidentDisclosure: formData.accidentDisclosure,
+        damageDisclosure: formData.damageDisclosure,
+        numberOfOwners: formData.numberOfOwners ? Number(formData.numberOfOwners) : undefined,
+        serviceRecords: formData.serviceRecords, modifications: formData.modifications,
+        sellerType: formData.sellerType, location: { city: formData.location, state: formData.locationState, postalCode: formData.postalCode || undefined },
+        features: formData.features.split("\n").map((item) => item.trim()).filter(Boolean),
+        negotiable: formData.negotiable, status,
         photos: formData.photos,
         description: formData.description,
         contactInfo: formData.contactInfo,
-      });
+      };
+      let vehicleId;
+      if (editId) {
+        const { status: targetStatus, ...updates } = values;
+        const id = editId as Id<"vehicles">;
+        await updateVehicle({ id, ...updates, numberOfOwners: updates.numberOfOwners ?? null });
+        if (existing?.status === "draft" && targetStatus === "pending") await changeStatus({ id, status: "pending" });
+        vehicleId = id;
+      } else { vehicleId = await createVehicle(values); }
 
       router.push(`/myAccount/my-listings?created=${vehicleId}`);
     } catch (error) {
-      console.error("Error creating vehicle:", error);
+      setErrorMessage(error instanceof Error ? error.message : "Unable to save listing. Please try again.");
     } finally {
       setIsSubmitting(false);
     }
@@ -158,8 +239,9 @@ export default function NewListingPage() {
     formData.model &&
     formData.year &&
     formData.mileage &&
-    formData.price;
-  const isStep2Valid = formData.description && formData.contactInfo;
+    formData.price && formData.vin && Number(formData.year) >= 1886 && Number(formData.mileage) >= 0 && Number(formData.price) > 0 &&
+    [formData.trim, formData.bodyStyle, formData.engine, formData.transmission, formData.drivetrain, formData.fuelType, formData.exteriorColor, formData.interiorColor].every((value) => value.trim());
+  const isStep2Valid = formData.description.trim().length >= 20 && formData.contactInfo.trim().length >= 3 && formData.location && /^[A-Z]{2}$/.test(formData.locationState) && /^[A-Z]{2}$/.test(formData.sellerState) && formData.mechanicalIssues.trim() && formData.accidentDisclosure.trim() && formData.damageDisclosure.trim() && formData.modifications.trim();
 
   return (
     <div className="market-page min-h-screen flex flex-col">
@@ -169,7 +251,7 @@ export default function NewListingPage() {
         {/* Header */}
         <div className="mb-8">
           <h1 className="text-3xl font-bold text-gray-900">
-            List Your Vehicle
+            {editId ? "Edit Your Vehicle" : "List Your Vehicle"}
           </h1>
           <p className="text-gray-600">
             Create a new vehicle listing to showcase at our events
@@ -221,7 +303,7 @@ export default function NewListingPage() {
               >
                 3
               </div>
-              <span className="text-sm font-medium">Event Registration</span>
+              <span className="text-sm font-medium">Review & Submit</span>
             </div>
           </div>
         </div>
@@ -234,10 +316,14 @@ export default function NewListingPage() {
                 ? "Vehicle Information"
                 : step === 2
                   ? "Description & Photos"
-                  : "Event Registration"}
+                  : "Review & Submit"}
             </CardTitle>
           </CardHeader>
           <CardContent className="space-y-6">
+            {errorMessage && <p role="alert" className="text-red-700">{errorMessage}</p>}
+            {(!editId || existing?.status === "draft") && <Button variant="outline" disabled={isSubmitting || !formData.title.trim()} onClick={() => handleSubmit("draft")}>
+              {isSubmitting ? "Saving..." : "Save Draft"}
+            </Button>}
             {step === 1 && (
               <div className="space-y-6">
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
@@ -288,23 +374,7 @@ export default function NewListingPage() {
 
                   <div className="space-y-2">
                     <Label htmlFor="year">Year *</Label>
-                    <Select
-                      value={formData.year}
-                      onValueChange={(value) =>
-                        handleInputChange("year", value)
-                      }
-                    >
-                      <SelectTrigger>
-                        <SelectValue placeholder="Select year" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {years.map((year) => (
-                          <SelectItem key={year} value={year.toString()}>
-                            {year}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
+                    <Input id="year" type="number" min={1886} max={currentYear + 1} value={formData.year} onChange={(e) => handleInputChange("year", e.target.value)} />
                   </div>
 
                   <div className="space-y-2">
@@ -334,14 +404,33 @@ export default function NewListingPage() {
                   </div>
 
                   <div className="space-y-2">
-                    <Label htmlFor="vin">VIN (Optional)</Label>
+                    <Label htmlFor="vin">VIN *</Label>
                     <Input
                       id="vin"
-                      placeholder="17-character VIN"
+                      placeholder="17-character VIN (or pre-1981 serial number)"
                       value={formData.vin}
-                      onChange={(e) => handleInputChange("vin", e.target.value)}
+                      onChange={(e) => { handleInputChange("vin", e.target.value.toUpperCase()); setVinMessage("Not verified"); }}
                     />
+                    <Button type="button" variant="outline" onClick={handleDecode} disabled={isDecoding || !/^[A-HJ-NPR-Z0-9]{17}$/.test(formData.vin.trim())}>
+                      {isDecoding ? "Decoding..." : "Decode VIN with Auto.dev"}
+                    </Button>
+                    <p className="text-sm text-gray-600" role="status">{vinMessage}</p>
                   </div>
+                  <p className="text-sm text-gray-600 md:col-span-2">Complete each specification. Enter Unknown if a specification is unavailable.</p>
+                  {([ ["trim", "Trim"], ["bodyStyle", "Body style"], ["engine", "Engine"], ["transmission", "Transmission"], ["drivetrain", "Drivetrain"], ["fuelType", "Fuel type"], ["exteriorColor", "Exterior color"], ["interiorColor", "Interior color"] ] as const).map(([field, label]) => (
+                    <div className="space-y-2" key={field}>
+                      <Label htmlFor={field}>{label}</Label>
+                      <Input id={field} value={formData[field]} onChange={(e) => handleInputChange(field, e.target.value)} />
+                    </div>
+                  ))}
+                  <div className="space-y-2">
+                    <Label htmlFor="mileageUnit">Mileage unit *</Label>
+                    <select id="mileageUnit" className="w-full rounded-md border p-2" value={formData.mileageUnit} onChange={(e) => handleInputChange("mileageUnit", e.target.value)}>
+                      <option value="mi">Miles</option><option value="km">Kilometers</option>
+                    </select>
+                  </div>
+                  <div className="space-y-2"><Label htmlFor="odometerStatus">Mileage declaration</Label><select id="odometerStatus" className="w-full rounded-md border p-2" value={formData.odometerStatus} onChange={(e) => handleInputChange("odometerStatus", e.target.value)}><option value="actual">Actual mileage</option><option value="exempt">Odometer exempt</option><option value="not_actual">Not actual mileage</option></select></div>
+                  <label className="flex items-center gap-2"><input type="checkbox" checked={formData.negotiable} onChange={(e) => setFormData((prev) => ({ ...prev, negotiable: e.target.checked }))} /> Asking price is negotiable</label>
                 </div>
 
                 <div className="flex justify-end">
@@ -354,6 +443,18 @@ export default function NewListingPage() {
 
             {step === 2 && (
               <div className="space-y-6">
+                <div className="grid gap-6 md:grid-cols-2">
+                  {([ ["sellerState", "Seller state *"], ["location", "Vehicle city *"], ["locationState", "Vehicle state *"], ["postalCode", "Postal code"], ["numberOfOwners", "Number of owners (leave blank if unknown)"] ] as const).map(([field, label]) => (
+                    <div className="space-y-2" key={field}><Label htmlFor={field}>{label}</Label><Input id={field} type={field === "numberOfOwners" ? "number" : "text"} min={field === "numberOfOwners" ? 1 : undefined} value={formData[field]} onChange={(e) => handleInputChange(field, e.target.value)} /></div>
+                  ))}
+                  <div className="space-y-2"><Label htmlFor="titleStatus">Title status</Label><select id="titleStatus" className="w-full rounded-md border p-2" value={formData.titleStatus} onChange={(e) => handleInputChange("titleStatus", e.target.value)}>{["clean", "rebuilt", "salvage", "flood", "lemon", "other", "unknown"].map((value) => <option key={value} value={value}>{value}</option>)}</select></div>
+                  <div className="space-y-2"><Label htmlFor="condition">Condition</Label><select id="condition" className="w-full rounded-md border p-2" value={formData.condition} onChange={(e) => handleInputChange("condition", e.target.value)}>{["excellent", "good", "fair", "poor"].map((value) => <option key={value} value={value}>{value}</option>)}</select></div>
+                  <div className="space-y-2"><Label htmlFor="sellerType">Seller type</Label><select id="sellerType" className="w-full rounded-md border p-2" value={formData.sellerType} onChange={(e) => handleInputChange("sellerType", e.target.value)}><option value="private">Private seller</option></select></div>
+                  <div className="space-y-2"><Label htmlFor="serviceRecords">Service records</Label><select id="serviceRecords" className="w-full rounded-md border p-2" value={formData.serviceRecords} onChange={(e) => handleInputChange("serviceRecords", e.target.value)}><option value="unknown">Unknown</option><option value="available">Available</option><option value="partial">Partial records</option><option value="unavailable">Unavailable</option></select></div>
+                </div>
+                {([ ["mechanicalIssues", "Known mechanical issues * (write None or Unknown if applicable)"], ["accidentDisclosure", "Accident disclosure"], ["damageDisclosure", "Damage disclosure"], ["modifications", "Modifications * (write None if unmodified)"], ["features", "Features / options (one per line)"] ] as const).map(([field, label]) => (
+                  <div className="space-y-2" key={field}><Label htmlFor={field}>{label}</Label><Textarea id={field} value={formData[field]} onChange={(e) => handleInputChange(field, e.target.value)} /></div>
+                ))}
                 <div className="space-y-2">
                   <Label htmlFor="description">Description *</Label>
                   <Textarea
@@ -456,7 +557,7 @@ export default function NewListingPage() {
                         {formData.make} {formData.model}
                       </p>
                       <p>
-                        <strong>Mileage:</strong> {formData.mileage} miles
+                        <strong>Mileage:</strong> {formData.mileage} {formData.mileageUnit}
                       </p>
                       <p>
                         <strong>Price:</strong> ${formData.price}
@@ -472,7 +573,7 @@ export default function NewListingPage() {
                     <Button variant="outline" onClick={() => setStep(2)}>
                       Previous Step
                     </Button>
-                    <Button onClick={handleSubmit} disabled={isSubmitting}>
+                    <Button onClick={() => handleSubmit("pending")} disabled={isSubmitting}>
                       {isSubmitting ? "Creating Listing..." : "Create Listing"}
                     </Button>
                   </div>

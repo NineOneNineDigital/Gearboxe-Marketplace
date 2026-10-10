@@ -1,3 +1,4 @@
+import { normalizeVehicleStatus } from "./lib/vehicleVisibility";
 import { v } from "convex/values";
 import { internalAction, mutation, query } from "./_generated/server";
 import { requireAdmin, requireSuperAdmin } from "./lib/authorization";
@@ -22,7 +23,7 @@ export const getAdminStats = query({
     const users = await ctx.db.query("users").collect();
 
     const pendingVehicles = vehicles.filter((v) => v.status === "pending");
-    const approvedVehicles = vehicles.filter((v) => v.status === "approved");
+    const approvedVehicles = vehicles.filter((v) => (v.status === "approved" || v.status === "active"));
     const upcomingEvents = events.filter((e) => e.date > Date.now());
 
     return {
@@ -46,7 +47,7 @@ export const getAllVehicles = query({
     const vehiclesWithUsers = await Promise.all(
       vehicles.map(async (vehicle) => {
         const user = await ctx.db.get(vehicle.userId);
-        return { ...vehicle, user };
+        return { ...normalizeVehicleStatus(vehicle), user };
       })
     );
 

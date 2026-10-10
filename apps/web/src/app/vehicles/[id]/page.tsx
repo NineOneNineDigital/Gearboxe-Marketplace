@@ -1,5 +1,8 @@
 "use client";
 
+import { BuyerServices } from "@/components/ui/buyer-services";
+import { VehicleDetails } from "@/components/ui/vehicle-details";
+import { VehiclePhotoCarousel } from "@/components/ui/vehicle-photo-carousel";
 import { Button } from "@/components/ui/button";
 import { Footer } from "@/components/ui/footer";
 import { Navbar } from "@/components/ui/navbar";
@@ -14,7 +17,6 @@ import {
   Calendar,
   Car,
   ChevronLeft,
-  ChevronRight,
   Clock,
   Copy,
   Gauge,
@@ -23,13 +25,12 @@ import {
   MapPin,
   Share2,
   User,
-  X,
 } from "lucide-react";
 import Head from "next/head";
 import Image from "next/image";
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { use, useCallback, useEffect, useState } from "react";
+import { use, useEffect, useState } from "react";
 
 interface VehiclePageProps {
   params: Promise<{
@@ -42,8 +43,6 @@ export default function VehiclePage({ params }: VehiclePageProps) {
   const { isSignedIn } = useAuth();
   const { user: convexUser } = useCurrentUser();
   const unwrappedParams = use(params);
-  const [currentPhotoIndex, setCurrentPhotoIndex] = useState(0);
-  const [isPhotoModalOpen, setIsPhotoModalOpen] = useState(false);
   const [isFavorited, setIsFavorited] = useState(false);
   const [isFavoriteLoading, setIsFavoriteLoading] = useState(false);
   const [showShareMenu, setShowShareMenu] = useState(false);
@@ -56,13 +55,8 @@ export default function VehiclePage({ params }: VehiclePageProps) {
     api.users.getUserById,
     vehicle?.userId ? { id: vehicle.userId } : "skip"
   );
-  const vehicleEvent = useQuery(
-    api.registrations.getRegistrationByVehicle,
-    vehicle?._id ? { vehicleId: vehicle._id } : "skip"
-  );
   const relatedVehicles = vehicleResults(
     useQuery(api.vehicles.getVehicles, {
-      status: "approved",
       make: vehicle?.make,
     })
   );
@@ -70,7 +64,7 @@ export default function VehiclePage({ params }: VehiclePageProps) {
   const removeFavorite = useMutation(api.favorites.removeFavorite);
   const isFavoritedQuery = useQuery(
     api.favorites.isFavorited,
-    convexUser?._id && vehicle?._id
+    isAuthenticated && convexUser?._id && vehicle?._id
       ? { userId: convexUser._id, vehicleId: vehicle._id }
       : "skip"
   );
@@ -92,42 +86,6 @@ export default function VehiclePage({ params }: VehiclePageProps) {
       setIsFavorited(isFavoritedQuery);
     }
   }, [isFavoritedQuery]);
-
-  const nextPhoto = useCallback(() => {
-    if (!vehicle) return;
-    setCurrentPhotoIndex((prev) =>
-      prev === vehicle.photos.length - 1 ? 0 : prev + 1
-    );
-  }, [vehicle]);
-
-  const prevPhoto = useCallback(() => {
-    if (!vehicle) return;
-    setCurrentPhotoIndex((prev) =>
-      prev === 0 ? vehicle.photos.length - 1 : prev - 1
-    );
-  }, [vehicle]);
-
-  useEffect(() => {
-    // Keyboard navigation for photo modal
-    const handleKeyDown = (e: KeyboardEvent) => {
-      if (!isPhotoModalOpen) return;
-
-      switch (e.key) {
-        case "Escape":
-          setIsPhotoModalOpen(false);
-          break;
-        case "ArrowLeft":
-          prevPhoto();
-          break;
-        case "ArrowRight":
-          nextPhoto();
-          break;
-      }
-    };
-
-    document.addEventListener("keydown", handleKeyDown);
-    return () => document.removeEventListener("keydown", handleKeyDown);
-  }, [isPhotoModalOpen, prevPhoto, nextPhoto]);
 
   useEffect(() => {
     // Close share menu when clicking outside
@@ -377,7 +335,7 @@ export default function VehiclePage({ params }: VehiclePageProps) {
                     <div className="flex flex-wrap items-center gap-4 text-sm text-gray-600">
                       <div className="flex items-center space-x-1">
                         <Gauge className="h-4 w-4" />
-                        <span>{formatMileage(vehicle.mileage)} miles</span>
+                        <span>{formatMileage(vehicle.mileage)} {vehicle.mileageUnit ?? "mi"}</span>
                       </div>
                       <div className="flex items-center space-x-1">
                         <Calendar className="h-4 w-4" />
@@ -458,183 +416,19 @@ export default function VehiclePage({ params }: VehiclePageProps) {
 
               </div>
 
-              {/* Main Photo */}
-              {vehicle.photos.length > 0 && (
-                <div className="order-1 overflow-hidden rounded-xl border border-black/10 bg-white shadow-sm">
-                  <div className="relative">
-                    <Image
-                      src={vehicle.photos[currentPhotoIndex]}
-                      alt={`${vehicle.title} - Photo ${currentPhotoIndex + 1}`}
-                      width={800}
-                      height={500}
-                      className="w-full h-96 object-cover cursor-pointer"
-                      onClick={() => setIsPhotoModalOpen(true)}
-                    />
+              <VehiclePhotoCarousel
+                key={vehicle._id}
+                photos={vehicle.photos}
+                title={vehicle.title}
+                vehicleLabel={`${vehicle.year} ${vehicle.make} ${vehicle.model}`}
+                className="order-1"
+              />
 
-                    {/* Photo Navigation */}
-                    {vehicle.photos.length > 1 && (
-                      <>
-                        <Button
-                          variant="outline"
-                          size="icon"
-                          className="absolute left-4 top-1/2 transform -translate-y-1/2 bg-gray-100 hover:bg-gray-200 border-gray-300 shadow-xl"
-                          onClick={prevPhoto}
-                        >
-                          <ChevronLeft className="h-6 w-6 text-primary" />
-                        </Button>
-                        <Button
-                          variant="outline"
-                          size="icon"
-                          className="absolute right-4 top-1/2 transform -translate-y-1/2 bg-gray-100 hover:bg-gray-200 border-gray-300 shadow-xl"
-                          onClick={nextPhoto}
-                        >
-                          <ChevronRight className="h-6 w-6 text-primary" />
-                        </Button>
-                      </>
-                    )}
-
-                    {/* Photo Counter */}
-                    <div className="absolute bottom-4 right-4 bg-black/70 text-white px-3 py-1 rounded-full text-sm">
-                      {currentPhotoIndex + 1} / {vehicle.photos.length}
-                    </div>
-                  </div>
-
-                  {/* Photo Thumbnails */}
-                  {vehicle.photos.length > 1 && (
-                    <div className="p-4 bg-gray-50">
-                      <div className="flex space-x-2 overflow-x-auto">
-                        {vehicle.photos.map((photo, index) => (
-                          <button
-                            key={index}
-                            onClick={() => setCurrentPhotoIndex(index)}
-                            className={`flex-shrink-0 w-20 h-16 rounded-lg overflow-hidden border-2 ${
-                              index === currentPhotoIndex
-                                ? "border-primary"
-                                : "border-gray-200"
-                            }`}
-                          >
-                            <Image
-                              src={photo}
-                              alt={`Thumbnail ${index + 1}`}
-                              width={80}
-                              height={64}
-                              className="w-full h-full object-cover"
-                            />
-                          </button>
-                        ))}
-                      </div>
-                    </div>
-                  )}
-                </div>
-              )}
-
-              {/* Vehicle Details */}
-              <div className="order-3 rounded-xl border border-black/10 bg-white shadow-sm">
-                <div className="p-6">
-                  <h2 className="text-xl font-semibold text-gray-900">
-                    Vehicle Details
-                  </h2>
-                </div>
-                <div className="border-b border-gray-200"></div>
-                <div className="p-6">
-                  <div className="space-y-6">
-                    {/* Vehicle Information */}
-                    <div>
-                      <h3 className="text-lg font-semibold text-gray-900 mb-4">
-                        Vehicle Information
-                      </h3>
-                      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                        <div className="space-y-4">
-                          <div className="flex justify-between py-3 border-b border-gray-100">
-                            <span className="text-sm font-medium text-gray-600">
-                              Make
-                            </span>
-                            <span className="text-gray-900 font-medium">
-                              {vehicle.make}
-                            </span>
-                          </div>
-                          <div className="flex justify-between py-3 border-b border-gray-100">
-                            <span className="text-sm font-medium text-gray-600">
-                              Model
-                            </span>
-                            <span className="text-gray-900 font-medium">
-                              {vehicle.model}
-                            </span>
-                          </div>
-                          <div className="flex justify-between py-3 border-b border-gray-100">
-                            <span className="text-sm font-medium text-gray-600">
-                              Year
-                            </span>
-                            <span className="text-gray-900 font-medium">
-                              {vehicle.year}
-                            </span>
-                          </div>
-                        </div>
-                        <div className="space-y-4">
-                          <div className="flex justify-between py-3 border-b border-gray-100">
-                            <span className="text-sm font-medium text-gray-600">
-                              Mileage
-                            </span>
-                            <span className="text-gray-900 font-medium">
-                              {formatMileage(vehicle.mileage)} miles
-                            </span>
-                          </div>
-                          <div className="flex justify-between py-3 border-b border-gray-100">
-                            <span className="text-sm font-medium text-gray-600">
-                              Price
-                            </span>
-                            <span className="text-primary font-semibold text-lg">
-                              {formatPrice(vehicle.price)}
-                            </span>
-                          </div>
-                          {vehicle.vin && (
-                            <div className="flex justify-between py-3 border-b border-gray-100">
-                              <span className="text-sm font-medium text-gray-600">
-                                VIN
-                              </span>
-                              <span className="text-gray-900 font-mono text-sm">
-                                {vehicle.vin}
-                              </span>
-                            </div>
-                          )}
-                        </div>
-                      </div>
-                    </div>
-
-                    {/* Description */}
-                    <div>
-                      <h3 className="text-lg font-semibold text-gray-900 mb-4">
-                        Description
-                      </h3>
-                      <div className="bg-gray-50 rounded-lg p-4">
-                        <p className="text-gray-700 whitespace-pre-wrap leading-relaxed">
-                          {vehicle.description}
-                        </p>
-                      </div>
-                    </div>
-
-                    {/* Marketplace context */}
-                    <div>
-                      <h3 className="mb-4 text-lg font-semibold text-gray-900">
-                        Buying context
-                      </h3>
-                      <div className="grid gap-3 sm:grid-cols-3">
-                        <div className="flex items-center space-x-2 text-sm text-gray-600">
-                          <User className="h-4 w-4 text-primary" />
-                          <span>Private seller</span>
-                        </div>
-                        <div className="flex items-center space-x-2 text-sm text-gray-600">
-                          <Mail className="h-4 w-4 text-primary" />
-                          <span>Direct messaging</span>
-                        </div>
-                        <div className="flex items-center space-x-2 text-sm text-gray-600">
-                          <Calendar className="h-4 w-4 text-primary" />
-                          <span>In-person viewing</span>
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-                </div>
+              <div className="order-3">
+                <VehicleDetails vehicle={vehicle} />
+              </div>
+              <div className="order-4">
+                <BuyerServices />
               </div>
             </div>
 
@@ -673,14 +467,14 @@ export default function VehiclePage({ params }: VehiclePageProps) {
                       <h3 className="font-semibold text-gray-900">
                         {seller.name}
                       </h3>
-                      <p className="text-sm text-gray-600">Private seller</p>
+                      <p className="text-sm text-gray-600">{vehicle.sellerType === "dealer" ? "Dealer" : vehicle.sellerType === "private" ? "Private seller" : "Seller"}</p>
                     </div>
                   </div>
 
                   <div className="space-y-3 mb-6">
                     <div className="flex items-center space-x-2 text-sm text-gray-600">
                       <MapPin className="h-4 w-4" />
-                      <span>Local Seller</span>
+                      <span>{vehicle.location ? `${vehicle.location.city}, ${vehicle.location.state}` : "Location not provided"}</span>
                     </div>
                   </div>
 
@@ -739,58 +533,15 @@ export default function VehiclePage({ params }: VehiclePageProps) {
                 </div>
               )}
 
-              {/* Upcoming Event */}
-              <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
-                <h3 className="font-semibold text-gray-900 mb-4">
-                  Upcoming Event
-                </h3>
-                {vehicleEvent?.event ? (
-                  <div className="space-y-4">
-                    <div className="flex items-start space-x-3">
-                      <Calendar className="h-5 w-5 text-primary mt-0.5" />
-                      <div className="flex-1">
-                        <h4 className="font-medium text-gray-900">
-                          {vehicleEvent.event.name}
-                        </h4>
-                        <p className="text-sm text-gray-600 mt-1">
-                          {new Date(vehicleEvent.event.date).toLocaleDateString(
-                            "en-US",
-                            {
-                              weekday: "long",
-                              year: "numeric",
-                              month: "long",
-                              day: "numeric",
-                            }
-                          )}
-                        </p>
-                        <p className="text-sm text-gray-600">
-                          {vehicleEvent.event.location}
-                        </p>
-                        <p className="text-sm text-gray-500 mt-1">
-                          {vehicleEvent.event.address}
-                        </p>
-                      </div>
-                    </div>
-                    <div className="pt-2 border-t border-gray-100">
-                      <p className="text-xs text-gray-600 mb-3">
-                        This vehicle will be displayed at this event.
-                      </p>
-                      <Button asChild variant="outline" className="w-full">
-                        <Link href="/events">View All Events</Link>
-                      </Button>
-                    </div>
-                  </div>
-                ) : (
-                  <div className="text-center py-6">
-                    <Calendar className="h-12 w-12 text-gray-300 mx-auto mb-3" />
-                    <p className="text-sm text-gray-600 mb-4">
-                      This vehicle is not currently registered for any events.
-                    </p>
-                    <Button asChild variant="outline" className="w-full">
-                      <Link href="/events">View All Events</Link>
-                    </Button>
-                  </div>
-                )}
+              <div className="rounded-xl border border-border bg-card p-6 shadow-sm">
+                <Calendar aria-hidden="true" className="mb-4 h-6 w-6 text-primary" />
+                <h3 className="font-semibold text-foreground">Meet sellers in person</h3>
+                <p className="mt-2 mb-4 text-sm leading-6 text-muted-foreground">
+                  Explore upcoming Gearboxe markets to see vehicles and meet local sellers.
+                </p>
+                <Button asChild variant="outline" className="w-full">
+                  <Link href="/events">View all events</Link>
+                </Button>
               </div>
             </div>
           </div>
@@ -798,58 +549,7 @@ export default function VehiclePage({ params }: VehiclePageProps) {
 
         <Footer />
 
-        {/* Photo Modal */}
-        {isPhotoModalOpen && vehicle.photos.length > 0 && (
-          <div className="fixed inset-0 bg-black/90 z-50 flex items-center justify-center p-4">
-            <div className="relative max-w-4xl max-h-full">
-              <Button
-                variant="outline"
-                size="icon"
-                className="absolute top-4 right-4 z-10 bg-gray-100 hover:bg-gray-200 border-gray-300 shadow-xl"
-                onClick={() => setIsPhotoModalOpen(false)}
-              >
-                <X className="h-6 w-6 text-primary" />
-              </Button>
 
-              <div className="relative">
-                <Image
-                  src={vehicle.photos[currentPhotoIndex]}
-                  alt={`${vehicle.title} - Photo ${currentPhotoIndex + 1}`}
-                  width={1200}
-                  height={800}
-                  className="max-w-full max-h-[80vh] object-contain rounded-lg"
-                />
-
-                {vehicle.photos.length > 1 && (
-                  <>
-                    <Button
-                      variant="outline"
-                      size="icon"
-                      className="absolute left-4 top-1/2 transform -translate-y-1/2 bg-gray-100 hover:bg-gray-200 border-gray-300 shadow-xl"
-                      onClick={prevPhoto}
-                    >
-                      <ChevronLeft className="h-6 w-6 text-primary" />
-                    </Button>
-                    <Button
-                      variant="outline"
-                      size="icon"
-                      className="absolute right-4 top-1/2 transform -translate-y-1/2 bg-gray-100 hover:bg-gray-200 border-gray-300 shadow-xl"
-                      onClick={nextPhoto}
-                    >
-                      <ChevronRight className="h-6 w-6 text-primary" />
-                    </Button>
-                  </>
-                )}
-              </div>
-
-              <div className="text-center mt-4 text-white">
-                <p className="text-sm">
-                  {currentPhotoIndex + 1} of {vehicle.photos.length}
-                </p>
-              </div>
-            </div>
-          </div>
-        )}
       </div>
     </>
   );

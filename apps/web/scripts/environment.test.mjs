@@ -51,3 +51,10 @@ test("invalid origins, mismatched Convex targets, and noninteger fees fail", () 
     { MARKETPLACE_ENV: undefined },
   ]) assert.throws(() => validateEnvironment({ ...valid, ...override }, "web-runtime"));
 });
+
+test("local marketplace can run without payments while supplied credentials remain validated", () => {
+  const local = { ...valid, MARKETPLACE_ENV: "development", STRIPE_SECRET_KEY: undefined, STRIPE_WEBHOOK_SECRET: undefined, EVENT_REGISTRATION_PRICE_CENTS: undefined };
+  validateEnvironment(local, "web-runtime");
+  assert.throws(() => validateEnvironment({ ...local, STRIPE_SECRET_KEY: "sk_live_example" }, "web-runtime"), /wrong key type/);
+  assert.throws(() => validateEnvironment(local, "convex"), /STRIPE_SECRET_KEY is required/);
+});

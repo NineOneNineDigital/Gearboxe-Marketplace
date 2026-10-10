@@ -1,3 +1,4 @@
+import { publicVehicle } from "./lib/vehicleVisibility";
 import { v } from "convex/values";
 import { mutation, query } from "./_generated/server";
 import { requireSelf } from "./lib/authorization";
@@ -10,7 +11,7 @@ export const addFavorite = mutation({
   handler: async (ctx, args) => {
     await requireSelf(ctx, args.userId);
     const vehicle = await ctx.db.get(args.vehicleId);
-    if (!vehicle || vehicle.status !== "approved") {
+    if (!vehicle || (vehicle.status !== "approved" && vehicle.status !== "active")) {
       throw new Error("Vehicle is not available");
     }
     // Check if already favorited
@@ -70,7 +71,7 @@ export const getFavoritesByUser = query({
     );
 
     return vehicles.flatMap((vehicle) =>
-      vehicle?.status === "approved" ? [vehicle] : []
+      (vehicle?.status === "approved" || vehicle?.status === "active") ? [publicVehicle(vehicle)] : []
     );
   },
 });

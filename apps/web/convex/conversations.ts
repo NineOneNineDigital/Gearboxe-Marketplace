@@ -24,7 +24,7 @@ export const getOrCreateConversation = mutation({
       throw new Error("A conversation requires two different participants");
     }
     const vehicle = await ctx.db.get(args.vehicleId);
-    if (!vehicle || vehicle.status !== "approved") {
+    if (!vehicle || (vehicle.status !== "approved" && vehicle.status !== "active")) {
       throw new Error("Vehicle is not available");
     }
     if (

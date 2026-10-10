@@ -33,11 +33,19 @@ The marketplace environment file belongs at `apps/web/.env.local`. Configure:
 - `NEXT_PUBLIC_APP_URL`
 - `MARKETPLACE_ENV` (`development`, `preview`, `staging`, or `production`)
 
+Local development can run without Stripe credentials; payment endpoints stay
+unavailable until configured. Hosted environments and Convex still require the
+payment configuration.
+
 The Convex deployment also requires `CLERK_JWT_ISSUER_DOMAIN`,
 `CLERK_WEBHOOK_SECRET`, `STRIPE_SECRET_KEY`, and
 `EVENT_REGISTRATION_PRICE_CENTS`. The registration price must match in the web
 and Convex environments: the web server creates Checkout sessions and Convex
 independently verifies the paid amount before completing a registration.
+
+Vehicle listing fields, lifecycle rules, legacy compatibility, and Auto.dev setup
+are documented in [Vehicle listings](docs/VEHICLE_LISTINGS.md). VIN decoding
+requires `AUTO_DEV_API_KEY` in the Convex deployment environment.
 
 ## Development
 

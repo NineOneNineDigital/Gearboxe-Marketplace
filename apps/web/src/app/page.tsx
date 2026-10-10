@@ -17,7 +17,7 @@ export default function HomePage() {
   const { isAuthenticated } = useConvexAuth();
   const upcomingEvents = useQuery(api.events.getUpcomingEvents);
   const featuredVehicles = vehicleResults(
-    useQuery(api.vehicles.getVehicles, { status: "approved" })
+    useQuery(api.vehicles.getVehicles, {})
   );
 
   const displayVehicles = featuredVehicles?.slice(0, 6) ?? [];

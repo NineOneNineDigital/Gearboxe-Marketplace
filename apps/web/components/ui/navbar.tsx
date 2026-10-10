@@ -13,7 +13,6 @@ import { useState } from "react";
 const navigation = [
   { href: "/vehicles", label: "Vehicles" },
   { href: "/events", label: "Events" },
-  { href: "/contact", label: "How it works" },
 ];
 
 export function Navbar() {

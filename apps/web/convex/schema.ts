@@ -1,7 +1,12 @@
 import { defineSchema, defineTable } from "convex/server";
 import { v } from "convex/values";
 
+import { optionalSpecificationFields, storedListingStatus, moderationEntry, decodedFields } from "./lib/vehicleSpecification";
+
 export default defineSchema({
+  vinDecodes: defineTable({ ...decodedFields, decodedAt: v.number() }).index("by_vin", ["vin"]),
+  vinDecodeLimits: defineTable({ userId: v.id("users"), requestedAt: v.number() }).index("by_user", ["userId"]),
+  vehicleModerationLog: defineTable({ vehicleId: v.id("vehicles"), ...moderationEntry.fields }).index("by_vehicle", ["vehicleId"]),
   // No public read/write functions: provisioning evidence is operator-only.
   adminAuditLog: defineTable({
     action: v.literal("bootstrapSuperAdmin"),
@@ -43,11 +48,12 @@ export default defineSchema({
     photos: v.array(v.string()),
     description: v.string(),
     contactInfo: v.string(),
-    status: v.union(
-      v.literal("pending"),
-      v.literal("approved"),
-      v.literal("rejected")
-    ),
+    ...optionalSpecificationFields,
+    vinVerificationStatus: v.optional(v.union(v.literal("unverified"), v.literal("decoded"))),
+    vinDecodedAt: v.optional(v.number()),
+    moderationReason: v.optional(v.string()),
+    moderationHistory: v.optional(v.array(moderationEntry)),
+    status: storedListingStatus,
     createdAt: v.number(),
   })
     .index("by_user", ["userId"])

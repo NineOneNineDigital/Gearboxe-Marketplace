@@ -16,8 +16,11 @@ export default function AdminListingsPage() {
   const { isAuthenticated, isLoading } = useConvexAuth();
   const { user } = useUser();
   const [statusFilter, setStatusFilter] = useState<
-    "all" | "pending" | "approved" | "rejected"
+    "all" | "draft" | "pending" | "active" | "rejected" | "reserved" | "sold" | "archived"
   >("all");
+
+  const [reasons, setReasons] = useState<Record<string, string>>({});
+  const [actionError, setActionError] = useState("");
 
   const isAdmin = useQuery(api.users.isAdmin);
   const allVehicles = useQuery(api.admin.getAllVehicles, isAdmin === true ? {} : "skip");
@@ -65,23 +68,24 @@ export default function AdminListingsPage() {
     try {
       await approveVehicle({ id: vehicleId as Id<"vehicles"> });
     } catch (error) {
-      console.error("Error approving vehicle:", error);
+      setActionError(error instanceof Error ? error.message : "Unable to approve listing.");
     }
   };
 
   const handleReject = async (vehicleId: string) => {
-    if (confirm("Are you sure you want to reject this listing?")) {
+    if (!reasons[vehicleId]?.trim()) { setActionError("Enter a moderation reason before rejecting a listing."); return; }
+    {
       try {
-        await rejectVehicle({ id: vehicleId as Id<"vehicles"> });
+        await rejectVehicle({ id: vehicleId as Id<"vehicles">, reason: reasons[vehicleId] });
       } catch (error) {
-        console.error("Error rejecting vehicle:", error);
+        setActionError(error instanceof Error ? error.message : "Unable to reject listing.");
       }
     }
   };
 
   const getStatusColor = (status: string) => {
     switch (status) {
-      case "approved":
+      case "active":
         return "status-approved";
       case "pending":
         return "status-pending";
@@ -115,6 +119,7 @@ export default function AdminListingsPage() {
         </div>
       </div>
 
+      {actionError && <p role="alert" className="mb-4 text-red-700">{actionError}</p>}
       {/* Filters */}
       <div className="mb-6">
         <div className="flex items-center space-x-4">
@@ -123,7 +128,11 @@ export default function AdminListingsPage() {
             {[
               { key: "all", label: "All" },
               { key: "pending", label: "Pending" },
-              { key: "approved", label: "Approved" },
+              { key: "active", label: "Active" },
+              { key: "draft", label: "Draft" },
+              { key: "reserved", label: "Reserved" },
+              { key: "sold", label: "Sold" },
+              { key: "archived", label: "Archived" },
               { key: "rejected", label: "Rejected" },
             ].map((filter) => (
               <Button
@@ -180,7 +189,7 @@ export default function AdminListingsPage() {
                       {vehicle.year} {vehicle.make} {vehicle.model}
                     </p>
                     <div className="flex justify-between items-center text-sm text-gray-600 mb-4">
-                      <span>{vehicle.mileage.toLocaleString()} miles</span>
+                      <span>{vehicle.mileage.toLocaleString()} {vehicle.mileageUnit ?? "mi"}</span>
                       <span className="font-semibold text-primary text-lg">
                         ${vehicle.price.toLocaleString()}
                       </span>
@@ -191,6 +200,9 @@ export default function AdminListingsPage() {
                       <p>Contact: {vehicle.contactInfo}</p>
                     </div>
 
+                    {vehicle.moderationReason && <p className="text-sm mb-3">Moderation reason: {vehicle.moderationReason}</p>}
+                    <details className="text-sm mb-3"><summary>Moderation history</summary><ol className="space-y-2 mt-2">{vehicle.moderationHistory?.map((entry, index) => <li key={index}>{new Date(entry.createdAt).toLocaleString()}: {entry.fromStatus ?? "new"} → {entry.toStatus}. {entry.reason}</li>)}</ol></details>
+                    {["pending", "active", "approved", "reserved"].includes(vehicle.status) && <label className="block mb-3 text-sm">Moderation reason (required for rejection)<textarea className="block w-full rounded border p-2" value={reasons[vehicle._id] ?? ""} onChange={(e) => setReasons((prev) => ({ ...prev, [vehicle._id]: e.target.value }))} /></label>}
                     {/* Actions */}
                     <div className="flex space-x-2">
                       <Button
@@ -204,16 +216,16 @@ export default function AdminListingsPage() {
                           View
                         </Link>
                       </Button>
-                      {vehicle.status === "pending" && (
+                      {["pending", "active", "approved", "reserved"].includes(vehicle.status) && (
                         <>
-                          <Button
+                          {vehicle.status === "pending" && <Button
                             size="sm"
                             onClick={() => handleApprove(vehicle._id)}
                             className="admin-success-btn"
                           >
                             <CheckCircle className="h-4 w-4 mr-1" />
                             Approve
-                          </Button>
+                          </Button>}
                           <Button
                             size="sm"
                             onClick={() => handleReject(vehicle._id)}
@@ -285,9 +297,9 @@ export default function AdminListingsPage() {
                 </span>
               </div>
               <div className="flex justify-between">
-                <span className="text-sm text-gray-600">Approved</span>
+                <span className="text-sm text-gray-600">Active</span>
                 <span className="font-medium text-green-600">
-                  {allVehicles.filter((v) => v.status === "approved").length}
+                  {allVehicles.filter((v) => v.status === "active").length}
                 </span>
               </div>
               <div className="flex justify-between">

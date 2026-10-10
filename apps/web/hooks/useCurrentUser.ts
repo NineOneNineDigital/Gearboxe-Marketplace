@@ -3,7 +3,7 @@ import { useConvexAuth, useQuery } from "convex/react";
 
 export function useCurrentUser() {
   const { isLoading, isAuthenticated } = useConvexAuth();
-  const user = useQuery(api.users.current);
+  const user = useQuery(api.users.current, isAuthenticated ? {} : "skip");
 
   // If Convex is still loading, show loading
   if (isLoading) {

@@ -26,7 +26,7 @@ export const sendMessage = mutation({
       throw new Error("You cannot message yourself");
     }
     const vehicle = await ctx.db.get(args.vehicleId);
-    if (!vehicle || vehicle.status !== "approved") {
+    if (!vehicle || (vehicle.status !== "approved" && vehicle.status !== "active")) {
       throw new Error("Vehicle is not available");
     }
     if (
