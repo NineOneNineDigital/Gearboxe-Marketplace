@@ -2,7 +2,7 @@ import { api } from "@/convex/_generated/api";
 import { stripe } from "@/lib/stripe";
 import { ConvexHttpClient } from "convex/browser";
 import { NextRequest, NextResponse } from "next/server";
-import QRCode from "qrcode";
+import type Stripe from "stripe";
 
 const convex = new ConvexHttpClient(process.env.NEXT_PUBLIC_CONVEX_URL!);
 
@@ -28,30 +28,14 @@ export async function POST(request: NextRequest) {
   }
 
   if (event.type === "checkout.session.completed") {
-    const session = event.data.object as any;
+    const session = event.data.object as Stripe.Checkout.Session;
 
     try {
-      const { userId, eventId, vehicleId } = session.metadata;
-
-      // Generate QR code data
-      const qrCodeData = `${userId}-${eventId}-${vehicleId}-${Date.now()}`;
-
-      // Generate QR code image
-      const qrCodeImage = await QRCode.toDataURL(qrCodeData);
-
-      // Create registration record
-      await convex.mutation(api.registrations.createRegistration, {
-        eventId,
-        vehicleId,
-        userId,
-        stripePaymentId: session.id,
-        qrCodeData,
+      await convex.action(api.registrationPayments.fulfillCheckout, {
+        checkoutSessionId: session.id,
       });
 
       console.log("Registration created successfully:", {
-        userId,
-        eventId,
-        vehicleId,
         sessionId: session.id,
       });
     } catch (error) {

@@ -6,6 +6,11 @@ import {
   query,
   QueryCtx,
 } from "./_generated/server";
+import {
+  getCurrentUser,
+  requireCurrentUser,
+  requireSuperAdmin,
+} from "./lib/authorization";
 
 export const current = query({
   args: {},
@@ -62,10 +67,14 @@ export const updateUserRole = mutation({
     ),
   },
   handler: async (ctx, args) => {
+    const actor = await requireSuperAdmin(ctx);
     const user = await userByExternalId(ctx, args.externalId);
 
     if (!user) {
       throw new Error("User not found");
+    }
+    if (actor._id === user._id && args.role !== "superAdmin") {
+      throw new Error("You cannot remove your own super administrator role");
     }
 
     await ctx.db.patch(user._id, { role: args.role });
@@ -99,29 +108,26 @@ export const getUserRole = query({
 export const getUser = query({
   args: { clerkId: v.string() },
   handler: async (ctx, { clerkId }) => {
-    return await userByExternalId(ctx, clerkId);
+    const currentUser = await requireCurrentUser(ctx);
+    if (currentUser.externalId !== clerkId) {
+      throw new Error("You do not have access to this account");
+    }
+    return currentUser;
   },
 });
 
 export const getUserById = query({
   args: { id: v.id("users") },
   handler: async (ctx, { id }) => {
-    return await ctx.db.get(id);
+    const user = await ctx.db.get(id);
+    return user
+      ? { _id: user._id, name: user.name, createdAt: user.createdAt }
+      : null;
   },
 });
 
 export async function getCurrentUserOrThrow(ctx: QueryCtx) {
-  const userRecord = await getCurrentUser(ctx);
-  if (!userRecord) throw new Error("Can't get current user");
-  return userRecord;
-}
-
-export async function getCurrentUser(ctx: QueryCtx) {
-  const identity = await ctx.auth.getUserIdentity();
-  if (identity === null) {
-    return null;
-  }
-  return await userByExternalId(ctx, identity.subject);
+  return await requireCurrentUser(ctx);
 }
 
 async function userByExternalId(ctx: QueryCtx, externalId: string) {

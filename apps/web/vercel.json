@@ -10,10 +10,12 @@
     "CLERK_JWT_ISSUER_DOMAIN": "@clerk_jwt_issuer_domain",
     "CLERK_WEBHOOK_SECRET": "@clerk_webhook_secret",
     "NEXT_PUBLIC_CONVEX_URL": "@convex_url",
+    "NEXT_PUBLIC_CONVEX_SITE_URL": "@convex_site_url",
     "CONVEX_DEPLOYMENT": "@convex_deployment",
     "STRIPE_SECRET_KEY": "@stripe_secret_key",
     "NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY": "@stripe_publishable_key",
     "STRIPE_WEBHOOK_SECRET": "@stripe_webhook_secret",
+    "EVENT_REGISTRATION_PRICE_CENTS": "@event_registration_price_cents",
     "NEXT_PUBLIC_APP_URL": "@app_url"
   }
 }

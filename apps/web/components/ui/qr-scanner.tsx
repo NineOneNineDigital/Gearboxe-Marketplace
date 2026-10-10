@@ -2,9 +2,9 @@
 
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { QrScanner } from "@yudiel/react-qr-scanner";
+import { Scanner } from "@yudiel/react-qr-scanner";
 import { Camera, CameraOff, CheckCircle, XCircle } from "lucide-react";
-import { useRef, useState } from "react";
+import { useState } from "react";
 
 interface QRScannerProps {
   onScan: (data: string) => void;
@@ -22,8 +22,6 @@ export function QRScannerComponent({
   const [scanStatus, setScanStatus] = useState<"idle" | "success" | "error">(
     "idle"
   );
-  const scannerRef = useRef<any>(null);
-
   const handleScan = (result: string) => {
     setLastResult(result);
     setScanStatus("success");
@@ -79,20 +77,28 @@ export function QRScannerComponent({
       <CardContent className="space-y-4">
         {isScanning ? (
           <div className="relative">
-            <QrScanner
-              ref={scannerRef}
-              onDecode={handleScan}
-              onError={handleError}
-              containerStyle={{
-                width: "100%",
-                height: "300px",
-                borderRadius: "8px",
-                overflow: "hidden",
+            <Scanner
+              onScan={(codes) => {
+                const value = codes[0]?.rawValue;
+                if (value) handleScan(value);
               }}
-              videoStyle={{
-                width: "100%",
-                height: "100%",
-                objectFit: "cover",
+              onError={(error) =>
+                handleError(
+                  error instanceof Error ? error : new Error("QR scan failed")
+                )
+              }
+              styles={{
+                container: {
+                  width: "100%",
+                  height: "300px",
+                  borderRadius: "8px",
+                  overflow: "hidden",
+                },
+                video: {
+                  width: "100%",
+                  height: "100%",
+                  objectFit: "cover",
+                },
               }}
             />
 
@@ -119,7 +125,7 @@ export function QRScannerComponent({
           <div className="w-full h-64 bg-gray-200 rounded-lg flex items-center justify-center">
             <div className="text-center text-gray-500">
               <Camera className="h-12 w-12 mx-auto mb-2" />
-              <p>Click "Start Scanning" to begin</p>
+              <p>Click &quot;Start Scanning&quot; to begin</p>
             </div>
           </div>
         )}

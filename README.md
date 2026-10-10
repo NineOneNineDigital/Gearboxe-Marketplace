@@ -24,7 +24,19 @@ The existing marketplace application and its Convex functions live together in `
 pnpm install
 ```
 
-The marketplace environment file belongs at `apps/web/.env.local`. It uses the existing Clerk, Convex, Stripe, and `NEXT_PUBLIC_APP_URL` variables.
+The marketplace environment file belongs at `apps/web/.env.local`. Configure:
+
+- `NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY` and `CLERK_SECRET_KEY`
+- `NEXT_PUBLIC_CONVEX_URL`, `NEXT_PUBLIC_CONVEX_SITE_URL`, and `CONVEX_DEPLOYMENT`
+- `STRIPE_SECRET_KEY`, `NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY`, and `STRIPE_WEBHOOK_SECRET`
+- `EVENT_REGISTRATION_PRICE_CENTS` as the canonical registration price in USD cents
+- `NEXT_PUBLIC_APP_URL`
+
+The Convex deployment also requires `CLERK_JWT_ISSUER_DOMAIN`,
+`CLERK_WEBHOOK_SECRET`, `STRIPE_SECRET_KEY`, and
+`EVENT_REGISTRATION_PRICE_CENTS`. The registration price must match in the web
+and Convex environments: the web server creates Checkout sessions and Convex
+independently verifies the paid amount before completing a registration.
 
 ## Development
 

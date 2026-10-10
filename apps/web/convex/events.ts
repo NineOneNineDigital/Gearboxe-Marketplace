@@ -1,5 +1,42 @@
 import { v } from "convex/values";
 import { mutation, query } from "./_generated/server";
+import { requireAdmin } from "./lib/authorization";
+
+function validateEvent(values: {
+  name?: string;
+  date?: number;
+  location?: string;
+  address?: string;
+  capacity?: number;
+  description?: string;
+}) {
+  for (const [label, value, max] of [
+    ["Name", values.name, 120],
+    ["Location", values.location, 200],
+    ["Address", values.address, 300],
+    ["Description", values.description, 5_000],
+  ] as const) {
+    if (value !== undefined && (!value.trim() || value.length > max)) {
+      throw new Error(
+        `${label} is required and must not exceed ${max} characters`
+      );
+    }
+  }
+  if (
+    values.date !== undefined &&
+    (!Number.isFinite(values.date) || values.date <= Date.now())
+  ) {
+    throw new Error("Event date must be in the future");
+  }
+  if (
+    values.capacity !== undefined &&
+    (!Number.isInteger(values.capacity) ||
+      values.capacity < 1 ||
+      values.capacity > 100_000)
+  ) {
+    throw new Error("Event capacity must be between 1 and 100,000");
+  }
+}
 
 export const createEvent = mutation({
   args: {
@@ -12,6 +49,8 @@ export const createEvent = mutation({
     description: v.string(),
   },
   handler: async (ctx, args) => {
+    await requireAdmin(ctx);
+    validateEvent(args);
     return await ctx.db.insert("events", {
       ...args,
       createdAt: Date.now(),
@@ -25,13 +64,12 @@ export const getEvents = query({
     upcoming: v.optional(v.boolean()),
   },
   handler: async (ctx, args) => {
-    let query = ctx.db.query("events");
-
-    if (args.cityId) {
-      query = query.withIndex("by_city", (q) => q.eq("cityId", args.cityId));
-    }
-
-    const events = await query.collect();
+    const events = args.cityId
+      ? await ctx.db
+          .query("events")
+          .withIndex("by_city", (q) => q.eq("cityId", args.cityId!))
+          .collect()
+      : await ctx.db.query("events").collect();
 
     if (args.upcoming) {
       const now = Date.now();
@@ -70,7 +108,18 @@ export const updateEvent = mutation({
     description: v.optional(v.string()),
   },
   handler: async (ctx, args) => {
+    await requireAdmin(ctx);
     const { id, ...updates } = args;
+    validateEvent(updates);
+    if (updates.capacity !== undefined) {
+      const registrations = await ctx.db
+        .query("registrations")
+        .withIndex("by_event", (q) => q.eq("eventId", id))
+        .collect();
+      if (updates.capacity < registrations.length) {
+        throw new Error("Capacity cannot be lower than current registrations");
+      }
+    }
     await ctx.db.patch(id, updates);
   },
 });
@@ -78,6 +127,14 @@ export const updateEvent = mutation({
 export const deleteEvent = mutation({
   args: { id: v.id("events") },
   handler: async (ctx, args) => {
+    await requireAdmin(ctx);
+    const registration = await ctx.db
+      .query("registrations")
+      .withIndex("by_event", (q) => q.eq("eventId", args.id))
+      .first();
+    if (registration) {
+      throw new Error("Events with registrations cannot be deleted");
+    }
     await ctx.db.delete(args.id);
   },
 });

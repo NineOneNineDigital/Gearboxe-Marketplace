@@ -3,7 +3,7 @@
 import { Button } from "@/components/ui/button";
 import { UserDropdown } from "@/components/ui/user-dropdown";
 import { api } from "@/convex/_generated/api";
-import { useAuth } from "@clerk/nextjs";
+import { useAuth, useUser } from "@clerk/nextjs";
 import { useConvexAuth, useQuery } from "convex/react";
 import {
   ArrowLeft,
@@ -23,7 +23,8 @@ import { useState } from "react";
 
 export function AdminNavbar() {
   const { isAuthenticated } = useConvexAuth();
-  const { isSignedIn, isLoaded: authLoaded, user } = useAuth();
+  const { isSignedIn, isLoaded: authLoaded } = useAuth();
+  const { user } = useUser();
   const pathname = usePathname();
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
 

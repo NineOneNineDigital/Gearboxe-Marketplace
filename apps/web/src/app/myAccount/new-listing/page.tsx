@@ -135,7 +135,6 @@ export default function NewListingPage() {
     setIsSubmitting(true);
     try {
       const vehicleId = await createVehicle({
-        userId: currentUser._id,
         title: formData.title,
         make: formData.make,
         model: formData.model,

@@ -77,7 +77,9 @@ export default defineSchema({
     .index("by_event", ["eventId"])
     .index("by_vehicle", ["vehicleId"])
     .index("by_user", ["userId"])
-    .index("by_payment_status", ["paymentStatus"]),
+    .index("by_payment_status", ["paymentStatus"])
+    .index("by_event_vehicle", ["eventId", "vehicleId"])
+    .index("by_stripe_payment", ["stripePaymentId"]),
 
   conversations: defineTable({
     vehicleId: v.id("vehicles"),

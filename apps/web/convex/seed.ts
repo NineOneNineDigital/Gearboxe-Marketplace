@@ -1,8 +1,10 @@
 import { mutation } from "./_generated/server";
+import { requireSuperAdmin } from "./lib/authorization";
 
 export const seedDatabase = mutation({
   args: {},
   handler: async (ctx) => {
+    await requireSuperAdmin(ctx);
     // Create fake users with new role system
     const users = [
       {

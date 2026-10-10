@@ -1,57 +1,32 @@
-import { api } from "@/convex/_generated/api";
-import type { WebhookEvent } from "@clerk/backend";
-import { ConvexHttpClient } from "convex/browser";
 import { NextRequest, NextResponse } from "next/server";
-import { Webhook } from "svix";
-
-const convex = new ConvexHttpClient(process.env.NEXT_PUBLIC_CONVEX_URL!);
 
 export async function POST(request: NextRequest) {
-  const event = await validateRequest(request);
-  if (!event) {
-    return NextResponse.json({ error: "Error occurred" }, { status: 400 });
-  }
-
-  try {
-    switch (event.type) {
-      case "user.created": // intentional fallthrough
-      case "user.updated":
-        await convex.mutation(api.users.upsertFromClerk, {
-          data: event.data,
-        });
-        break;
-
-      case "user.deleted": {
-        const clerkUserId = event.data.id!;
-        await convex.mutation(api.users.deleteFromClerk, { clerkUserId });
-        break;
-      }
-      default:
-        console.log("Ignored Clerk webhook event", event.type);
-    }
-
-    return NextResponse.json({ received: true });
-  } catch (error) {
-    console.error("Error processing webhook:", error);
+  const convexSiteUrl = process.env.NEXT_PUBLIC_CONVEX_SITE_URL;
+  if (!convexSiteUrl) {
+    console.error("NEXT_PUBLIC_CONVEX_SITE_URL is not configured");
     return NextResponse.json(
-      { error: "Failed to process webhook" },
-      { status: 500 }
+      { error: "Webhook forwarding is unavailable" },
+      { status: 503 }
     );
   }
-}
 
-async function validateRequest(req: NextRequest): Promise<WebhookEvent | null> {
-  const payloadString = await req.text();
-  const svixHeaders = {
-    "svix-id": req.headers.get("svix-id")!,
-    "svix-timestamp": req.headers.get("svix-timestamp")!,
-    "svix-signature": req.headers.get("svix-signature")!,
-  };
-  const wh = new Webhook(process.env.CLERK_WEBHOOK_SECRET!);
   try {
-    return wh.verify(payloadString, svixHeaders) as unknown as WebhookEvent;
+    const response = await fetch(`${convexSiteUrl}/clerk-users-webhook`, {
+      method: "POST",
+      headers: {
+        "content-type": request.headers.get("content-type") ?? "application/json",
+        "svix-id": request.headers.get("svix-id") ?? "",
+        "svix-timestamp": request.headers.get("svix-timestamp") ?? "",
+        "svix-signature": request.headers.get("svix-signature") ?? "",
+      },
+      body: await request.text(),
+    });
+    return new NextResponse(await response.text(), { status: response.status });
   } catch (error) {
-    console.error("Error verifying webhook event", error);
-    return null;
+    console.error("Error forwarding webhook:", error);
+    return NextResponse.json(
+      { error: "Failed to forward webhook" },
+      { status: 500 }
+    );
   }
 }

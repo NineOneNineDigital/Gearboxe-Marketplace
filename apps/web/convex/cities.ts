@@ -1,5 +1,6 @@
 import { v } from "convex/values";
 import { mutation, query } from "./_generated/server";
+import { requireAdmin } from "./lib/authorization";
 
 export const createCity = mutation({
   args: {
@@ -8,6 +9,7 @@ export const createCity = mutation({
     slug: v.string(),
   },
   handler: async (ctx, args) => {
+    await requireAdmin(ctx);
     return await ctx.db.insert("cities", {
       ...args,
       active: true,
@@ -44,6 +46,7 @@ export const updateCity = mutation({
     active: v.optional(v.boolean()),
   },
   handler: async (ctx, args) => {
+    await requireAdmin(ctx);
     const { id, ...updates } = args;
     await ctx.db.patch(id, updates);
   },

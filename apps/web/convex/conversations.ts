@@ -1,5 +1,10 @@
 import { v } from "convex/values";
 import { mutation, query } from "./_generated/server";
+import {
+  isConversationParticipant,
+  requireCurrentUser,
+  requireSelf,
+} from "./lib/authorization";
 
 export const getOrCreateConversation = mutation({
   args: {
@@ -8,6 +13,26 @@ export const getOrCreateConversation = mutation({
     participant2Id: v.id("users"),
   },
   handler: async (ctx, args) => {
+    const currentUser = await requireCurrentUser(ctx);
+    if (
+      currentUser._id !== args.participant1Id &&
+      currentUser._id !== args.participant2Id
+    ) {
+      throw new Error("You must be a participant in this conversation");
+    }
+    if (args.participant1Id === args.participant2Id) {
+      throw new Error("A conversation requires two different participants");
+    }
+    const vehicle = await ctx.db.get(args.vehicleId);
+    if (!vehicle || vehicle.status !== "approved") {
+      throw new Error("Vehicle is not available");
+    }
+    if (
+      vehicle.userId !== args.participant1Id &&
+      vehicle.userId !== args.participant2Id
+    ) {
+      throw new Error("The vehicle seller must be part of the conversation");
+    }
     // Ensure consistent ordering of participants
     const [participant1Id, participant2Id] =
       args.participant1Id < args.participant2Id
@@ -43,6 +68,7 @@ export const getOrCreateConversation = mutation({
 export const getConversationsByUser = query({
   args: { userId: v.id("users") },
   handler: async (ctx, args) => {
+    await requireSelf(ctx, args.userId);
     const conversations = await ctx.db
       .query("conversations")
       .withIndex("by_participant1", (q) => q.eq("participant1Id", args.userId))
@@ -116,13 +142,29 @@ export const getConversationsByUser = query({
 export const getConversationById = query({
   args: { conversationId: v.id("conversations") },
   handler: async (ctx, args) => {
-    return await ctx.db.get(args.conversationId);
+    const currentUser = await requireCurrentUser(ctx);
+    const conversation = await ctx.db.get(args.conversationId);
+    if (
+      !conversation ||
+      !isConversationParticipant(conversation, currentUser._id)
+    ) {
+      return null;
+    }
+    return conversation;
   },
 });
 
 export const updateLastMessageTime = mutation({
   args: { conversationId: v.id("conversations") },
   handler: async (ctx, args) => {
+    const currentUser = await requireCurrentUser(ctx);
+    const conversation = await ctx.db.get(args.conversationId);
+    if (
+      !conversation ||
+      !isConversationParticipant(conversation, currentUser._id)
+    ) {
+      throw new Error("Conversation not found");
+    }
     await ctx.db.patch(args.conversationId, {
       lastMessageAt: Date.now(),
     });
@@ -136,6 +178,13 @@ export const getConversationByParticipants = query({
     participant2Id: v.id("users"),
   },
   handler: async (ctx, args) => {
+    const currentUser = await requireCurrentUser(ctx);
+    if (
+      currentUser._id !== args.participant1Id &&
+      currentUser._id !== args.participant2Id
+    ) {
+      throw new Error("You must be a participant in this conversation");
+    }
     // Ensure consistent ordering of participants
     const [participant1Id, participant2Id] =
       args.participant1Id < args.participant2Id

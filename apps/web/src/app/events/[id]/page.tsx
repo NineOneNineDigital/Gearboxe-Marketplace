@@ -6,27 +6,40 @@ import { Footer } from "@/components/ui/footer";
 import { Navbar } from "@/components/ui/navbar";
 import { VehicleCard } from "@/components/ui/vehicle-card";
 import { api } from "@/convex/_generated/api";
+import type { Id } from "@/convex/_generated/dataModel";
 import { useAuth } from "@clerk/nextjs";
 import { useConvexAuth, useQuery } from "convex/react";
 import { Calendar, Clock, MapPin, Users } from "lucide-react";
 import Link from "next/link";
 import { notFound } from "next/navigation";
+import { use } from "react";
 
 interface EventPageProps {
-  params: {
+  params: Promise<{
     id: string;
-  };
+  }>;
 }
 
 export default function EventPage({ params }: EventPageProps) {
+  const { id } = use(params);
   const { isAuthenticated } = useConvexAuth();
   const { isSignedIn } = useAuth();
-  const event = useQuery(api.events.getEventById, { id: params.id as any });
-  const registrations = useQuery(api.registrations.getRegistrationsByEvent, {
-    eventId: params.id as any,
+  const event = useQuery(api.events.getEventById, {
+    id: id as Id<"events">,
+  });
+  const registeredVehicles = useQuery(api.registrations.getVehiclesByEvent, {
+    eventId: id as Id<"events">,
   });
 
-  if (!event) {
+  if (event === undefined) {
+    return (
+      <div className="market-page min-h-screen flex items-center justify-center">
+        <p className="text-muted-foreground">Loading event…</p>
+      </div>
+    );
+  }
+
+  if (event === null) {
     return notFound();
   }
 
@@ -49,8 +62,7 @@ export default function EventPage({ params }: EventPageProps) {
 
   const { date, time } = formatDate(event.date);
   const isUpcoming = event.date > Date.now();
-  const registeredVehicles =
-    registrations?.map((reg) => reg.vehicle).filter(Boolean) || [];
+  const eventVehicles = registeredVehicles || [];
 
   return (
     <div className="market-page min-h-screen flex flex-col">
@@ -142,12 +154,12 @@ export default function EventPage({ params }: EventPageProps) {
         {/* Registered Vehicles */}
         <div>
           <h2 className="text-2xl font-bold text-gray-900 mb-6">
-            Registered Vehicles ({registeredVehicles.length})
+            Registered Vehicles ({eventVehicles.length})
           </h2>
 
-          {registeredVehicles.length > 0 ? (
+          {eventVehicles.length > 0 ? (
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-              {registeredVehicles.map((vehicle) => (
+              {eventVehicles.map((vehicle) => (
                 <VehicleCard key={vehicle._id} vehicle={vehicle} />
               ))}
             </div>
