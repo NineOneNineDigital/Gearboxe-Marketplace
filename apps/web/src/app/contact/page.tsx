@@ -122,7 +122,7 @@ export default function ContactPage() {
               </h1>
               <p className="text-xl text-gray-600 max-w-2xl mx-auto">
                 Have questions about our car market events or need help with
-                your listing? We're here to help you every step of the way.
+                your listing? We&apos;re here to help you every step of the way.
               </p>
             </div>
           </div>
@@ -182,7 +182,7 @@ export default function ContactPage() {
                         Message Sent!
                       </h3>
                       <p className="text-gray-600">
-                        Thank you for contacting us. We'll get back to you
+                        Thank you for contacting us. We&apos;ll get back to you
                         within 24 hours.
                       </p>
                     </div>

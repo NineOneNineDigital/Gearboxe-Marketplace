@@ -1,8 +1,16 @@
 import Stripe from "stripe";
 
-export const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!, {
-  apiVersion: "2025-09-30.clover",
-});
+let stripe: Stripe | undefined;
+
+export function getStripe(): Stripe {
+  const secretKey = process.env.STRIPE_SECRET_KEY;
+  if (!secretKey) {
+    throw new Error("Stripe payments are not configured");
+  }
+
+  stripe ??= new Stripe(secretKey, { apiVersion: "2025-09-30.clover" });
+  return stripe;
+}
 
 export const formatAmountForStripe = (amount: number): number => {
   return Math.round(amount * 100);

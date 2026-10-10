@@ -4,6 +4,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Download, Share } from "lucide-react";
 import QRCode from "qrcode";
+import Image from "next/image";
 import { useEffect, useState } from "react";
 
 interface QRDisplayProps {
@@ -82,7 +83,7 @@ export function QRDisplay({
       <CardContent className="text-center space-y-4">
         {qrCodeUrl ? (
           <div className="flex justify-center">
-            <img src={qrCodeUrl} alt="QR Code" className="border rounded-lg" />
+            <Image unoptimized width={256} height={256} src={qrCodeUrl} alt="QR Code" className="border rounded-lg" />
           </div>
         ) : (
           <div className="w-64 h-64 bg-gray-200 rounded-lg flex items-center justify-center">

@@ -13,7 +13,7 @@ import Link from "next/link";
 import { redirect } from "next/navigation";
 
 export default function DashboardPage() {
-  const { isLoading, isAuthenticated, user } = useCurrentUser();
+  const { isLoading, user } = useCurrentUser();
   const { isSignedIn, isLoaded: authLoaded } = useAuth();
 
   // Always call hooks, but conditionally pass arguments

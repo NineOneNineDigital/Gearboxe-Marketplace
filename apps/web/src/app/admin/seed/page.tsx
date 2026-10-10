@@ -9,6 +9,7 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 import { api } from "@/convex/_generated/api";
+import type { FunctionReturnType } from "convex/server";
 import { useMutation } from "convex/react";
 import {
   Calendar,
@@ -22,7 +23,7 @@ import { useState } from "react";
 
 export default function SeedPage() {
   const [isSeeding, setIsSeeding] = useState(false);
-  const [seedResult, setSeedResult] = useState<any>(null);
+  const [seedResult, setSeedResult] = useState<FunctionReturnType<typeof api.seed.seedDatabase> | null>(null);
   const seedDatabase = useMutation(api.seed.seedDatabase);
 
   const handleSeed = async () => {
@@ -151,7 +152,7 @@ export default function SeedPage() {
         <CardHeader>
           <CardTitle>Test Data Overview</CardTitle>
           <CardDescription>
-            Here's what the seed script will add to your database:
+            Here&apos;s what the seed script will add to your database:
           </CardDescription>
         </CardHeader>
         <CardContent>

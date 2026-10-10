@@ -4,6 +4,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { QRScannerComponent } from "@/components/ui/qr-scanner";
 import { api } from "@/convex/_generated/api";
+import type { Id } from "@/convex/_generated/dataModel";
 import { useUser } from "@clerk/nextjs";
 import { useConvexAuth, useMutation, useQuery } from "convex/react";
 import { ArrowLeft, Calendar, Car, CheckCircle, Users } from "lucide-react";
@@ -16,6 +17,19 @@ export default function AdminCheckinPage() {
   const { user } = useUser();
   const [selectedEvent, setSelectedEvent] = useState<string | null>(null);
   const [scannedData, setScannedData] = useState<string | null>(null);
+
+  const isAdmin = useQuery(api.users.isAdmin);
+  const upcomingEvents = useQuery(api.events.getUpcomingEvents);
+  const eventRegistrations = useQuery(
+    api.registrations.getRegistrationsByEvent,
+    isAdmin === true && selectedEvent
+      ? { eventId: selectedEvent as Id<"events"> }
+      : "skip"
+  );
+  const checkInRegistration = useMutation(
+    api.registrations.checkInRegistration
+  );
+
 
   if (isLoading) {
     return (
@@ -32,16 +46,6 @@ export default function AdminCheckinPage() {
     redirect("/sign-in");
   }
 
-  const isAdmin = useQuery(api.users.isAdmin);
-  const upcomingEvents = useQuery(api.events.getUpcomingEvents);
-  const eventRegistrations = selectedEvent
-    ? useQuery(api.registrations.getRegistrationsByEvent, {
-        eventId: selectedEvent as any,
-      })
-    : null;
-  const checkInRegistration = useMutation(
-    api.registrations.checkInRegistration
-  );
 
   if (isAdmin === false) {
     redirect("/myAccount");
@@ -66,7 +70,7 @@ export default function AdminCheckinPage() {
 
   const handleManualCheckIn = async (registrationId: string) => {
     try {
-      await checkInRegistration({ id: registrationId as any });
+      await checkInRegistration({ id: registrationId as Id<"registrations"> });
       // Refresh the registrations list
       window.location.reload();
     } catch (error) {

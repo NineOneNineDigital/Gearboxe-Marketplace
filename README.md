@@ -14,7 +14,7 @@ The existing marketplace application and its Convex functions live together in `
 
 ## Requirements
 
-- Node.js 20 or newer
+- Node.js 22 (see `.nvmrc`; use `nvm use` if installed)
 - pnpm 10.18.0 (the version is pinned in `package.json`)
 - Convex, Clerk, and Stripe accounts for the marketplace app
 
@@ -66,8 +66,27 @@ pnpm convex:dev
 
 ```bash
 pnpm lint
+pnpm typecheck
+pnpm test
 pnpm build
 ```
+
+Run the full release baseline with `pnpm check`. Lint rejects warnings as well
+as errors. Type checking covers both applications and the shared design tokens.
+The current automated tests cover design tokens; marketplace integration and
+end-to-end coverage are still pending.
+
+GitHub Actions runs these same checks for pull requests and pushes to `main`,
+with a frozen lockfile and the Node/pnpm versions pinned in the repository.
+The workflow uses nonfunctional public build fixtures and does not require
+Stripe/Clerk secrets, contact production authentication/payment backends, or
+deploy either application. Builds fetch the existing Google Fonts over the network.
+Runtime smoke tests need a separately configured staging environment.
+
+Public Clerk and Convex configuration is required for Next.js builds. Stripe
+credentials are only required at runtime when handling payment requests.
+Build verification does not establish that live authentication or payments are
+configured correctly.
 
 ## Deployment
 

@@ -6,6 +6,7 @@ import { Footer } from "@/components/ui/footer";
 import { Navbar } from "@/components/ui/navbar";
 import { QRDisplay } from "@/components/ui/qr-display";
 import { api } from "@/convex/_generated/api";
+import type { Id } from "@/convex/_generated/dataModel";
 import { useUser } from "@clerk/nextjs";
 import { useConvexAuth, useMutation, useQuery } from "convex/react";
 import {
@@ -18,10 +19,19 @@ import {
   XCircle,
 } from "lucide-react";
 import Link from "next/link";
+import Image from "next/image";
 import { redirect, useRouter, useSearchParams } from "next/navigation";
-import { useState } from "react";
+import { Suspense, useState } from "react";
 
 export default function MyListingsPage() {
+  return (
+    <Suspense fallback={<p className="p-8 text-center">Loading listings...</p>}>
+      <MyListingsContent />
+    </Suspense>
+  );
+}
+
+function MyListingsContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const { isAuthenticated, isLoading } = useConvexAuth();
@@ -63,7 +73,7 @@ export default function MyListingsPage() {
   const handleDeleteVehicle = async (vehicleId: string) => {
     if (confirm("Are you sure you want to delete this listing?")) {
       try {
-        await deleteVehicle({ id: vehicleId as any });
+        await deleteVehicle({ id: vehicleId as Id<"vehicles"> });
         router.refresh();
       } catch (error) {
         console.error("Error deleting vehicle:", error);
@@ -148,7 +158,10 @@ export default function MyListingsPage() {
                 >
                   <div className="relative">
                     {vehicle.photos.length > 0 ? (
-                      <img
+                      <Image
+                        unoptimized
+                        width={800}
+                        height={600}
                         src={vehicle.photos[0]}
                         alt={vehicle.title}
                         className="w-full h-48 object-cover"

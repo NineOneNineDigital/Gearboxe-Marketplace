@@ -3,18 +3,24 @@
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { api } from "@/convex/_generated/api";
+import type { Doc, Id } from "@/convex/_generated/dataModel";
 import { useUser } from "@clerk/nextjs";
 import { useConvexAuth, useMutation, useQuery } from "convex/react";
 import { ArrowLeft, Calendar, MapPin, Plus, Trash2, Users } from "lucide-react";
 import Link from "next/link";
-import { redirect, useSearchParams } from "next/navigation";
+import { redirect } from "next/navigation";
 import { useState } from "react";
 
 export default function AdminEventsPage() {
-  const searchParams = useSearchParams();
   const { isAuthenticated, isLoading } = useConvexAuth();
   const { user } = useUser();
   const [showCreateForm, setShowCreateForm] = useState(false);
+
+  const isAdmin = useQuery(api.users.isAdmin);
+  const allEvents = useQuery(api.admin.getAllEvents, isAdmin === true ? {} : "skip");
+  const cities = useQuery(api.cities.getCities);
+  const deleteEvent = useMutation(api.events.deleteEvent);
+
 
   if (isLoading) {
     return (
@@ -31,10 +37,6 @@ export default function AdminEventsPage() {
     redirect("/sign-in");
   }
 
-  const isAdmin = useQuery(api.users.isAdmin);
-  const allEvents = useQuery(api.admin.getAllEvents);
-  const cities = useQuery(api.cities.getCities);
-  const deleteEvent = useMutation(api.events.deleteEvent);
 
   if (isAdmin === false) {
     redirect("/myAccount");
@@ -54,17 +56,13 @@ export default function AdminEventsPage() {
   const handleDeleteEvent = async (eventId: string) => {
     if (confirm("Are you sure you want to delete this event?")) {
       try {
-        await deleteEvent({ id: eventId as any });
+        await deleteEvent({ id: eventId as Id<"events"> });
       } catch (error) {
         console.error("Error deleting event:", error);
       }
     }
   };
 
-  const selectedEventId = searchParams.get("event");
-  const selectedEvent = selectedEventId
-    ? allEvents.find((e) => e._id === selectedEventId)
-    : null;
 
   return (
     <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12">
@@ -200,7 +198,7 @@ function EventCreateForm({
   cities,
   onSuccess,
 }: {
-  cities: any[];
+  cities: Doc<"cities">[];
   onSuccess: () => void;
 }) {
   const [formData, setFormData] = useState({
@@ -232,7 +230,7 @@ function EventCreateForm({
     setIsSubmitting(true);
     try {
       await createEvent({
-        cityId: formData.cityId as any,
+        cityId: formData.cityId as Id<"cities">,
         name: formData.name,
         date: new Date(formData.date).getTime(),
         location: formData.location,

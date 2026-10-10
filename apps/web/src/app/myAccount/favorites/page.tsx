@@ -5,17 +5,19 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Footer } from "@/components/ui/footer";
 import { Navbar } from "@/components/ui/navbar";
 import { api } from "@/convex/_generated/api";
+import type { Id } from "@/convex/_generated/dataModel";
 import { useCurrentUser } from "@/hooks/useCurrentUser";
 import { useToast } from "@/hooks/useToast";
 import { useAuth } from "@clerk/nextjs";
 import { useMutation, useQuery } from "convex/react";
 import { Eye, Heart, SortAsc } from "lucide-react";
 import Link from "next/link";
+import Image from "next/image";
 import { redirect } from "next/navigation";
 import { useState } from "react";
 
 export default function FavoritesPage() {
-  const { isLoading, isAuthenticated, user } = useCurrentUser();
+  const { isLoading, user } = useCurrentUser();
   const { isSignedIn, isLoaded: authLoaded } = useAuth();
   const [sortBy, setSortBy] = useState<
     "newest" | "oldest" | "price-low" | "price-high"
@@ -63,7 +65,7 @@ export default function FavoritesPage() {
       const vehicle = favorites?.find((v) => v._id === vehicleId);
       await removeFavorite({
         userId: user._id,
-        vehicleId: vehicleId as any,
+        vehicleId: vehicleId as Id<"vehicles">,
       });
       toast({
         title: "Removed from favorites",
@@ -137,7 +139,7 @@ export default function FavoritesPage() {
                   <SortAsc className="h-4 w-4 text-gray-500" />
                   <select
                     value={sortBy}
-                    onChange={(e) => setSortBy(e.target.value as any)}
+                    onChange={(e) => setSortBy(e.target.value as typeof sortBy)}
                     className="text-sm text-gray-900 border border-gray-300 rounded-lg px-3 py-2 bg-white hover:border-gray-400 focus:outline-none focus:ring-2 focus:ring-primary focus:border-primary transition-colors"
                   >
                     <option value="newest">Newest First</option>
@@ -161,7 +163,10 @@ export default function FavoritesPage() {
               >
                 <div className="relative">
                   {vehicle.photos.length > 0 ? (
-                    <img
+                    <Image
+                      unoptimized
+                      width={800}
+                      height={600}
                       src={vehicle.photos[0]}
                       alt={vehicle.title}
                       className="w-full object-cover h-48"

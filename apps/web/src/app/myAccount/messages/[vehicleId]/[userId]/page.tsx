@@ -6,6 +6,7 @@ import { Footer } from "@/components/ui/footer";
 import { MessageThread } from "@/components/ui/message-thread";
 import { Navbar } from "@/components/ui/navbar";
 import { api } from "@/convex/_generated/api";
+import type { Id } from "@/convex/_generated/dataModel";
 import { useUser } from "@clerk/nextjs";
 import { useConvexAuth, useQuery } from "convex/react";
 import { ArrowLeft, Car, User } from "lucide-react";
@@ -25,6 +26,33 @@ export default function ConversationPage({ params }: ConversationPageProps) {
   const { isAuthenticated, isLoading } = useConvexAuth();
   const { user } = useUser();
 
+  // Always call hooks to maintain hook order
+  const currentUser = useQuery(
+    api.users.getUser,
+    isAuthenticated && user?.id ? { clerkId: user.id } : "skip"
+  );
+  const vehicle = useQuery(
+    api.vehicles.getVehicleById,
+    vehicleId ? { id: vehicleId as Id<"vehicles"> } : "skip"
+  );
+  const otherUser = useQuery(
+    api.users.getUserById,
+    userId ? { id: userId as Id<"users"> } : "skip"
+  );
+
+  // Get conversation by participants
+  const conversation = useQuery(
+    api.conversations.getConversationByParticipants,
+    currentUser?._id && vehicleId && userId
+      ? {
+          vehicleId: vehicleId as Id<"vehicles">,
+          participant1Id: currentUser._id,
+          participant2Id: userId as Id<"users">,
+        }
+      : "skip"
+  );
+
+
   if (isLoading) {
     return (
       <div className="min-h-screen bg-white flex items-center justify-center">
@@ -36,31 +64,6 @@ export default function ConversationPage({ params }: ConversationPageProps) {
     );
   }
 
-  // Always call hooks to maintain hook order
-  const currentUser = useQuery(
-    api.users.getUser,
-    user?.id ? { clerkId: user.id } : "skip"
-  );
-  const vehicle = useQuery(
-    api.vehicles.getVehicleById,
-    vehicleId ? { id: vehicleId as any } : "skip"
-  );
-  const otherUser = useQuery(
-    api.users.getUserById,
-    userId ? { id: userId as any } : "skip"
-  );
-
-  // Get conversation by participants
-  const conversation = useQuery(
-    api.conversations.getConversationByParticipants,
-    currentUser?._id && vehicleId && userId
-      ? {
-          vehicleId: vehicleId as any,
-          participant1Id: currentUser._id as any,
-          participant2Id: userId as any,
-        }
-      : "skip"
-  );
 
   if (!isAuthenticated || !user) {
     redirect("/sign-in");
@@ -193,8 +196,8 @@ export default function ConversationPage({ params }: ConversationPageProps) {
           {/* Message Thread */}
           <div className="lg:col-span-3">
             <MessageThread
-              vehicleId={vehicleId as any}
-              recipientId={userId as any}
+              vehicleId={vehicleId as Id<"vehicles">}
+              recipientId={userId as Id<"users">}
               recipientName={otherUser?.name || "User"}
               conversationId={conversation?._id}
             />

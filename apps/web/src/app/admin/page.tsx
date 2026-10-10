@@ -24,8 +24,8 @@ export default function AdminDashboardPage() {
   // Call all hooks at the top level (Rules of Hooks)
   const isAdmin = useQuery(api.users.isAdmin);
   const isSuperAdmin = useQuery(api.users.isSuperAdmin);
-  const adminStats = useQuery(api.admin.getAdminStats);
-  const pendingVehicles = useQuery(api.admin.getAllVehicles);
+  const adminStats = useQuery(api.admin.getAdminStats, isAdmin === true ? {} : "skip");
+  const pendingVehicles = useQuery(api.admin.getAllVehicles, isAdmin === true ? {} : "skip");
   const upcomingEvents = useQuery(api.events.getUpcomingEvents);
 
   // Show loading while auth is being determined

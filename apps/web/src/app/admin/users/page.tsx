@@ -3,6 +3,7 @@
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { api } from "@/convex/_generated/api";
+import type { Id } from "@/convex/_generated/dataModel";
 import { useUser } from "@clerk/nextjs";
 import { useConvexAuth, useMutation, useQuery } from "convex/react";
 import { ArrowLeft, Crown, Mail, Star, User, Users } from "lucide-react";
@@ -16,6 +17,12 @@ export default function AdminUsersPage() {
   const [roleFilter, setRoleFilter] = useState<
     "all" | "user" | "admin" | "superAdmin"
   >("all");
+
+  const isAdmin = useQuery(api.users.isAdmin);
+  const isSuperAdmin = useQuery(api.users.isSuperAdmin);
+  const allUsers = useQuery(api.admin.getAllUsers, isAdmin === true ? {} : "skip");
+  const updateUserRole = useMutation(api.admin.updateUserRole);
+
 
   if (isLoading) {
     return (
@@ -32,10 +39,6 @@ export default function AdminUsersPage() {
     redirect("/sign-in");
   }
 
-  const isAdmin = useQuery(api.users.isAdmin);
-  const isSuperAdmin = useQuery(api.users.isSuperAdmin);
-  const allUsers = useQuery(api.admin.getAllUsers);
-  const updateUserRole = useMutation(api.admin.updateUserRole);
 
   if (isAdmin === false) {
     redirect("/myAccount");
@@ -71,7 +74,7 @@ export default function AdminUsersPage() {
       confirm(`Are you sure you want to change this user's role to ${newRole}?`)
     ) {
       try {
-        await updateUserRole({ userId: userId as any, role: newRole });
+        await updateUserRole({ userId: userId as Id<"users">, role: newRole });
       } catch (error) {
         console.error("Error updating user role:", error);
       }
@@ -141,7 +144,7 @@ export default function AdminUsersPage() {
                 key={filter.key}
                 variant={roleFilter === filter.key ? "default" : "outline"}
                 size="sm"
-                onClick={() => setRoleFilter(filter.key as any)}
+                onClick={() => setRoleFilter(filter.key as typeof roleFilter)}
               >
                 {filter.label}
               </Button>
@@ -186,7 +189,7 @@ export default function AdminUsersPage() {
                         <select
                           value={user.role}
                           onChange={(e) =>
-                            handleRoleChange(user._id, e.target.value as any)
+                            handleRoleChange(user._id, e.target.value as "user" | "admin" | "superAdmin")
                           }
                           className="px-3 py-1 text-sm border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-primary"
                           disabled={

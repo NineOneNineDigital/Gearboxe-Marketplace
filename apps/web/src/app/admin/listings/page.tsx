@@ -3,20 +3,27 @@
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { api } from "@/convex/_generated/api";
+import type { Id } from "@/convex/_generated/dataModel";
 import { useUser } from "@clerk/nextjs";
 import { useConvexAuth, useMutation, useQuery } from "convex/react";
 import { ArrowLeft, CheckCircle, Eye, Filter, XCircle } from "lucide-react";
 import Link from "next/link";
-import { redirect, useSearchParams } from "next/navigation";
+import Image from "next/image";
+import { redirect } from "next/navigation";
 import { useState } from "react";
 
 export default function AdminListingsPage() {
-  const searchParams = useSearchParams();
   const { isAuthenticated, isLoading } = useConvexAuth();
   const { user } = useUser();
   const [statusFilter, setStatusFilter] = useState<
     "all" | "pending" | "approved" | "rejected"
   >("all");
+
+  const isAdmin = useQuery(api.users.isAdmin);
+  const allVehicles = useQuery(api.admin.getAllVehicles, isAdmin === true ? {} : "skip");
+  const approveVehicle = useMutation(api.vehicles.approveVehicle);
+  const rejectVehicle = useMutation(api.vehicles.rejectVehicle);
+
 
   if (isLoading) {
     return (
@@ -33,10 +40,6 @@ export default function AdminListingsPage() {
     redirect("/sign-in");
   }
 
-  const isAdmin = useQuery(api.users.isAdmin);
-  const allVehicles = useQuery(api.admin.getAllVehicles);
-  const approveVehicle = useMutation(api.vehicles.approveVehicle);
-  const rejectVehicle = useMutation(api.vehicles.rejectVehicle);
 
   if (isAdmin === false) {
     redirect("/myAccount");
@@ -60,7 +63,7 @@ export default function AdminListingsPage() {
 
   const handleApprove = async (vehicleId: string) => {
     try {
-      await approveVehicle({ id: vehicleId as any });
+      await approveVehicle({ id: vehicleId as Id<"vehicles"> });
     } catch (error) {
       console.error("Error approving vehicle:", error);
     }
@@ -69,7 +72,7 @@ export default function AdminListingsPage() {
   const handleReject = async (vehicleId: string) => {
     if (confirm("Are you sure you want to reject this listing?")) {
       try {
-        await rejectVehicle({ id: vehicleId as any });
+        await rejectVehicle({ id: vehicleId as Id<"vehicles"> });
       } catch (error) {
         console.error("Error rejecting vehicle:", error);
       }
@@ -89,10 +92,6 @@ export default function AdminListingsPage() {
     }
   };
 
-  const selectedVehicleId = searchParams.get("vehicle");
-  const selectedVehicle = selectedVehicleId
-    ? allVehicles.find((v) => v._id === selectedVehicleId)
-    : null;
 
   return (
     <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12">
@@ -131,7 +130,7 @@ export default function AdminListingsPage() {
                 key={filter.key}
                 variant={statusFilter === filter.key ? "default" : "outline"}
                 size="sm"
-                onClick={() => setStatusFilter(filter.key as any)}
+                onClick={() => setStatusFilter(filter.key as typeof statusFilter)}
               >
                 {filter.label}
               </Button>
@@ -149,7 +148,10 @@ export default function AdminListingsPage() {
                 <Card key={vehicle._id} className="overflow-hidden">
                   <div className="relative">
                     {vehicle.photos.length > 0 ? (
-                      <img
+                      <Image
+                        unoptimized
+                        width={800}
+                        height={600}
                         src={vehicle.photos[0]}
                         alt={vehicle.title}
                         className="w-full h-48 object-cover"

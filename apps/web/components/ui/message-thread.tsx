@@ -4,24 +4,12 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Textarea } from "@/components/ui/textarea";
 import { api } from "@/convex/_generated/api";
+import type { Id } from "@/convex/_generated/dataModel";
 import { useCurrentUser } from "@/hooks/useCurrentUser";
 import { useToast } from "@/hooks/useToast";
-import { useUser } from "@clerk/nextjs";
 import { useMutation, useQuery } from "convex/react";
 import { Check, CheckCheck, MessageCircle, Send } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
-
-interface Message {
-  _id: string;
-  senderId: string;
-  recipientId: string;
-  content: string;
-  read: boolean;
-  createdAt: number;
-  sender?: {
-    name: string;
-  };
-}
 
 interface MessageThreadProps {
   vehicleId: string;
@@ -36,7 +24,6 @@ export function MessageThread({
   recipientName,
   conversationId,
 }: MessageThreadProps) {
-  const { user } = useUser();
   const { user: convexUser } = useCurrentUser();
   const [newMessage, setNewMessage] = useState("");
   const [isLoading, setIsLoading] = useState(false);
@@ -47,9 +34,11 @@ export function MessageThread({
     conversationId
       ? api.messages.getMessagesByConversation
       : api.messages.getMessagesByVehicle,
-    conversationId
-      ? { conversationId: conversationId as any }
-      : { vehicleId: vehicleId as any }
+    !convexUser
+      ? "skip"
+      : conversationId
+      ? { conversationId: conversationId as Id<"conversations"> }
+      : { vehicleId: vehicleId as Id<"vehicles"> }
   );
   const sendMessage = useMutation(api.messages.sendMessage);
   const markAsRead = useMutation(api.messages.markAsRead);
@@ -62,8 +51,8 @@ export function MessageThread({
     if (messages && convexUser && conversationId) {
       // Use the new conversation-based mark as read
       markConversationAsRead({
-        conversationId: conversationId as any,
-        userId: convexUser._id as any,
+        conversationId: conversationId as Id<"conversations">,
+        userId: convexUser._id,
       });
     } else if (messages && convexUser) {
       // Fallback to individual message marking
@@ -92,9 +81,9 @@ export function MessageThread({
     setIsLoading(true);
     try {
       await sendMessage({
-        senderId: convexUser._id as any,
-        recipientId: recipientId as any,
-        vehicleId: vehicleId as any,
+        senderId: convexUser._id,
+        recipientId: recipientId as Id<"users">,
+        vehicleId: vehicleId as Id<"vehicles">,
         content: newMessage.trim(),
       });
       setNewMessage("");

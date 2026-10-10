@@ -1,5 +1,5 @@
 import { api } from "@/convex/_generated/api";
-import { stripe } from "@/lib/stripe";
+import { getStripe } from "@/lib/stripe";
 import { ConvexHttpClient } from "convex/browser";
 import { NextRequest, NextResponse } from "next/server";
 import type Stripe from "stripe";
@@ -14,13 +14,21 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: "No signature" }, { status: 400 });
   }
 
+  const webhookSecret = process.env.STRIPE_WEBHOOK_SECRET;
+  if (!webhookSecret || !process.env.STRIPE_SECRET_KEY) {
+    return NextResponse.json(
+      { error: "Payment processing is unavailable" },
+      { status: 503 }
+    );
+  }
+
   let event;
 
   try {
-    event = stripe.webhooks.constructEvent(
+    event = getStripe().webhooks.constructEvent(
       body,
       signature,
-      process.env.STRIPE_WEBHOOK_SECRET!
+      webhookSecret
     );
   } catch (err) {
     console.error("Webhook signature verification failed:", err);

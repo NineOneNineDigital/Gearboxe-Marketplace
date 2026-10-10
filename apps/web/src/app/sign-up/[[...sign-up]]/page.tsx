@@ -1,5 +1,6 @@
 "use client";
 
+import { isClerkAPIResponseError } from "@clerk/nextjs/errors";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -72,9 +73,11 @@ export default function SignUpPage() {
 
       await signUp.prepareEmailAddressVerification({ strategy: "email_code" });
       setPendingVerification(true);
-    } catch (err: any) {
+    } catch (err: unknown) {
       const errorMessage =
-        err.errors?.[0]?.message || "An error occurred during sign up";
+        isClerkAPIResponseError(err)
+          ? err.errors[0]?.message || "An error occurred during sign up"
+          : "An error occurred during sign up";
 
       // Handle session already exists error
       if (
@@ -119,9 +122,11 @@ export default function SignUpPage() {
       } else {
         setError("Verification failed. Please check your code.");
       }
-    } catch (err: any) {
+    } catch (err: unknown) {
       setError(
-        err.errors?.[0]?.message || "An error occurred during verification"
+        isClerkAPIResponseError(err)
+          ? err.errors[0]?.message || "An error occurred during verification"
+          : "An error occurred during verification"
       );
     } finally {
       setIsLoading(false);
@@ -164,7 +169,7 @@ export default function SignUpPage() {
               Verify your email
             </h2>
             <p className="text-gray-600">
-              We've sent a verification code to your email address
+              We&apos;ve sent a verification code to your email address
             </p>
           </div>
 

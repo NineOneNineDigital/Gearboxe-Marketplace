@@ -16,11 +16,11 @@ import {
 import { Textarea } from "@/components/ui/textarea";
 import { api } from "@/convex/_generated/api";
 import { useCurrentUser } from "@/hooks/useCurrentUser";
-import { useUser } from "@clerk/nextjs";
-import { useMutation, useQuery } from "convex/react";
+import { useMutation } from "convex/react";
 import { Car, Upload } from "lucide-react";
 import { redirect, useRouter } from "next/navigation";
 import { useState } from "react";
+import Image from "next/image";
 
 const makes = [
   "Acura",
@@ -63,7 +63,7 @@ const years = Array.from({ length: 30 }, (_, i) => currentYear - i);
 export default function NewListingPage() {
   const router = useRouter();
   const { isLoading, isAuthenticated, user: currentUser } = useCurrentUser();
-  const { user } = useUser();
+  const createVehicle = useMutation(api.vehicles.createVehicle);
 
   const [step, setStep] = useState(1);
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -91,9 +91,6 @@ export default function NewListingPage() {
     );
   }
 
-  // Always call hooks to maintain hook order
-  const upcomingEvents = useQuery(api.events.getUpcomingEvents);
-  const createVehicle = useMutation(api.vehicles.createVehicle);
 
   if (!isAuthenticated) {
     redirect("/sign-in");
@@ -408,7 +405,10 @@ export default function NewListingPage() {
                     <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mt-4">
                       {formData.photos.map((photo, index) => (
                         <div key={index} className="relative">
-                          <img
+                          <Image
+                            unoptimized
+                            width={800}
+                            height={600}
                             src={photo}
                             alt={`Vehicle photo ${index + 1}`}
                             className="w-full h-24 object-cover rounded-lg"

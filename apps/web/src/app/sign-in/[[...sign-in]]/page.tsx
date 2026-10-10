@@ -1,5 +1,6 @@
 "use client";
 
+import { isClerkAPIResponseError } from "@clerk/nextjs/errors";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -68,9 +69,11 @@ export default function SignInPage() {
       } else {
         setError("Sign in failed. Please check your credentials.");
       }
-    } catch (err: any) {
+    } catch (err: unknown) {
       const errorMessage =
-        err.errors?.[0]?.message || "An error occurred during sign in";
+        isClerkAPIResponseError(err)
+          ? err.errors[0]?.message || "An error occurred during sign in"
+          : "An error occurred during sign in";
 
       // Handle session already exists error
       if (
@@ -296,7 +299,7 @@ export default function SignInPage() {
 
         <div className="text-center">
           <p className="text-sm text-gray-500">
-            Don't have an account?{" "}
+            Don&apos;t have an account?{" "}
             <Link
               href="/sign-up"
               className="font-medium text-primary hover:text-primary/80"
