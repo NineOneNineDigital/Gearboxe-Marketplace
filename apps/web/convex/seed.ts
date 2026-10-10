@@ -5,6 +5,9 @@ export const seedDatabase = mutation({
   args: {},
   handler: async (ctx) => {
     await requireSuperAdmin(ctx);
+    if (process.env.MARKETPLACE_ENV !== "development" && process.env.MARKETPLACE_ENV !== "preview") {
+      throw new Error("Sample data is allowed only in development or preview deployments");
+    }
     // Create fake users with new role system
     const users = [
       {

@@ -1,4 +1,7 @@
 import type { NextConfig } from "next";
+import { validateEnvironment } from "./convex/lib/environment";
+
+validateEnvironment(process.env, process.env.VERCEL === "1" ? "web-runtime" : "web-build");
 
 const nextConfig: NextConfig = {
   poweredByHeader: false,

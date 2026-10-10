@@ -10,7 +10,7 @@
     "build": "pnpm --filter './apps/*' build",
     "lint": "pnpm --filter './apps/*' lint",
     "typecheck": "pnpm -r typecheck",
-    "test": "pnpm --filter @workspace/design-tokens test",
+    "test": "pnpm --filter @gearboxe/web test && pnpm --filter @workspace/design-tokens test",
     "check": "pnpm lint && pnpm typecheck && pnpm test && pnpm build",
     "check:tokens": "pnpm --filter @workspace/design-tokens typecheck && pnpm --filter @workspace/design-tokens test",
     "convex:dev": "pnpm --filter @gearboxe/web exec convex dev",

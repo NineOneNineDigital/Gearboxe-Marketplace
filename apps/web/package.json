@@ -7,6 +7,8 @@
     "dev": "next dev",
     "dev:turbo": "next dev --turbopack",
     "build": "next build",
+    "build:deploy": "node scripts/deploy.mjs",
+    "test": "node --experimental-strip-types --test scripts/*.test.mjs",
     "start": "next start",
     "lint": "eslint --max-warnings=0",
     "typecheck": "tsc --noEmit --incremental false"

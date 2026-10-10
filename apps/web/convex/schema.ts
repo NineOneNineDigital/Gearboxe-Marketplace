@@ -2,6 +2,14 @@ import { defineSchema, defineTable } from "convex/server";
 import { v } from "convex/values";
 
 export default defineSchema({
+  // No public read/write functions: provisioning evidence is operator-only.
+  adminAuditLog: defineTable({
+    action: v.literal("bootstrapSuperAdmin"),
+    targetUserId: v.id("users"),
+    source: v.literal("deployment-operator"),
+    reason: v.string(),
+    createdAt: v.number(),
+  }),
   users: defineTable({
     name: v.string(),
     // this is the Clerk ID, stored in the subject JWT field

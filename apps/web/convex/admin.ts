@@ -1,6 +1,17 @@
 import { v } from "convex/values";
-import { mutation, query } from "./_generated/server";
+import { internalAction, mutation, query } from "./_generated/server";
 import { requireAdmin, requireSuperAdmin } from "./lib/authorization";
+import { validateEnvironment } from "./lib/environment";
+
+// Operator-only readiness check, invoked by the protected release workflow.
+export const validateDeployment = internalAction({
+  args: { expectedEnvironment: v.string() },
+  handler: async (_ctx, { expectedEnvironment }) => {
+    const { mode } = validateEnvironment(process.env, "convex");
+    if (mode !== expectedEnvironment) throw new Error("Backend environment does not match the release target");
+    return { ready: true, environment: mode };
+  },
+});
 
 export const getAdminStats = query({
   handler: async (ctx) => {

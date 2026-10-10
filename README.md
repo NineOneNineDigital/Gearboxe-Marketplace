@@ -28,9 +28,10 @@ The marketplace environment file belongs at `apps/web/.env.local`. Configure:
 
 - `NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY` and `CLERK_SECRET_KEY`
 - `NEXT_PUBLIC_CONVEX_URL`, `NEXT_PUBLIC_CONVEX_SITE_URL`, and `CONVEX_DEPLOYMENT`
-- `STRIPE_SECRET_KEY`, `NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY`, and `STRIPE_WEBHOOK_SECRET`
+- `STRIPE_SECRET_KEY` and `STRIPE_WEBHOOK_SECRET`
 - `EVENT_REGISTRATION_PRICE_CENTS` as the canonical registration price in USD cents
 - `NEXT_PUBLIC_APP_URL`
+- `MARKETPLACE_ENV` (`development`, `preview`, `staging`, or `production`)
 
 The Convex deployment also requires `CLERK_JWT_ISSUER_DOMAIN`,
 `CLERK_WEBHOOK_SECRET`, `STRIPE_SECRET_KEY`, and
@@ -73,7 +74,7 @@ pnpm build
 
 Run the full release baseline with `pnpm check`. Lint rejects warnings as well
 as errors. Type checking covers both applications and the shared design tokens.
-The current automated tests cover design tokens; marketplace integration and
+The current automated tests cover configuration, initial admin provisioning, and design tokens; marketplace integration and
 end-to-end coverage are still pending.
 
 GitHub Actions runs these same checks for pull requests and pushes to `main`,
@@ -90,4 +91,10 @@ configured correctly.
 
 ## Deployment
 
-Deploy each Next.js app as its own project and set its project root to `apps/web` or `apps/dashboard`. Marketplace environment variables are configured on the `apps/web` deployment. Convex runtime variables must also be configured in the Convex deployment. Deploy the backend from the repository root with `pnpm convex:deploy`.
+Deploy each Next.js app as its own project and set its project root to `apps/web` or `apps/dashboard`. Marketplace environment variables are configured on the `apps/web` deployment. Convex runtime variables must also be configured in the Convex deployment. Backend releases must use an explicit environment-scoped deploy key; do not rely on a developer's default deployment selection.
+
+Use the [deployment runbook](docs/DEPLOYMENT.md) for environment isolation,
+Vercel preview/staging setup, secret ownership/rotation, first-super-admin
+provisioning, release gates, and rollback. Cloud resources still need provisioning.
+The marketplace's Vercel build command deploys the explicitly targeted Convex
+backend and builds the frontend against its URL; production releases require review.

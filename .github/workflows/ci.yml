@@ -20,6 +20,7 @@ jobs:
     timeout-minutes: 20
     env:
       CI: true
+      MARKETPLACE_ENV: ci
       NEXT_TELEMETRY_DISABLED: 1
       # Public, nonfunctional build fixtures. No production secrets or deployments.
       NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY: pk_test_ZXhhbXBsZS5jbGVyay5hY2NvdW50cy5kZXYk
@@ -44,7 +45,7 @@ jobs:
         run: pnpm lint
       - name: Type-check workspace
         run: pnpm typecheck
-      - name: Run existing tests
+      - name: Run tests
         run: pnpm test
       - name: Build both applications
         run: pnpm build

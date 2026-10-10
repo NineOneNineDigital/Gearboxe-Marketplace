@@ -1,5 +1,6 @@
 import { UserJSON } from "@clerk/backend";
 import { v, Validator } from "convex/values";
+import { provisionFirstSuperAdmin } from "./lib/provisioning";
 import {
   internalMutation,
   mutation,
@@ -17,6 +18,13 @@ export const current = query({
   handler: async (ctx) => {
     return await getCurrentUser(ctx);
   },
+});
+
+// Only deployment operators can invoke internal functions. This allowlist is
+// temporary and must be removed immediately after the first administrator exists.
+export const bootstrapSuperAdmin = internalMutation({
+  args: { clerkUserId: v.string(), expectedEmail: v.string(), reason: v.string() },
+  handler: async (ctx, args) => provisionFirstSuperAdmin(ctx, args, process.env),
 });
 
 export const upsertFromClerk = internalMutation({
