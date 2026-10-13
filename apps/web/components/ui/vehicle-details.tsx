@@ -21,7 +21,7 @@ export function VehicleDetails({ vehicle }: { vehicle: Doc<"vehicles"> }) {
       </dl>
       <div className="mt-5 flex flex-wrap items-center justify-between gap-2 border-t border-border pt-4 text-xs">
         <p className="text-muted-foreground">VIN <span className="ml-2 break-all font-mono text-foreground">{vehicle.vin || "Not provided"}</span></p>
-        <span className="text-muted-foreground">{vehicle.vinVerificationStatus === "decoded" ? "Decoded by Auto.dev" : "VIN not decoded"}</span>
+        <span className="text-muted-foreground">{vehicle.vinVerificationStatus === "decoded" ? "VIN decoded" : "VIN not decoded"}</span>
       </div>
       <div className="mt-5 border-t border-border pt-4">
         <h3 className="text-sm font-semibold text-foreground">Seller’s description</h3>

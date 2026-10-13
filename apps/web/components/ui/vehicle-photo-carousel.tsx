@@ -1,6 +1,7 @@
 "use client";
 
 import { Button } from "@/components/ui/button";
+import { isTrustedImageUrl } from "@/lib/trusted-images";
 import { cn } from "@/lib/utils";
 import * as Dialog from "@radix-ui/react-dialog";
 import { Car, ChevronLeft, ChevronRight, Expand, ImageOff, X } from "lucide-react";
@@ -10,19 +11,11 @@ import type { KeyboardEvent, TouchEvent } from "react";
 
 interface VehiclePhotoCarouselProps {
   photos: string[];
+  thumbnailPhotos?: string[];
+  captions?: string[];
   title: string;
   vehicleLabel: string;
   className?: string;
-}
-
-// Invalid references should reach the fallback, rather than throw in next/image.
-function isImageReference(source: string): boolean {
-  if (!source.trim()) return false;
-  if (source.startsWith("/") && !source.startsWith("//")) return true;
-  try {
-    const url = new URL(source);
-    return ["http:", "https:", "blob:"].includes(url.protocol);
-  } catch { return false; }
 }
 
 function PhotoFallback({ vehicleLabel, unavailable }: { vehicleLabel: string; unavailable: boolean }) {
@@ -42,7 +35,7 @@ function PhotoFallback({ vehicleLabel, unavailable }: { vehicleLabel: string; un
   );
 }
 
-export function VehiclePhotoCarousel({ photos, title, vehicleLabel, className }: VehiclePhotoCarouselProps) {
+export function VehiclePhotoCarousel({ photos, thumbnailPhotos, captions, title, vehicleLabel, className }: VehiclePhotoCarouselProps) {
   const [selected, setSelected] = useState(0);
   const [failed, setFailed] = useState<Set<string>>(() => new Set());
   const [expanded, setExpanded] = useState(false);
@@ -50,7 +43,7 @@ export function VehiclePhotoCarousel({ photos, title, vehicleLabel, className }:
   const thumbnailRefs = useRef<(HTMLButtonElement | null)[]>([]);
   const index = Math.min(selected, Math.max(0, photos.length - 1));
   const source = photos[index];
-  const available = Boolean(source && isImageReference(source) && !failed.has(source));
+  const available = Boolean(source && isTrustedImageUrl(source) && !failed.has(source));
 
   const markFailed = (photo: string) => setFailed(prev => new Set(prev).add(photo));
   const select = (next: number) => {
@@ -91,7 +84,7 @@ export function VehiclePhotoCarousel({ photos, title, vehicleLabel, className }:
           {available ? (
             <Dialog.Trigger asChild>
               <button type="button" aria-label={`Enlarge photo ${index + 1} of ${title}`} className="relative block h-full w-full focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-primary">
-                <Image key={source} src={source} alt={`${title} — photo ${index + 1}`} fill unoptimized sizes="(max-width: 1024px) 100vw, 800px" className="object-contain" onError={() => markFailed(source)} />
+                <Image key={source} src={source} alt={captions?.[index] || `${title} — photo ${index + 1}`} fill sizes="(max-width: 1024px) 100vw, 800px" className="object-contain" onError={() => markFailed(source)} />
                 <span className="absolute right-4 top-4 flex items-center gap-2 rounded-md bg-black/65 px-3 py-2 font-mono text-[10px] uppercase tracking-wider text-white"><Expand aria-hidden="true" className="h-3.5 w-3.5" /> Expand</span>
               </button>
             </Dialog.Trigger>
@@ -100,15 +93,19 @@ export function VehiclePhotoCarousel({ photos, title, vehicleLabel, className }:
         </div>
         <div className="flex min-h-12 items-center justify-between gap-3 border-t border-border px-4 py-3 text-muted-foreground">
           <span className="font-mono text-[10px] uppercase tracking-wider">Vehicle gallery</span>
+          {captions?.[index] && <span className="min-w-0 break-words text-sm">{captions[index]}</span>}
           {counter || <span className="font-mono text-xs">No photos yet</span>}
         </div>
         {photos.length > 1 && (
           <div className="flex gap-2 overflow-x-auto border-t border-border p-3" aria-label="Choose a vehicle photo">
-            {photos.map((photo, position) => (
-              <button type="button" key={`${position}-${photo}`} ref={element => { thumbnailRefs.current[position] = element; }} aria-label={`Show photo ${position + 1}${!isImageReference(photo) || failed.has(photo) ? " (unavailable)" : ""}`} aria-pressed={index === position} onClick={() => select(position)} className={cn("relative h-16 w-24 shrink-0 overflow-hidden rounded-md border-2 bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2", index === position ? "border-primary" : "border-transparent hover:border-primary/40")}>
-                {isImageReference(photo) && !failed.has(photo) ? <Image src={photo} alt="" fill unoptimized sizes="96px" className="object-cover" onError={() => markFailed(photo)} /> : <span className="flex h-full items-center justify-center bg-[hsl(var(--midnight))]"><Car aria-hidden="true" className="h-6 w-6 text-primary" /></span>}
+            {photos.map((photo, position) => {
+              const thumbnail = isTrustedImageUrl(thumbnailPhotos?.[position] ?? "") ? thumbnailPhotos![position] : photo;
+              return (
+              <button type="button" key={`${position}-${photo}`} ref={element => { thumbnailRefs.current[position] = element; }} aria-label={`Show photo ${position + 1}${!isTrustedImageUrl(photo) || failed.has(photo) ? " (unavailable)" : ""}`} aria-pressed={index === position} onClick={() => select(position)} className={cn("relative h-16 w-24 shrink-0 overflow-hidden rounded-md border-2 bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2", index === position ? "border-primary" : "border-transparent hover:border-primary/40")}>
+                {isTrustedImageUrl(thumbnail) && !failed.has(thumbnail) ? <Image src={thumbnail} alt="" fill sizes="96px" className="object-cover" onError={() => markFailed(thumbnail)} /> : <span className="flex h-full items-center justify-center bg-[hsl(var(--midnight))]"><Car aria-hidden="true" className="h-6 w-6 text-primary" /></span>}
               </button>
-            ))}
+              );
+            })}
           </div>
         )}
       </section>
@@ -120,10 +117,10 @@ export function VehiclePhotoCarousel({ photos, title, vehicleLabel, className }:
             <Dialog.Close asChild><Button type="button" variant="outline" size="icon" aria-label="Close photo gallery"><X aria-hidden="true" className="h-5 w-5" /></Button></Dialog.Close>
           </div>
           <div className="relative h-[60vh] min-h-80 sm:h-[70vh]" onTouchStart={event => { touchStart.current = { x: event.touches[0].clientX, y: event.touches[0].clientY }; }} onTouchEnd={handleTouchEnd} onTouchCancel={() => { touchStart.current = null; }}>
-            {available ? <Image key={source} src={source} alt={`${title} — photo ${index + 1}`} fill unoptimized sizes="100vw" className="object-contain" onError={() => markFailed(source)} /> : <PhotoFallback vehicleLabel={vehicleLabel} unavailable={photos.length > 0} />}
+            {available ? <Image key={source} src={source} alt={captions?.[index] || `${title} — photo ${index + 1}`} fill sizes="100vw" className="object-contain" onError={() => markFailed(source)} /> : <PhotoFallback vehicleLabel={vehicleLabel} unavailable={photos.length > 0} />}
             {navigation}
           </div>
-          <div className="mt-4 text-center text-[hsl(var(--chrome))]">{counter}</div>
+          <div className="mt-4 text-center text-[hsl(var(--chrome))]">{captions?.[index] && <p className="mb-2 text-sm">{captions[index]}</p>}{counter}</div>
         </Dialog.Content>
       </Dialog.Portal>
     </Dialog.Root>

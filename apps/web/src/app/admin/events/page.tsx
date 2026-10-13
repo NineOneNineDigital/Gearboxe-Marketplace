@@ -19,7 +19,11 @@ export default function AdminEventsPage() {
   const isAdmin = useQuery(api.users.isAdmin);
   const allEvents = useQuery(api.admin.getAllEvents, isAdmin === true ? {} : "skip");
   const cities = useQuery(api.cities.getCities);
+  const staffCandidates = useQuery(api.admin.getAllUsers, isAdmin === true ? {} : "skip");
   const deleteEvent = useMutation(api.events.deleteEvent);
+  const cancelEvent = useMutation(api.eventBookings.cancelEvent);
+  const [actionError, setActionError] = useState("");
+  const [busyEvent, setBusyEvent] = useState("");
 
 
   if (isLoading) {
@@ -58,7 +62,7 @@ export default function AdminEventsPage() {
       try {
         await deleteEvent({ id: eventId as Id<"events"> });
       } catch (error) {
-        console.error("Error deleting event:", error);
+        setActionError(error instanceof Error ? error.message : "Unable to delete event.");
       }
     }
   };
@@ -88,6 +92,7 @@ export default function AdminEventsPage() {
         </div>
       </div>
 
+      {actionError && <p role="alert" className="mb-4 text-red-700">{actionError}</p>}
       {/* Create Event Form */}
       {showCreateForm && (
         <Card className="mb-8">
@@ -99,8 +104,7 @@ export default function AdminEventsPage() {
               cities={cities}
               onSuccess={() => {
                 setShowCreateForm(false);
-                // Refresh the page to show new event
-                window.location.reload();
+
               }}
             />
           </CardContent>
@@ -146,6 +150,14 @@ export default function AdminEventsPage() {
                     </p>
                   )}
 
+                  {event.cancelledAt ? <p className="text-sm text-red-700">Cancelled: {event.cancellationReason}</p> : <Button variant="outline" disabled={!!busyEvent} onClick={async () => {
+                    const reason = window.prompt("Reason for cancelling this event (all paid registrations will receive a full refund):");
+                    if (!reason?.trim()) return;
+                    if (!window.confirm("Cancel the event and automatically refund every paid registration?")) return;
+                    setBusyEvent(event._id); setActionError("");
+                    try { await cancelEvent({ eventId: event._id, reason: reason.trim() }); } catch (error) { setActionError(error instanceof Error ? error.message : "Unable to cancel event."); } finally { setBusyEvent(""); }
+                  }}>{busyEvent === event._id ? "Cancelling…" : "Cancel event and refund registrations"}</Button>}
+                  <EventOperationsSettings event={event} users={staffCandidates ?? []} />
                   <div className="flex space-x-2 pt-4">
                     <Button
                       asChild
@@ -209,7 +221,9 @@ function EventCreateForm({
     address: "",
     capacity: "",
     description: "",
+    registrationFee: "49.00", timeZone: "America/New_York", registrationDeadline: "", eventRules: "", vendorInstructions: "", contactName: "", contactPhone: "", contactEmail: "", onSiteContactVisibility: "vendors",
   });
+  const [formError, setFormError] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   const createEvent = useMutation(api.events.createEvent);
@@ -237,10 +251,15 @@ function EventCreateForm({
         address: formData.address,
         capacity: parseInt(formData.capacity),
         description: formData.description,
+        registrationFeeCents: Math.round(Number(formData.registrationFee) * 100), timeZone: formData.timeZone,
+        registrationDeadline: formData.registrationDeadline ? new Date(formData.registrationDeadline).getTime() : undefined,
+        eventRules: formData.eventRules || undefined, vendorInstructions: formData.vendorInstructions || undefined,
+        onSiteContact: formData.contactName && formData.contactPhone ? { name: formData.contactName, phone: formData.contactPhone, email: formData.contactEmail || undefined } : undefined,
+        onSiteContactVisibility: formData.onSiteContactVisibility as "vendors" | "public",
       });
       onSuccess();
     } catch (error) {
-      console.error("Error creating event:", error);
+      setFormError(error instanceof Error ? error.message : "Unable to create event.");
     } finally {
       setIsSubmitting(false);
     }
@@ -358,6 +377,13 @@ function EventCreateForm({
         />
       </div>
 
+      <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+        {([['registrationFee', 'Registration fee (USD)', 'number'], ['timeZone', 'Event time zone (IANA)', 'text'], ['registrationDeadline', 'Registration deadline (your local time)', 'datetime-local'], ['contactName', 'On-site contact name', 'text'], ['contactPhone', 'On-site contact phone', 'tel'], ['contactEmail', 'On-site contact email', 'email']] as const).map(([key, label, type]) => <label key={key} className="space-y-2"><span className="block text-sm font-medium">{label}</span><input className="w-full rounded border p-2" type={type} step={key === 'registrationFee' ? '0.01' : undefined} min={key === 'registrationFee' ? '0.50' : undefined} required={key === 'registrationFee' || key === 'timeZone'} value={formData[key]} onChange={e => setFormData(prev => ({ ...prev, [key]: e.target.value }))} /></label>)}
+      </div>
+      <p className="text-sm text-muted-foreground">Date and deadline inputs use your device time zone; the event time zone controls event-day and refund calculations.</p>
+      {(['eventRules', 'vendorInstructions'] as const).map(key => <label key={key} className="block space-y-2"><span className="block font-medium">{key === 'eventRules' ? 'Event rules' : 'Vendor instructions'}</span>{key === 'vendorInstructions' && <span className="block text-sm text-muted-foreground">Public information: omit private access codes and personal contact details.</span>}<textarea className="w-full rounded border p-2" maxLength={5000} value={formData[key]} onChange={e => setFormData(prev => ({...prev, [key]: e.target.value}))} /></label>)}
+      <label className="block space-y-2"><span className="block font-medium">On-site contact visibility</span><select className="rounded border p-2" value={formData.onSiteContactVisibility} onChange={e => setFormData(prev => ({...prev, onSiteContactVisibility: e.target.value}))}><option value="vendors">Confirmed vendors and assigned staff</option><option value="public">Public — contact phone and email visible to everyone</option></select></label>
+      {formError && <p role="alert" className="text-red-700">{formError}</p>}
       <div className="flex justify-end space-x-4">
         <Button
           type="button"
@@ -371,6 +397,7 @@ function EventCreateForm({
               address: "",
               capacity: "",
               description: "",
+    registrationFee: "49.00", timeZone: "America/New_York", registrationDeadline: "", eventRules: "", vendorInstructions: "", contactName: "", contactPhone: "", contactEmail: "", onSiteContactVisibility: "vendors",
             });
           }}
         >
@@ -382,4 +409,23 @@ function EventCreateForm({
       </div>
     </form>
   );
+}
+
+function EventOperationsSettings({ event, users }: { event: Doc<"events">; users: Doc<"users">[] }) {
+  const update = useMutation(api.events.updateEvent);
+  const assign = useMutation(api.eventOperations.assignStaff);
+  const remove = useMutation(api.eventOperations.removeStaff);
+  const staff = useQuery(api.eventOperations.listStaff, { eventId: event._id });
+  const [form, setForm] = useState({ registrationFee: event.registrationFeeCents !== undefined ? String(event.registrationFeeCents / 100) : "", timeZone: event.timeZone ?? "America/New_York", capacity: String(event.capacity), deadline: event.registrationDeadline ? new Date(event.registrationDeadline - new Date(event.registrationDeadline).getTimezoneOffset() * 60000).toISOString().slice(0,16) : "", rules: event.eventRules ?? "", instructions: event.vendorInstructions ?? "", contactName: event.onSiteContact?.name ?? "", contactPhone: event.onSiteContact?.phone ?? "", contactEmail: event.onSiteContact?.email ?? "", visibility: event.onSiteContactVisibility ?? "vendors" });
+  const [clearDeadline,setClearDeadline] = useState(false); const [clearContact,setClearContact] = useState(false);
+  const [userId,setUserId] = useState(""); const [role,setRole] = useState<"checkin"|"manager">("checkin"); const [error,setError] = useState(""); const [busy,setBusy] = useState(false);
+  async function perform(operation: () => Promise<unknown>) { setBusy(true); setError(""); try { await operation(); } catch (error) { setError(error instanceof Error ? error.message : "Unable to update event."); } finally { setBusy(false); } }
+  return <details className="rounded border p-3"><summary className="cursor-pointer font-medium">Operations settings and staff</summary><form className="mt-3 space-y-3" onSubmit={e => { e.preventDefault(); void perform(() => update({ id: event._id, registrationFeeCents: Math.round(Number(form.registrationFee) * 100), timeZone: form.timeZone, capacity: Number(form.capacity), clearRegistrationDeadline: clearDeadline, clearOnSiteContact: clearContact, registrationDeadline: !clearDeadline && form.deadline && new Date(form.deadline).getTime() !== event.registrationDeadline ? new Date(form.deadline).getTime() : undefined, eventRules: form.rules, vendorInstructions: form.instructions, onSiteContact: !clearContact && form.contactName && form.contactPhone ? { name: form.contactName, phone: form.contactPhone, email: form.contactEmail || undefined } : undefined, onSiteContactVisibility: form.visibility as "vendors"|"public" })); }}>
+    {([['registrationFee','Fee (USD)','number'],['timeZone','Time zone','text'],['capacity','Capacity','number'],['deadline','Registration deadline (device time zone)','datetime-local'],['contactName','On-site contact name','text'],['contactPhone','On-site contact phone','tel'],['contactEmail','On-site contact email','email']] as const).map(([key,label,type]) => <label className="block" key={key}><span className="block text-sm">{label}</span><input type={type} required={key === 'registrationFee' || key === 'capacity' || key === 'timeZone'} step={key === 'registrationFee' ? '0.01' : undefined} className="w-full rounded border p-2" value={form[key]} onChange={e => setForm(prev => ({...prev,[key]: e.target.value}))} /></label>)}
+    {(['rules','instructions'] as const).map(key => <label key={key} className="block"><span>{key === 'rules' ? 'Event rules' : 'Vendor instructions'}</span>{key === 'instructions' && <span className="block text-sm text-muted-foreground">Public information: omit private access codes and personal contact details.</span>}<textarea className="w-full rounded border p-2" maxLength={5000} value={form[key]} onChange={e => setForm(prev => ({...prev,[key]: e.target.value}))} /></label>)}
+    <label className="block"><input type="checkbox" checked={clearDeadline} onChange={e => setClearDeadline(e.target.checked)} /> Remove registration deadline (new registration stays open until the event)</label>
+    <label className="block"><input type="checkbox" checked={clearContact} onChange={e => setClearContact(e.target.checked)} /> Remove on-site contact</label>
+    <p className="text-sm">Blank deadline and contact fields preserve existing values unless removal is selected.</p>
+    <label className="block">Contact visibility<select className="block w-full rounded border p-2" value={form.visibility} onChange={e => setForm(prev => ({...prev, visibility: e.target.value as "vendors"|"public"}))}><option value="vendors">Confirmed vendors and staff</option><option value="public">Public phone and email — everyone</option></select></label><Button disabled={busy || !!event.cancelledAt}>Save settings</Button>
+  </form><div className="mt-4 space-y-2"><h4 className="font-semibold">Event staff</h4>{staff?.map(row => <div key={row._id}><span>{row.name} · {row.role}</span><Button variant="ghost" size="sm" disabled={busy} onClick={() => perform(() => remove({eventId:event._id,userId:row.userId}))}>Remove</Button></div>)}<label className="block">Assign an existing account<select className="block w-full rounded border p-2" value={userId} onChange={e => setUserId(e.target.value)}><option value="">Select staff member</option>{users.filter(user => user.suspendedAt === undefined).map(user => <option key={user._id} value={user._id}>{user.name} ({user.email})</option>)}</select></label><select className="rounded border p-2" value={role} onChange={e => setRole(e.target.value as typeof role)}><option value="checkin">Check-in only</option><option value="manager">Event manager</option></select><Button disabled={busy || !userId.trim()} onClick={() => perform(() => assign({eventId:event._id,userId:userId as Id<"users">,role}))}>Assign staff</Button><p className="text-sm">Staff access only this event at /staff/events. Managers can undo check-in, export rosters, resolve incidents, and request refunds.</p></div>{error && <p role="alert" className="text-red-700">{error}</p>}</details>;
 }

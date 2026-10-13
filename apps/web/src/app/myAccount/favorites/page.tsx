@@ -13,6 +13,7 @@ import { useMutation, useQuery } from "convex/react";
 import { Eye, Heart, SortAsc } from "lucide-react";
 import Link from "next/link";
 import Image from "next/image";
+import { isTrustedImageUrl } from "@/lib/trusted-images";
 import { redirect } from "next/navigation";
 import { useState } from "react";
 
@@ -27,7 +28,7 @@ export default function FavoritesPage() {
   // Always call hooks to maintain hook order
   const favorites = useQuery(
     api.favorites.getFavoritesByUser,
-    user?._id ? { userId: user._id } : "skip"
+    user?._id ? {} : "skip"
   );
   const removeFavorite = useMutation(api.favorites.removeFavorite);
 
@@ -64,7 +65,6 @@ export default function FavoritesPage() {
     try {
       const vehicle = favorites?.find((v) => v._id === vehicleId);
       await removeFavorite({
-        userId: user._id,
         vehicleId: vehicleId as Id<"vehicles">,
       });
       toast({
@@ -162,12 +162,11 @@ export default function FavoritesPage() {
                 className="overflow-hidden hover:shadow-lg transition-shadow"
               >
                 <div className="relative">
-                  {vehicle.photos.length > 0 ? (
+                  {isTrustedImageUrl(vehicle.thumbnailPhotos?.[0] ?? vehicle.photos[0] ?? "") ? (
                     <Image
-                      unoptimized
                       width={800}
                       height={600}
-                      src={vehicle.photos[0]}
+                      src={vehicle.thumbnailPhotos?.[0] ?? vehicle.photos[0]}
                       alt={vehicle.title}
                       className="w-full object-cover h-48"
                     />

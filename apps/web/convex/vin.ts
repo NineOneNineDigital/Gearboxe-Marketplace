@@ -2,8 +2,10 @@ import { v } from "convex/values";
 import { action, internalMutation, internalQuery } from "./_generated/server";
 import { api, internal } from "./_generated/api";
 import { decodedFields } from "./lib/vehicleSpecification";
-import { normalizeVin, fetchDecode } from "./lib/autoDev";
-import type { DecodedVehicle } from "./lib/autoDev";
+import { autoDevDecoder } from "./lib/autoDev";
+import { vpicDecoder } from "./lib/vpic";
+import { normalizeVin, selectVinDecoder } from "./lib/vinDecoder";
+import type { DecodedVehicle } from "./lib/vinDecoder";
 
 export const cached = internalQuery({
   args: { vin: v.string() },
@@ -32,6 +34,7 @@ export const decodeVin = action({
   handler: async (ctx, args): Promise<DecodedVehicle> => {
     const user = await ctx.runQuery(api.users.current, {});
     if (!user) throw new Error("Authentication required");
+    if (user.suspendedAt !== undefined) throw new Error("Account suspended");
     const vin = normalizeVin(args.vin);
     await ctx.runMutation(internal.vin.claimRequest, { userId: user._id });
     const cached = await ctx.runQuery(internal.vin.cached, { vin });
@@ -40,9 +43,11 @@ export const decodeVin = action({
       void _id; void _creationTime; void decodedAt;
       return result;
     }
-    const key = process.env.AUTO_DEV_API_KEY;
-    if (!key) throw new Error("VIN decoding is not configured; enter vehicle details manually");
-    const result = await fetchDecode(vin, key);
+    const decoder = selectVinDecoder({
+      VIN_DECODER_PROVIDER: process.env.VIN_DECODER_PROVIDER,
+      AUTO_DEV_API_KEY: process.env.AUTO_DEV_API_KEY,
+    }, { auto_dev: autoDevDecoder, vpic: vpicDecoder });
+    const result = await decoder.decode(vin);
     await ctx.runMutation(internal.vin.storeDecode, { ...result, decodedAt: Date.now() });
     return result;
   },

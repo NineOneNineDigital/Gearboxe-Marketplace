@@ -4,6 +4,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Footer } from "@/components/ui/footer";
 import { MessageThread } from "@/components/ui/message-thread";
+import { SafetyControls } from "@/components/ui/safety-controls";
 import { Navbar } from "@/components/ui/navbar";
 import { api } from "@/convex/_generated/api";
 import type { Id } from "@/convex/_generated/dataModel";
@@ -28,12 +29,12 @@ export default function ConversationPage({ params }: ConversationPageProps) {
 
   // Always call hooks to maintain hook order
   const currentUser = useQuery(
-    api.users.getUser,
-    isAuthenticated && user?.id ? { clerkId: user.id } : "skip"
+    api.users.current,
+    isAuthenticated && user?.id ? {} : "skip"
   );
   const vehicle = useQuery(
-    api.vehicles.getVehicleById,
-    vehicleId ? { id: vehicleId as Id<"vehicles"> } : "skip"
+    api.conversations.getVehicleContext,
+    isAuthenticated && currentUser && vehicleId && userId ? { vehicleId: vehicleId as Id<"vehicles">, otherUserId: userId as Id<"users"> } : "skip"
   );
   const otherUser = useQuery(
     api.users.getUserById,
@@ -46,8 +47,7 @@ export default function ConversationPage({ params }: ConversationPageProps) {
     currentUser?._id && vehicleId && userId
       ? {
           vehicleId: vehicleId as Id<"vehicles">,
-          participant1Id: currentUser._id,
-          participant2Id: userId as Id<"users">,
+          otherUserId: userId as Id<"users">,
         }
       : "skip"
   );
@@ -102,7 +102,7 @@ export default function ConversationPage({ params }: ConversationPageProps) {
                 Conversation {otherUser && `with ${otherUser.name}`}
               </h1>
             </div>
-            {vehicle && (
+            {vehicle && ["active", "approved"].includes(vehicle.status) && (
               <Button asChild variant="outline">
                 <Link href={`/vehicles/${vehicle._id}`}>
                   <Car className="h-4 w-4 mr-2" />
@@ -125,6 +125,7 @@ export default function ConversationPage({ params }: ConversationPageProps) {
                 </CardHeader>
                 <CardContent className="pt-0">
                   <div className="space-y-6">
+                    <p className="rounded-md bg-muted p-3 text-sm">Listing status: <span className="capitalize font-medium">{vehicle.status === "approved" ? "active" : vehicle.status}</span>. Your conversation remains available.</p>
                     <div className="text-center">
                       <h3 className="font-bold text-xl text-gray-900 mb-2">
                         {vehicle.year} {vehicle.make} {vehicle.model}
@@ -135,7 +136,7 @@ export default function ConversationPage({ params }: ConversationPageProps) {
                             Mileage
                           </span>
                           <span className="text-sm font-semibold text-gray-900">
-                            {vehicle.mileage.toLocaleString()} miles
+                            {vehicle.mileage.toLocaleString()} {vehicle.mileageUnit ?? "mi"}
                           </span>
                         </div>
                         <div className="border-t border-gray-200 pt-3">
@@ -201,6 +202,7 @@ export default function ConversationPage({ params }: ConversationPageProps) {
               recipientName={otherUser?.name || "User"}
               conversationId={conversation?._id}
             />
+            <SafetyControls vehicleId={vehicleId as Id<"vehicles">} targetUserId={userId as Id<"users">} />
           </div>
         </div>
       </div>

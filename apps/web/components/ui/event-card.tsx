@@ -13,6 +13,7 @@ interface Event {
   address: string;
   capacity: number;
   description: string;
+  cancelledAt?: number;
   city?: {
     name: string;
     state: string;
@@ -43,7 +44,7 @@ export function EventCard({ event, showRegister = true }: EventCardProps) {
   };
 
   const { date, time } = formatDate(event.date);
-  const isUpcoming = event.date > Date.now();
+  const isUpcoming = event.date > Date.now() && !event.cancelledAt;
 
   return (
     <Card className="group overflow-hidden border-border bg-card transition-[transform,box-shadow,border-color] duration-300 hover:-translate-y-1 hover:border-primary/35 hover:shadow-[0_20px_50px_hsl(var(--midnight)/0.12)]">
@@ -99,7 +100,7 @@ export function EventCard({ event, showRegister = true }: EventCardProps) {
         </Button>
         {showRegister && isUpcoming && (
           <Button asChild>
-            <Link href={`/events/${event._id}`}>Register <ArrowUpRight className="h-4 w-4" /></Link>
+            <Link href={`/events/${event._id}/register`}>Register <ArrowUpRight className="h-4 w-4" /></Link>
           </Button>
         )}
       </CardFooter>

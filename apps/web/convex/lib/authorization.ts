@@ -19,11 +19,12 @@ export async function requireCurrentUser(ctx: AuthContext) {
   if (!user) {
     throw new ConvexError("Authentication required");
   }
+  if (user.suspendedAt !== undefined) throw new ConvexError("Your account is suspended. Visit Safety & support to appeal.");
   return user;
 }
 
 export function isAdmin(user: Doc<"users">) {
-  return user.role === "admin" || user.role === "superAdmin";
+  return user.suspendedAt === undefined && (user.role === "admin" || user.role === "superAdmin");
 }
 
 export async function requireAdmin(ctx: AuthContext) {

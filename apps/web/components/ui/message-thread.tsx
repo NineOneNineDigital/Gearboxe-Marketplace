@@ -7,9 +7,9 @@ import { api } from "@/convex/_generated/api";
 import type { Id } from "@/convex/_generated/dataModel";
 import { useCurrentUser } from "@/hooks/useCurrentUser";
 import { useToast } from "@/hooks/useToast";
-import { useMutation, useQuery } from "convex/react";
+import { useMutation, usePaginatedQuery, useQuery } from "convex/react";
 import { Check, CheckCheck, MessageCircle, Send } from "lucide-react";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useLayoutEffect, useRef, useState } from "react";
 
 interface MessageThreadProps {
   vehicleId: string;
@@ -30,58 +30,50 @@ export function MessageThread({
   const { toast } = useToast();
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
-  const messages = useQuery(
-    conversationId
-      ? api.messages.getMessagesByConversation
-      : api.messages.getMessagesByVehicle,
-    !convexUser
-      ? "skip"
-      : conversationId
-      ? { conversationId: conversationId as Id<"conversations"> }
-      : { vehicleId: vehicleId as Id<"vehicles"> }
+  const scrollRef = useRef<HTMLDivElement>(null);
+  const olderScroll = useRef<{ height: number; top: number } | null>(null);
+  const latestMessage = useRef<string | undefined>(undefined);
+  const atBottom = useRef(true);
+  const foundConversation = useQuery(api.conversations.getConversationByParticipants,
+    convexUser ? { vehicleId: vehicleId as Id<"vehicles">, otherUserId: recipientId as Id<"users"> } : "skip");
+  const threadId = conversationId ?? foundConversation?._id;
+  const contact = useQuery(api.conversations.getContactState,
+    convexUser ? { otherUserId: recipientId as Id<"users"> } : "skip");
+  const { results, status, loadMore } = usePaginatedQuery(
+    api.messages.getMessagesByConversation,
+    convexUser && threadId ? { conversationId: threadId as Id<"conversations"> } : "skip",
+    { initialNumItems: 30 }
   );
+  const messages = [...results].reverse();
   const sendMessage = useMutation(api.messages.sendMessage);
-  const markAsRead = useMutation(api.messages.markAsRead);
-  const markConversationAsRead = useMutation(
-    api.messages.markConversationAsRead
-  );
+  const markConversationAsRead = useMutation(api.messages.markConversationAsRead);
 
   useEffect(() => {
-    // Mark messages as read when component mounts
-    if (messages && convexUser && conversationId) {
-      // Use the new conversation-based mark as read
-      markConversationAsRead({
-        conversationId: conversationId as Id<"conversations">,
-        userId: convexUser._id,
-      });
-    } else if (messages && convexUser) {
-      // Fallback to individual message marking
-      messages.forEach((message) => {
-        if (message.recipientId === convexUser._id && !message.read) {
-          markAsRead({ messageId: message._id });
-        }
-      });
+    if (!convexUser || !threadId) return;
+    const messageIds = results.filter(message => message.recipientId === convexUser._id && !message.read).slice(0, 50).map(message => message._id);
+    if (messageIds.length) void markConversationAsRead({ conversationId: threadId as Id<"conversations">, messageIds }).catch(() => {
+      toast({ title: "Unable to mark messages as read", variant: "destructive" });
+    });
+  }, [results, convexUser, threadId, markConversationAsRead, toast]);
+
+  useLayoutEffect(() => {
+    const scroller = scrollRef.current;
+    if (!scroller) return;
+    if (olderScroll.current && status !== "LoadingMore") {
+      scroller.scrollTop = olderScroll.current.top + scroller.scrollHeight - olderScroll.current.height;
+      olderScroll.current = null;
+    } else if (!olderScroll.current && latestMessage.current !== results[0]?._id && (atBottom.current || results[0]?.senderId === convexUser?._id)) {
+      messagesEndRef.current?.scrollIntoView({ behavior: latestMessage.current ? "smooth" : "instant" });
     }
-  }, [
-    messages,
-    convexUser,
-    markAsRead,
-    markConversationAsRead,
-    conversationId,
-  ]);
-
-  useEffect(() => {
-    // Scroll to bottom when new messages arrive
-    messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
-  }, [messages]);
+    latestMessage.current = results[0]?._id;
+  }, [results, status, convexUser?._id]);
 
   const handleSendMessage = async () => {
-    if (!newMessage.trim() || !convexUser) return;
+    if (!newMessage.trim() || !convexUser || !contact?.canContact || isLoading) return;
 
     setIsLoading(true);
     try {
       await sendMessage({
-        senderId: convexUser._id,
         recipientId: recipientId as Id<"users">,
         vehicleId: vehicleId as Id<"vehicles">,
         content: newMessage.trim(),
@@ -95,7 +87,7 @@ export function MessageThread({
       console.error("Error sending message:", error);
       toast({
         title: "Error",
-        description: "Failed to send message. Please try again.",
+        description: error instanceof Error ? error.message : "Failed to send message. Please try again.",
         variant: "destructive",
       });
     } finally {
@@ -133,7 +125,15 @@ export function MessageThread({
 
       <CardContent className="flex-1 flex flex-col space-y-4 overflow-hidden p-0">
         {/* Messages */}
-        <div className="flex-1 overflow-y-auto space-y-4 p-4">
+        <div ref={scrollRef} onScroll={event => {
+            const node = event.currentTarget;
+            atBottom.current = node.scrollHeight - node.scrollTop - node.clientHeight < 100;
+          }} className="flex-1 overflow-y-auto space-y-4 p-4">
+          {(status === "CanLoadMore" || status === "LoadingMore") && <Button variant="outline" size="sm" disabled={status === "LoadingMore"} onClick={() => {
+            if (scrollRef.current) olderScroll.current = { height: scrollRef.current.scrollHeight, top: scrollRef.current.scrollTop };
+            loadMore(30);
+          }}>{status === "LoadingMore" ? "Loading…" : "Load older messages"}</Button>}
+          {status === "LoadingFirstPage" && threadId && <p role="status">Loading messages…</p>}
           {messages && messages.length > 0 ? (
             messages.map((message) => {
               const isOwnMessage = message.senderId === convexUser._id;
@@ -188,9 +188,13 @@ export function MessageThread({
 
         {/* Message Input */}
         <div className="border-t border-gray-200 bg-gray-50 p-4">
+          {contact?.canContact === false && <p className="mb-2 text-sm" role="status">Messaging is unavailable between these accounts.</p>}
           <div className="flex space-x-2">
             <Textarea
               placeholder="Type your message..."
+              aria-label="Message"
+              maxLength={2000}
+              disabled={!contact?.canContact || isLoading}
               value={newMessage}
               onChange={(e) => setNewMessage(e.target.value)}
               onKeyDown={(e) => {
@@ -203,7 +207,7 @@ export function MessageThread({
             />
             <Button
               onClick={handleSendMessage}
-              disabled={!newMessage.trim() || isLoading}
+              disabled={!newMessage.trim() || isLoading || !contact?.canContact}
               size="sm"
               className="px-4 py-2 rounded-lg"
             >

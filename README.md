@@ -29,7 +29,7 @@ The marketplace environment file belongs at `apps/web/.env.local`. Configure:
 - `NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY` and `CLERK_SECRET_KEY`
 - `NEXT_PUBLIC_CONVEX_URL`, `NEXT_PUBLIC_CONVEX_SITE_URL`, and `CONVEX_DEPLOYMENT`
 - `STRIPE_SECRET_KEY` and `STRIPE_WEBHOOK_SECRET`
-- `EVENT_REGISTRATION_PRICE_CENTS` as the canonical registration price in USD cents
+- `EVENT_REGISTRATION_PRICE_CENTS` for legacy web configuration validation; configure the canonical default fee in Convex
 - `NEXT_PUBLIC_APP_URL`
 - `MARKETPLACE_ENV` (`development`, `preview`, `staging`, or `production`)
 
@@ -39,13 +39,37 @@ payment configuration.
 
 The Convex deployment also requires `CLERK_JWT_ISSUER_DOMAIN`,
 `CLERK_WEBHOOK_SECRET`, `STRIPE_SECRET_KEY`, and
-`EVENT_REGISTRATION_PRICE_CENTS`. The registration price must match in the web
-and Convex environments: the web server creates Checkout sessions and Convex
-independently verifies the paid amount before completing a registration.
+`EVENT_REGISTRATION_PRICE_CENTS`. Checkout uses the Convex server fee snapshot; the browser and Next.js never
+choose the charged amount. Configure `APP_URL` and `STRIPE_WEBHOOK_SECRET` in
+Convex as well as the web deployment. Registration, capacity holds, refunds and
+recovery are documented in [Event payments](docs/EVENT_PAYMENTS.md).
 
-Vehicle listing fields, lifecycle rules, legacy compatibility, and Auto.dev setup
-are documented in [Vehicle listings](docs/VEHICLE_LISTINGS.md). VIN decoding
-requires `AUTO_DEV_API_KEY` in the Convex deployment environment.
+Event rules, deadlines, waitlists, assigned staff, QR admission, attendance,
+incidents and roster exports are documented in
+[Popup operations](docs/POPUP_OPERATIONS.md).
+
+Vehicle listing fields, lifecycle rules, VIN provider selection, and permanent
+media storage are documented in [Vehicle listings](docs/VEHICLE_LISTINGS.md).
+Set `VIN_DECODER_PROVIDER` to `auto_dev` or `vpic` in Convex; Auto.dev also needs
+`AUTO_DEV_API_KEY`. Media uploads need `APP_URL` set to the exact web origin there.
+Seller drafts autosave; submission requires complete specifications and processed
+Convex photos. My Listings provides moderation feedback, status controls,
+activity counts and in-app confirmations. Closing a listing preserves existing
+conversations and event registrations.
+Buyer discovery uses bounded cursor pages with indexed keyword, location and
+sort lookups, URL filters, saved searches and recently viewed listings. Existing
+inventory must be backfilled into the discovery catalog before browser rollout;
+the linked listing documentation includes the deployment sequence and SEO setup.
+
+Trust, reporting, seller verification, private documents, moderation, appeals,
+and sensitive-data visibility and retention are documented in
+[Trust and safety](docs/TRUST_SAFETY.md).
+
+Messaging, the notification inbox, email preferences, Autosend setup, delivery
+tracking and recovery are documented in [Notifications](docs/NOTIFICATIONS.md).
+Transactional email runs in Convex and requires `AUTOSEND_API_KEY`,
+`AUTOSEND_FROM_EMAIL`, `AUTOSEND_WEBHOOK_SECRET`, and the exact web origin in
+`APP_URL`. Configure a verified sender and the delivery webhook before rollout.
 
 ## Development
 
@@ -82,8 +106,9 @@ pnpm build
 
 Run the full release baseline with `pnpm check`. Lint rejects warnings as well
 as errors. Type checking covers both applications and the shared design tokens.
-The current automated tests cover configuration, initial admin provisioning, and design tokens; marketplace integration and
-end-to-end coverage are still pending.
+Automated tests cover configuration, admin provisioning, marketplace backend
+policies, payments, notifications, event operations and design tokens. Live
+provider integration and browser end-to-end coverage still require staging.
 
 GitHub Actions runs these same checks for pull requests and pushes to `main`,
 with a frozen lockfile and the Node/pnpm versions pinned in the repository.

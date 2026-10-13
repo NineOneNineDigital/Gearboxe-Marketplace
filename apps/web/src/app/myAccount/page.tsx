@@ -23,7 +23,7 @@ export default function DashboardPage() {
   );
   const unreadCount = useQuery(
     api.messages.getUnreadCount,
-    user?._id ? { userId: user._id } : "skip"
+    user?._id ? {} : "skip"
   );
 
   // Show loading while auth is being determined
@@ -104,6 +104,8 @@ export default function DashboardPage() {
             </Link>
           </Button>
         </div>
+
+        <Button asChild variant="outline" className="mb-8"><Link href="/myAccount/registrations">Event registrations and receipts</Link></Button>
 
         {/* Stats Summary */}
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-8">

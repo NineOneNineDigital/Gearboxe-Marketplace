@@ -1,6 +1,12 @@
 import type { Doc } from "@/convex/_generated/dataModel";
 
-export function vehicleResults(result: unknown): Doc<"vehicles">[] | undefined {
+export type VehicleWithMedia = Doc<"vehicles"> & {
+  thumbnailPhotos?: string[];
+  photoCaptions?: string[];
+  legacyPhotos?: string[];
+};
+
+export function vehicleResults(result: unknown): VehicleWithMedia[] | undefined {
   if (result === undefined) return undefined;
   if (Array.isArray(result)) return result;
   if (

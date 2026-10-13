@@ -7,12 +7,16 @@ const nextConfig: NextConfig = {
   poweredByHeader: false,
   transpilePackages: ["@workspace/design-tokens"],
   images: {
-    domains: ["localhost"],
     remotePatterns: [
       {
         protocol: "https",
         hostname: "images.unsplash.com",
       },
+      ...(process.env.NEXT_PUBLIC_CONVEX_URL ? [{
+        protocol: "https" as const,
+        hostname: new URL(process.env.NEXT_PUBLIC_CONVEX_URL).hostname,
+        pathname: "/api/storage/**",
+      }] : []),
     ],
   },
   async headers() {
@@ -25,7 +29,7 @@ const nextConfig: NextConfig = {
           { key: "Referrer-Policy", value: "strict-origin-when-cross-origin" },
           {
             key: "Permissions-Policy",
-            value: "camera=(self), geolocation=(), microphone=()",
+            value: "camera=(self), geolocation=(self), microphone=()",
           },
           {
             key: "Strict-Transport-Security",

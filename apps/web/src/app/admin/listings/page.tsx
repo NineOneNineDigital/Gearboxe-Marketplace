@@ -9,6 +9,7 @@ import { useConvexAuth, useMutation, useQuery } from "convex/react";
 import { ArrowLeft, CheckCircle, Eye, Filter, XCircle } from "lucide-react";
 import Link from "next/link";
 import Image from "next/image";
+import { isTrustedImageUrl } from "@/lib/trusted-images";
 import { redirect } from "next/navigation";
 import { useState } from "react";
 
@@ -156,12 +157,11 @@ export default function AdminListingsPage() {
               {filteredVehicles.map((vehicle) => (
                 <Card key={vehicle._id} className="overflow-hidden">
                   <div className="relative">
-                    {vehicle.photos.length > 0 ? (
+                    {isTrustedImageUrl(vehicle.thumbnailPhotos?.[0] ?? vehicle.photos[0] ?? "") ? (
                       <Image
-                        unoptimized
                         width={800}
                         height={600}
-                        src={vehicle.photos[0]}
+                        src={vehicle.thumbnailPhotos?.[0] ?? vehicle.photos[0]}
                         alt={vehicle.title}
                         className="w-full h-48 object-cover"
                       />

@@ -4,7 +4,11 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Footer } from "@/components/ui/footer";
 import { Navbar } from "@/components/ui/navbar";
+import { RegisterVehicle } from "@/components/ui/register-vehicle";
 import { QRDisplay } from "@/components/ui/qr-display";
+import { ListingNotifications } from "@/components/ui/listing-notifications";
+import { Toast, ToastClose, ToastDescription, ToastProvider, ToastTitle, ToastViewport } from "@/components/ui/toast";
+import { useToast } from "@/hooks/useToast";
 import { api } from "@/convex/_generated/api";
 import type { Id } from "@/convex/_generated/dataModel";
 import { useUser } from "@clerk/nextjs";
@@ -20,7 +24,8 @@ import {
 } from "lucide-react";
 import Link from "next/link";
 import Image from "next/image";
-import { redirect, useRouter, useSearchParams } from "next/navigation";
+import { isTrustedImageUrl } from "@/lib/trusted-images";
+import { redirect, useSearchParams } from "next/navigation";
 import { Suspense, useState } from "react";
 
 export default function MyListingsPage() {
@@ -32,7 +37,7 @@ export default function MyListingsPage() {
 }
 
 function MyListingsContent() {
-  const router = useRouter();
+  const { toast, toasts, dismiss } = useToast();
   const searchParams = useSearchParams();
   const { isAuthenticated, isLoading } = useConvexAuth();
   const { user } = useUser();
@@ -40,8 +45,8 @@ function MyListingsContent() {
 
   // Always call hooks to maintain hook order
   const currentUser = useQuery(
-    api.users.getUser,
-    user?.id ? { clerkId: user.id } : "skip"
+    api.users.current,
+    isAuthenticated && user?.id ? {} : "skip"
   );
   const userVehicles = useQuery(
     api.vehicles.getVehiclesByUser,
@@ -49,8 +54,9 @@ function MyListingsContent() {
   );
   const userRegistrations = useQuery(
     api.registrations.getRegistrationsByUser,
-    currentUser?._id ? { userId: currentUser._id } : "skip"
+    currentUser?._id ? {} : "skip"
   );
+  const analytics = useQuery(api.vehicles.getSellerAnalytics, currentUser?._id ? {} : "skip");
   const changeStatus = useMutation(api.vehicles.changeVehicleStatus);
   const [actionError, setActionError] = useState("");
   const [updatingId, setUpdatingId] = useState<string | null>(null);
@@ -73,22 +79,36 @@ function MyListingsContent() {
 
   const createdVehicleId = searchParams.get("created");
 
-  const handleDeleteVehicle = async (vehicleId: string) => {
-    if (confirm("Are you sure you want to delete this listing?")) {
-      try {
-        await deleteVehicle({ id: vehicleId as Id<"vehicles"> });
-        router.refresh();
-      } catch (error) {
-        console.error("Error deleting vehicle:", error);
-      }
-    }
+  const handleDeleteVehicle = async (vehicleId: Id<"vehicles">) => {
+    if (!confirm("Delete this listing permanently? Listings with conversations or event registrations must be withdrawn instead to preserve their history.")) return;
+    setActionError("");
+    setUpdatingId(vehicleId);
+    try {
+      await deleteVehicle({ id: vehicleId });
+      toast({ title: "Listing deleted" });
+    } catch (error) {
+      setActionError(error instanceof Error ? error.message : "Unable to delete this listing.");
+    } finally { setUpdatingId(null); }
   };
 
-  const handleStatus = async (id: Id<"vehicles">, status: "draft" | "pending" | "active" | "reserved" | "sold" | "archived") => {
-    setActionError(""); setUpdatingId(id);
-    try { await changeStatus({ id, status }); }
-    catch (error) { setActionError(error instanceof Error ? error.message : "Unable to update listing."); }
-    finally { setUpdatingId(null); }
+  const handleStatus = async (id: Id<"vehicles">, status: "draft" | "pending" | "active" | "reserved" | "sold" | "withdrawn" | "archived") => {
+    setActionError("");
+    setUpdatingId(id);
+    try {
+      await changeStatus({ id, status });
+      const confirmations = {
+        draft: "Listing returned to draft",
+        pending: "Listing submitted for review",
+        active: "Reservation released",
+        reserved: "Listing marked reserved",
+        sold: "Listing marked sold",
+        withdrawn: "Listing withdrawn",
+        archived: "Listing archived",
+      };
+      toast({ title: confirmations[status], description: status === "withdrawn" ? "Your conversations and event registrations are preserved." : undefined });
+    } catch (error) {
+      setActionError(error instanceof Error ? error.message : "Unable to update listing.");
+    } finally { setUpdatingId(null); }
   };
 
   const getStatusIcon = (status: string) => {
@@ -153,26 +173,31 @@ function MyListingsContent() {
         )}
 
         {actionError && <p className="mb-4 text-red-700" role="alert">{actionError}</p>}
+        <ListingNotifications enabled={Boolean(currentUser?._id)} />
         {/* Listings Grid */}
-        {userVehicles && userVehicles.length > 0 ? (
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
+        {userVehicles === undefined ? <p role="status" className="py-12 text-center text-gray-600">Loading your listings...</p> : userVehicles.length > 0 ? (
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
             {userVehicles.map((vehicle) => {
               const registration = userRegistrations?.find(
-                (reg) => reg.vehicleId === vehicle._id
+                (reg) => reg.vehicleId === vehicle._id && reg.paymentStatus === "completed"
               );
+
+              const metrics = analytics?.find((entry) => entry.vehicleId === vehicle._id);
+              const latestRejection = [...(vehicle.moderationHistory ?? [])].reverse().find((entry) => entry.toStatus === "rejected" && entry.reason);
+              const moderationReason = vehicle.moderationReason || (vehicle.status === "rejected" ? latestRejection?.reason : undefined);
 
               return (
                 <Card
                   key={vehicle._id}
+                  id={`listing-${vehicle._id}`}
                   className="overflow-hidden hover:shadow-lg transition-shadow"
                 >
                   <div className="relative">
-                    {vehicle.photos.length > 0 ? (
+                    {isTrustedImageUrl(vehicle.thumbnailPhotos?.[0] ?? vehicle.photos[0] ?? "") ? (
                       <Image
-                        unoptimized
                         width={800}
                         height={600}
-                        src={vehicle.photos[0]}
+                        src={vehicle.thumbnailPhotos?.[0] ?? vehicle.photos[0]}
                         alt={vehicle.title}
                         className="w-full h-48 object-cover"
                       />
@@ -203,11 +228,13 @@ function MyListingsContent() {
                                 : "bg-gray-100 text-gray-800"
                             }`}
                           >
-                            {registration.checkedIn
+                            {registration.event?.cancelledAt
+                              ? "Event Cancelled"
+                              : registration.checkedIn
                               ? "Checked In"
                               : "Not Checked In"}
                           </span>
-                          {registration.qrCodeData && (
+                          {registration.qrCodeData && !registration.event?.cancelledAt && (
                             <Button
                               variant="ghost"
                               size="sm"
@@ -256,18 +283,32 @@ function MyListingsContent() {
                       </div>
                     )}
 
-                    {vehicle.moderationReason && <p className="text-sm mb-3">Moderation reason: {vehicle.moderationReason}</p>}
-                    <details className="text-sm mb-3"><summary>Listing history</summary><ol className="space-y-2 mt-2">{vehicle.moderationHistory?.map((entry, index) => <li key={index}>{new Date(entry.createdAt).toLocaleString()}: {entry.fromStatus ?? "new"} → {entry.toStatus}. {entry.reason}</li>)}</ol></details>
+                    {metrics && (
+                      <dl className="mb-4 grid grid-cols-2 gap-2 rounded-lg bg-gray-50 p-3 text-sm">
+                        {[["Views", metrics.views], ["Saved", metrics.favorites], ["Conversations", metrics.conversations], ["Buyer inquiries", metrics.inquiries]].map(([label, value]) => (
+                          <div key={label}>
+                            <dt className="text-xs text-gray-600">{label}</dt>
+                            <dd className="font-semibold">{typeof value === "number" ? value.toLocaleString() : value}</dd>
+                          </div>
+                        ))}
+                      </dl>
+                    )}
+                    {moderationReason && <div className="mb-3 rounded-lg border border-amber-200 bg-amber-50 p-3 text-sm"><p className="font-semibold">{vehicle.status === "rejected" ? "Changes needed before resubmission" : "Moderation note"}</p><p className="mt-1">{moderationReason}</p></div>}
+                    <details className="text-sm mb-3"><summary className="cursor-pointer">Listing history</summary><ol className="space-y-2 mt-2">{vehicle.moderationHistory?.map((entry, index) => <li key={index}>{new Date(entry.createdAt).toLocaleString()}: {entry.fromStatus ?? "new"} → {entry.toStatus}. {entry.reason}</li>)}</ol></details>
                     <div className="flex flex-wrap gap-2 mb-3">
-                      {!["sold", "archived"].includes(vehicle.status) && <Button asChild size="sm" variant="outline"><Link href={`/myAccount/new-listing?edit=${vehicle._id}`}>Edit listing</Link></Button>}
-                      {vehicle.status === "pending" && <Button size="sm" variant="outline" disabled={updatingId === vehicle._id} onClick={() => handleStatus(vehicle._id, "draft")}>Return to draft</Button>}
-                      {vehicle.status === "archived" && <Button size="sm" variant="outline" disabled={updatingId === vehicle._id} onClick={() => handleStatus(vehicle._id, "draft")}>Restore draft</Button>}
-                      {vehicle.status === "draft" && <Button size="sm" disabled={updatingId === vehicle._id} onClick={() => handleStatus(vehicle._id, "pending")}>Submit for review</Button>}
-                      {["active", "approved"].includes(vehicle.status) && <Button size="sm" disabled={updatingId === vehicle._id} onClick={() => handleStatus(vehicle._id, "reserved")}>Mark reserved</Button>}
-                      {vehicle.status === "reserved" && <Button size="sm" disabled={updatingId === vehicle._id} onClick={() => handleStatus(vehicle._id, "active")}>Release reservation</Button>}
-                      {["active", "approved", "reserved"].includes(vehicle.status) && <Button size="sm" disabled={updatingId === vehicle._id} onClick={() => handleStatus(vehicle._id, "sold")}>Mark sold</Button>}
-                      {vehicle.status !== "archived" && <Button size="sm" variant="outline" disabled={updatingId === vehicle._id} onClick={() => handleStatus(vehicle._id, "archived")}>Archive</Button>}
+                      {!["sold", "archived", "withdrawn"].includes(vehicle.status) && <Button asChild size="sm" variant="outline"><Link href={`/myAccount/new-listing?edit=${vehicle._id}`}>{vehicle.status === "rejected" ? "Edit & resubmit" : vehicle.status === "draft" ? "Continue draft" : "Edit listing"}</Link></Button>}
+                      {vehicle.status === "pending" && <Button size="sm" variant="outline" disabled={updatingId !== null} onClick={() => handleStatus(vehicle._id, "draft")}>Return to draft</Button>}
+                      {["archived", "withdrawn"].includes(vehicle.status) && <Button size="sm" variant="outline" disabled={updatingId !== null} onClick={() => handleStatus(vehicle._id, "draft")}>Reopen as draft</Button>}
+                      {["draft", "rejected"].includes(vehicle.status) && <Button asChild size="sm"><Link href={`/myAccount/new-listing?edit=${vehicle._id}`}>Preview & submit</Link></Button>}
+                      {["active", "approved"].includes(vehicle.status) && <Button size="sm" disabled={updatingId !== null} onClick={() => handleStatus(vehicle._id, "reserved")}>Mark reserved</Button>}
+                      {vehicle.status === "reserved" && <Button size="sm" disabled={updatingId !== null} onClick={() => handleStatus(vehicle._id, "active")}>Release reservation</Button>}
+                      {["active", "approved", "reserved"].includes(vehicle.status) && <Button size="sm" disabled={updatingId !== null} onClick={() => handleStatus(vehicle._id, "sold")}>Mark sold</Button>}
+                      {!["withdrawn", "archived", "sold"].includes(vehicle.status) && <Button size="sm" variant="outline" disabled={updatingId !== null} onClick={() => handleStatus(vehicle._id, "withdrawn")}>Withdraw</Button>}
+                      {!["archived"].includes(vehicle.status) && <Button size="sm" variant="outline" disabled={updatingId !== null} onClick={() => handleStatus(vehicle._id, "archived")}>Archive</Button>}
                     </div>
+                    {["active", "approved", "pending", "reserved"].includes(vehicle.status) && <p className="mb-3 text-xs text-gray-600">Editing specifications requires a new review before the listing can go live.</p>}
+                    <p className="mb-3 text-xs text-gray-600">Withdrawing keeps conversations and event registrations available.</p>
+                    {["active", "approved"].includes(vehicle.status) && <RegisterVehicle vehicleId={vehicle._id} />}
                     {/* Actions */}
                     <div className="flex space-x-2">
                       <Button
@@ -281,14 +322,16 @@ function MyListingsContent() {
                           View
                         </Link>
                       </Button>
-                      <Button
+                      {["draft", "rejected"].includes(vehicle.status) && !registration && (!metrics || metrics.conversations === 0) && <Button
                         variant="outline"
                         size="sm"
+                        disabled={updatingId !== null}
+                        aria-label={`Delete ${vehicle.title}`}
                         onClick={() => handleDeleteVehicle(vehicle._id)}
                         className="text-red-600 hover:text-red-700 hover:bg-red-50"
                       >
                         <Trash2 className="h-4 w-4" />
-                      </Button>
+                      </Button>}
                     </div>
                   </CardContent>
                 </Card>
@@ -361,6 +404,10 @@ function MyListingsContent() {
         </div>
       )}
 
+      <ToastProvider>
+        {toasts.map((notification) => <Toast key={notification.id} onOpenChange={(open) => { if (!open) dismiss(notification.id); }}><div><ToastTitle>{notification.title}</ToastTitle>{notification.description && <ToastDescription>{notification.description}</ToastDescription>}</div><ToastClose onClick={() => dismiss(notification.id)} /></Toast>)}
+        <ToastViewport />
+      </ToastProvider>
       <Footer />
     </div>
   );

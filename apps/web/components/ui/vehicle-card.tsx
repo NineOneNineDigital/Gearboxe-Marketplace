@@ -4,7 +4,8 @@ import { CheckAvailabilityDialog } from "@/components/ui/check-availability-dial
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardFooter } from "@/components/ui/card";
 import { api } from "@/convex/_generated/api";
-import type { Doc } from "@/convex/_generated/dataModel";
+import type { VehicleWithMedia } from "@/lib/vehicle-results";
+import { isTrustedImageUrl } from "@/lib/trusted-images";
 import { useCurrentUser } from "@/hooks/useCurrentUser";
 import { useToast } from "@/hooks/useToast";
 import { cn } from "@/lib/utils";
@@ -15,7 +16,7 @@ import Link from "next/link";
 import { useEffect, useState } from "react";
 
 interface VehicleCardProps {
-  vehicle: Doc<"vehicles">;
+  vehicle: VehicleWithMedia;
   showFavorite?: boolean;
   layout?: "grid" | "list";
   showAvailability?: boolean;
@@ -37,7 +38,7 @@ export function VehicleCard({
   const isFavoritedQuery = useQuery(
     api.favorites.isFavorited,
     convexUser?._id
-      ? { userId: convexUser._id, vehicleId: vehicle._id }
+      ? { vehicleId: vehicle._id }
       : "skip"
   );
 
@@ -55,7 +56,6 @@ export function VehicleCard({
     try {
       if (isFavorited) {
         await removeFavorite({
-          userId: convexUser._id,
           vehicleId: vehicle._id,
         });
         setIsFavorited(false);
@@ -65,7 +65,6 @@ export function VehicleCard({
         });
       } else {
         await addFavorite({
-          userId: convexUser._id,
           vehicleId: vehicle._id,
         });
         setIsFavorited(true);
@@ -85,6 +84,9 @@ export function VehicleCard({
       setIsLoading(false);
     }
   };
+
+  const photo = vehicle.thumbnailPhotos?.[0] ?? vehicle.photos[0];
+  const [failedPhoto, setFailedPhoto] = useState<string | null>(null);
 
   const formatPrice = (price: number) => {
     return new Intl.NumberFormat("en-US", {
@@ -115,9 +117,10 @@ export function VehicleCard({
         className="absolute inset-0 z-10 rounded-xl focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-primary"
       ><span className="sr-only">{vehicle.title}</span></Link>}
       <div className="relative overflow-hidden bg-[hsl(var(--midnight))]">
-        {vehicle.photos.length > 0 ? (
+        {photo && isTrustedImageUrl(photo) && failedPhoto !== photo ? (
           <Image
-            src={vehicle.photos[0]}
+            src={photo}
+            onError={() => setFailedPhoto(photo)}
             alt={vehicle.title}
             width={400}
             height={300}

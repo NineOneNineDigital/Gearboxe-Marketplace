@@ -29,12 +29,12 @@ export default function MessagesPage() {
 
   // Always call hooks to maintain hook order
   const currentUser = useQuery(
-    api.users.getUser,
-    user?.id ? { clerkId: user.id } : "skip"
+    api.users.current,
+    user?.id ? {} : "skip"
   );
   const conversations = useQuery(
-    api.messages.getConversations,
-    currentUser?._id ? { userId: currentUser._id } : "skip"
+    api.conversations.getConversationsByUser,
+    isAuthenticated && currentUser?._id ? {} : "skip"
   );
 
   if (isLoading) {
@@ -105,7 +105,7 @@ export default function MessagesPage() {
         return matchesSearch && conversation.unreadCount > 0;
       } else if (filterStatus === "recent") {
         const diffInHours =
-          (Date.now() - conversation.lastMessage.createdAt) / (1000 * 60 * 60);
+          (Date.now() - (conversation.lastMessage?.createdAt ?? conversation.lastMessageAt)) / (1000 * 60 * 60);
         return matchesSearch && diffInHours < 24;
       }
 
@@ -211,7 +211,7 @@ export default function MessagesPage() {
                           <Car className="h-7 w-7 text-primary" />
                         </div>
                         <div
-                          className={`absolute -bottom-1 -right-1 w-4 h-4 rounded-full border-2 border-white ${getStatusColor(conversation.lastMessage.createdAt)}`}
+                          className={`absolute -bottom-1 -right-1 w-4 h-4 rounded-full border-2 border-white ${getStatusColor((conversation.lastMessage?.createdAt ?? conversation.lastMessageAt))}`}
                         ></div>
                       </div>
 
@@ -233,7 +233,7 @@ export default function MessagesPage() {
                             <div className="flex items-center space-x-1 text-xs text-gray-500">
                               <Clock className="h-3 w-3" />
                               <span>
-                                {formatTime(conversation.lastMessage.createdAt)}
+                                {formatTime((conversation.lastMessage?.createdAt ?? conversation.lastMessageAt))}
                               </span>
                             </div>
                             <ChevronRight className="h-4 w-4 text-gray-400 group-hover:text-primary transition-colors" />
@@ -250,7 +250,7 @@ export default function MessagesPage() {
                         </div>
 
                         <p className="text-sm text-gray-600 truncate mt-2 leading-relaxed">
-                          {conversation.lastMessage.content}
+                          {conversation.lastMessage?.content ?? "No messages yet"}
                         </p>
                       </div>
                     </div>

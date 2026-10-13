@@ -1,7 +1,9 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { validateVehicle, assertStatusTransition } from "../convex/lib/vehicleValidation.ts";
-import { normalizeVin, parseDecodeResponse, fetchDecode } from "../convex/lib/autoDev.ts";
+import { parseDecodeResponse, fetchDecode } from "../convex/lib/autoDev.ts";
+
+import { normalizeVin } from "../convex/lib/vinDecoder.ts";
 
 const vin = "3GCUDHEL3NG668790";
 const vehicle = {

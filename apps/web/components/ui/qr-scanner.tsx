@@ -3,7 +3,7 @@
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Scanner } from "@yudiel/react-qr-scanner";
-import { Camera, CameraOff, CheckCircle, XCircle } from "lucide-react";
+import { Camera, CameraOff, XCircle } from "lucide-react";
 import { useState } from "react";
 
 interface QRScannerProps {
@@ -18,16 +18,16 @@ export function QRScannerComponent({
   title = "QR Code Scanner",
 }: QRScannerProps) {
   const [isScanning, setIsScanning] = useState(false);
-  const [lastResult, setLastResult] = useState<string | null>(null);
-  const [scanStatus, setScanStatus] = useState<"idle" | "success" | "error">(
+
+  const [scanStatus, setScanStatus] = useState<"idle" | "captured" | "error">(
     "idle"
   );
   const handleScan = (result: string) => {
-    setLastResult(result);
-    setScanStatus("success");
+    setScanStatus("captured");
+    setIsScanning(false);
     onScan(result);
 
-    // Stop scanning after successful scan
+    // Capture is not an admission confirmation.
     setTimeout(() => {
       setIsScanning(false);
       setScanStatus("idle");
@@ -46,7 +46,7 @@ export function QRScannerComponent({
   const toggleScanning = () => {
     setIsScanning(!isScanning);
     setScanStatus("idle");
-    setLastResult(null);
+
   };
 
   return (
@@ -75,6 +75,7 @@ export function QRScannerComponent({
       </CardHeader>
 
       <CardContent className="space-y-4">
+        {scanStatus === "captured" && <p role="status">Code captured. Await backend validation before admission.</p>}
         {isScanning ? (
           <div className="relative">
             <Scanner
@@ -105,10 +106,9 @@ export function QRScannerComponent({
             {/* Overlay with scanning status */}
             <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
               <div className="bg-black/50 text-white px-4 py-2 rounded-lg">
-                {scanStatus === "success" && (
+                {scanStatus === "captured" && (
                   <div className="flex items-center space-x-2">
-                    <CheckCircle className="h-5 w-5 text-green-400" />
-                    <span>Scan Successful!</span>
+                    <span>Code captured — backend validation required</span>
                   </div>
                 )}
                 {scanStatus === "error" && (
@@ -130,14 +130,7 @@ export function QRScannerComponent({
           </div>
         )}
 
-        {lastResult && (
-          <div className="p-3 bg-gray-50 rounded-lg">
-            <p className="text-sm font-medium text-gray-700 mb-1">
-              Last Scan Result:
-            </p>
-            <p className="text-xs text-gray-600 break-all">{lastResult}</p>
-          </div>
-        )}
+
       </CardContent>
     </Card>
   );

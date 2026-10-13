@@ -7,6 +7,8 @@ import { useAuth, useUser } from "@clerk/nextjs";
 import { useConvexAuth, useQuery } from "convex/react";
 import {
   ArrowLeft,
+  Mail,
+  CreditCard,
   Calendar,
   Car,
   CheckCircle,
@@ -61,6 +63,19 @@ export function AdminNavbar() {
   }
 
   const adminNavItems = [
+    { href: "/admin/payments", label: "Payments", icon: CreditCard, active: pathname.startsWith("/admin/payments") },
+    {
+      href: "/admin/notifications",
+      label: "Email delivery",
+      icon: Mail,
+      active: pathname.startsWith("/admin/notifications"),
+    },
+    {
+      href: "/admin/safety",
+      label: "Safety",
+      icon: Shield,
+      active: pathname.startsWith("/admin/safety"),
+    },
     {
       href: "/admin",
       label: "Dashboard",

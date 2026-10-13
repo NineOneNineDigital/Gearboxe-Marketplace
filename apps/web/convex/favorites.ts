@@ -1,15 +1,17 @@
 import { publicVehicle } from "./lib/vehicleVisibility";
 import { v } from "convex/values";
 import { mutation, query } from "./_generated/server";
-import { requireSelf } from "./lib/authorization";
+import { requireCurrentUser } from "./lib/authorization";
+import { enqueueNotification } from "./notifications";
+import { consumeRateLimit } from "./lib/trustGuards";
+import { resolveVehicleMedia } from "./lib/vehicleMedia";
 
 export const addFavorite = mutation({
   args: {
-    userId: v.id("users"),
     vehicleId: v.id("vehicles"),
   },
   handler: async (ctx, args) => {
-    await requireSelf(ctx, args.userId);
+    const user = await requireCurrentUser(ctx);
     const vehicle = await ctx.db.get(args.vehicleId);
     if (!vehicle || (vehicle.status !== "approved" && vehicle.status !== "active")) {
       throw new Error("Vehicle is not available");
@@ -18,7 +20,7 @@ export const addFavorite = mutation({
     const existing = await ctx.db
       .query("favorites")
       .withIndex("by_user_vehicle", (q) =>
-        q.eq("userId", args.userId).eq("vehicleId", args.vehicleId)
+        q.eq("userId", user._id).eq("vehicleId", args.vehicleId)
       )
       .first();
 
@@ -26,24 +28,27 @@ export const addFavorite = mutation({
       return existing._id;
     }
 
-    return await ctx.db.insert("favorites", {
-      ...args,
-      createdAt: Date.now(),
+    await consumeRateLimit(ctx, user._id, "favorite");
+    const id = await ctx.db.insert("favorites", { ...args, userId: user._id, createdAt: Date.now() });
+    if (vehicle.userId !== user._id) await enqueueNotification(ctx, {
+      userId: vehicle.userId, sourceUserId: user._id, category: "favorites", kind: "new_favorite",
+      message: "A shopper saved your listing.", vehicleId: vehicle._id,
+      link: `/myAccount/my-listings#listing-${vehicle._id}`, dedupeKey: `favorite:${vehicle._id}:${user._id}`,
     });
+    return id;
   },
 });
 
 export const removeFavorite = mutation({
   args: {
-    userId: v.id("users"),
     vehicleId: v.id("vehicles"),
   },
   handler: async (ctx, args) => {
-    await requireSelf(ctx, args.userId);
+    const user = await requireCurrentUser(ctx);
     const favorite = await ctx.db
       .query("favorites")
       .withIndex("by_user_vehicle", (q) =>
-        q.eq("userId", args.userId).eq("vehicleId", args.vehicleId)
+        q.eq("userId", user._id).eq("vehicleId", args.vehicleId)
       )
       .first();
 
@@ -54,12 +59,12 @@ export const removeFavorite = mutation({
 });
 
 export const getFavoritesByUser = query({
-  args: { userId: v.id("users") },
-  handler: async (ctx, args) => {
-    await requireSelf(ctx, args.userId);
+  args: {},
+  handler: async (ctx) => {
+    const user = await requireCurrentUser(ctx);
     const favorites = await ctx.db
       .query("favorites")
-      .withIndex("by_user", (q) => q.eq("userId", args.userId))
+      .withIndex("by_user", (q) => q.eq("userId", user._id))
       .collect();
 
     // Get vehicle details for each favorite
@@ -70,23 +75,23 @@ export const getFavoritesByUser = query({
       })
     );
 
-    return vehicles.flatMap((vehicle) =>
+    const visible = vehicles.flatMap((vehicle) =>
       (vehicle?.status === "approved" || vehicle?.status === "active") ? [publicVehicle(vehicle)] : []
     );
+    return Promise.all(visible.map(vehicle => resolveVehicleMedia(ctx, vehicle)));
   },
 });
 
 export const isFavorited = query({
   args: {
-    userId: v.id("users"),
     vehicleId: v.id("vehicles"),
   },
   handler: async (ctx, args) => {
-    await requireSelf(ctx, args.userId);
+    const user = await requireCurrentUser(ctx);
     const favorite = await ctx.db
       .query("favorites")
       .withIndex("by_user_vehicle", (q) =>
-        q.eq("userId", args.userId).eq("vehicleId", args.vehicleId)
+        q.eq("userId", user._id).eq("vehicleId", args.vehicleId)
       )
       .first();
 

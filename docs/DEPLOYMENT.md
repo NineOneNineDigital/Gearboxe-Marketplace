@@ -78,7 +78,8 @@ Web build: `NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY`, `NEXT_PUBLIC_CONVEX_URL`,
 Web runtime also requires `CLERK_SECRET_KEY`, `STRIPE_SECRET_KEY`,
 `STRIPE_WEBHOOK_SECRET`, `EVENT_REGISTRATION_PRICE_CENTS`.
 Convex requires `CLERK_JWT_ISSUER_DOMAIN`, `CLERK_WEBHOOK_SECRET`,
-`STRIPE_SECRET_KEY`, `EVENT_REGISTRATION_PRICE_CENTS`, and `MARKETPLACE_ENV`.
+`STRIPE_SECRET_KEY`, `STRIPE_WEBHOOK_SECRET`, `EVENT_REGISTRATION_PRICE_CENTS`,
+`APP_URL`, and `MARKETPLACE_ENV`.
 No client Stripe publishable key is currently consumed: Checkout redirects are server-created.
 The event price must be the approved positive integer USD-cent amount and match
 between web and backend. Key prefixes do not prove a key is valid or belongs to
@@ -196,3 +197,8 @@ Rollback must use current unrevoked secrets, not restore leaked credentials.
 6. Record incident timeline/results, restore release controls, and rehearse this
    procedure in staging **before** the first production launch. A documented procedure
    is not a tested recovery plan until that rehearsal is recorded.
+
+Event checkout, inventory initialization, webhook subscriptions, automatic refunds,
+and payment recovery follow [Event payments](EVENT_PAYMENTS.md).
+Event staff assignments, historical roster/attendance migrations and on-site
+connectivity checks follow [Popup operations](POPUP_OPERATIONS.md).

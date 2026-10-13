@@ -3,8 +3,19 @@ import { httpRouter } from "convex/server";
 import { Webhook } from "svix";
 import { internal } from "./_generated/api";
 import { httpAction } from "./_generated/server";
+import { documentDownload, documentUpload } from "./trustDocuments";
+import { autosendWebhook, unsubscribe } from "./notificationHttp";
+import { upload } from "./mediaUpload";
 
 const http = httpRouter();
+http.route({ path: "/notifications/unsubscribe", method: "GET", handler: unsubscribe });
+http.route({ path: "/notifications/unsubscribe", method: "POST", handler: unsubscribe });
+http.route({ path: "/autosend-webhook", method: "POST", handler: autosendWebhook });
+http.route({ path: "/trust/document", method: "POST", handler: documentUpload });
+http.route({ path: "/trust/document", method: "OPTIONS", handler: documentUpload });
+http.route({ path: "/trust/document", method: "GET", handler: documentDownload });
+http.route({ path: "/vehicle-media/upload", method: "POST", handler: upload });
+http.route({ path: "/vehicle-media/upload", method: "OPTIONS", handler: upload });
 
 http.route({
   path: "/clerk-users-webhook",

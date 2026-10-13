@@ -1,6 +1,6 @@
 import { v } from "convex/values";
 
-export const listingStatus = v.union(v.literal("draft"), v.literal("pending"), v.literal("active"), v.literal("rejected"), v.literal("reserved"), v.literal("sold"), v.literal("archived"));
+export const listingStatus = v.union(v.literal("draft"), v.literal("pending"), v.literal("active"), v.literal("rejected"), v.literal("reserved"), v.literal("sold"), v.literal("withdrawn"), v.literal("archived"));
 // Transitional read support; new writes never use approved.
 export const storedListingStatus = v.union(listingStatus, v.literal("approved"));
 export const specificationFields = {
@@ -14,7 +14,7 @@ export const specificationFields = {
   numberOfOwners: v.optional(v.number()),
   serviceRecords: v.union(v.literal("available"), v.literal("partial"), v.literal("unavailable"), v.literal("unknown")),
   modifications: v.string(), sellerType: v.union(v.literal("private"), v.literal("dealer")),
-  location: v.object({ city: v.string(), state: v.string(), postalCode: v.optional(v.string()) }),
+  location: v.object({ city: v.string(), state: v.string(), postalCode: v.optional(v.string()), latitude: v.optional(v.number()), longitude: v.optional(v.number()) }),
   features: v.array(v.string()), negotiable: v.boolean(),
 };
 export const optionalSpecificationFields = {

@@ -3,6 +3,7 @@ import { v } from "convex/values";
 import { internalAction, mutation, query } from "./_generated/server";
 import { requireAdmin, requireSuperAdmin } from "./lib/authorization";
 import { validateEnvironment } from "./lib/environment";
+import { resolveVehicleMedia } from "./lib/vehicleMedia";
 
 // Operator-only readiness check, invoked by the protected release workflow.
 export const validateDeployment = internalAction({
@@ -47,7 +48,7 @@ export const getAllVehicles = query({
     const vehiclesWithUsers = await Promise.all(
       vehicles.map(async (vehicle) => {
         const user = await ctx.db.get(vehicle.userId);
-        return { ...normalizeVehicleStatus(vehicle), user };
+        return { ...await resolveVehicleMedia(ctx, normalizeVehicleStatus(vehicle)), user };
       })
     );
 
@@ -100,6 +101,7 @@ export const updateUserRole = mutation({
     }
 
     await ctx.db.patch(userId, { role });
+    await ctx.db.insert("adminAuditLog", { action: "role_changed", actorId: actor._id, targetUserId: userId, source: "admin", reason: `Role changed to ${role}`, createdAt: Date.now() });
     return { success: true, user: { ...user, role } };
   },
 });
@@ -117,6 +119,7 @@ export const promoteToAdmin = mutation({
     }
 
     await ctx.db.patch(userId, { role: "admin" });
+    await ctx.db.insert("adminAuditLog", { action: "role_changed", actorId: actor._id, targetUserId: userId, source: "admin", reason: "Role changed to admin", createdAt: Date.now() });
     return { success: true, user: { ...user, role: "admin" } };
   },
 });
@@ -124,13 +127,14 @@ export const promoteToAdmin = mutation({
 export const promoteToSuperAdmin = mutation({
   args: { userId: v.id("users") },
   handler: async (ctx, { userId }) => {
-    await requireSuperAdmin(ctx);
+    const actor = await requireSuperAdmin(ctx);
     const user = await ctx.db.get(userId);
     if (!user) {
       throw new Error("User not found");
     }
 
     await ctx.db.patch(userId, { role: "superAdmin" });
+    await ctx.db.insert("adminAuditLog", { action: "role_changed", actorId: actor._id, targetUserId: userId, source: "admin", reason: "Role changed to superAdmin", createdAt: Date.now() });
     return { success: true, user: { ...user, role: "superAdmin" } };
   },
 });
@@ -148,6 +152,7 @@ export const demoteToUser = mutation({
     }
 
     await ctx.db.patch(userId, { role: "user" });
+    await ctx.db.insert("adminAuditLog", { action: "role_changed", actorId: actor._id, targetUserId: userId, source: "admin", reason: "Role changed to user", createdAt: Date.now() });
     return { success: true, user: { ...user, role: "user" } };
   },
 });

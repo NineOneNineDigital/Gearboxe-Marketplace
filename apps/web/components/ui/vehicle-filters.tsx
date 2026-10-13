@@ -4,31 +4,11 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
-import { SlidersHorizontal, X } from "lucide-react";
+import { type DiscoveryFilters, readDiscoveryUrl } from "@/lib/discovery-url";
+import { MapPin, SlidersHorizontal } from "lucide-react";
 import { useEffect, useState } from "react";
 
-export interface VehicleFilterValues {
-  make?: string;
-  model?: string;
-  minPrice?: number;
-  maxPrice?: number;
-  minYear?: number;
-  maxYear?: number;
-}
-
-interface VehicleFiltersProps {
-  onFiltersChange: (filters: VehicleFilterValues) => void;
-  values?: VehicleFilterValues;
-  className?: string;
-}
-
+export type VehicleFilterValues = DiscoveryFilters;
 export const vehicleMakes = [
   "Acura",
   "Audi",
@@ -64,215 +44,217 @@ export const vehicleMakes = [
   "Volvo",
 ];
 
-const currentYear = new Date().getFullYear();
-const years = Array.from({ length: 30 }, (_, i) => currentYear - i);
+const fields = [
+  ["search", "Search", "Make, model, or listing title", "text"],
+  ["model", "Model", "Exact model", "text"],
+  ["minPrice", "Minimum price", "0", "number"],
+  ["maxPrice", "Maximum price", "Any", "number"],
+  ["minYear", "Earliest year", "1886", "number"],
+  ["maxYear", "Latest year", "Any", "number"],
+  ["maxMileage", "Maximum mileage (mi)", "Any", "number"],
+  ["state", "State", "NC", "text"],
+  ["latitude", "Latitude", "35.78", "number"],
+  ["longitude", "Longitude", "-78.64", "number"],
+  ["radiusMiles", "Distance (mi)", "50", "number"],
+] as const;
+type FormValues = Record<string, string>;
+function formValues(values: DiscoveryFilters): FormValues {
+  return Object.fromEntries(
+    Object.entries(values).map(([key, value]) => [key, String(value)]),
+  );
+}
 
 export function VehicleFilters({
   onFiltersChange,
-  values,
+  values = {},
   className,
-}: VehicleFiltersProps) {
-  const [filters, setFilters] = useState({
-    make: "all",
-    model: "",
-    minPrice: "",
-    maxPrice: "",
-    minYear: "any",
-    maxYear: "any",
-  });
-
+}: {
+  onFiltersChange: (filters: VehicleFilterValues) => void;
+  values?: VehicleFilterValues;
+  className?: string;
+}) {
+  const [draft, setDraft] = useState<FormValues>(() => formValues(values));
+  const [error, setError] = useState("");
+  const [locating, setLocating] = useState(false);
   useEffect(() => {
-    setFilters({
-      make: values?.make ?? "all",
-      model: values?.model ?? "",
-      minPrice: values?.minPrice?.toString() ?? "",
-      maxPrice: values?.maxPrice?.toString() ?? "",
-      minYear: values?.minYear?.toString() ?? "any",
-      maxYear: values?.maxYear?.toString() ?? "any",
-    });
-  }, [
-    values?.make,
-    values?.model,
-    values?.minPrice,
-    values?.maxPrice,
-    values?.minYear,
-    values?.maxYear,
-  ]);
-
-  const handleFilterChange = (key: string, value: string) => {
-    const newFilters = { ...filters, [key]: value };
-    setFilters(newFilters);
-
-    // Convert to numbers for numeric fields and handle special values
-    const processedFilters = {
-      make:
-        newFilters.make && newFilters.make !== "all"
-          ? newFilters.make
-          : undefined,
-      model: newFilters.model || undefined,
-      minPrice: newFilters.minPrice ? parseInt(newFilters.minPrice) : undefined,
-      maxPrice: newFilters.maxPrice ? parseInt(newFilters.maxPrice) : undefined,
-      minYear:
-        newFilters.minYear && newFilters.minYear !== "any"
-          ? parseInt(newFilters.minYear)
-          : undefined,
-      maxYear:
-        newFilters.maxYear && newFilters.maxYear !== "any"
-          ? parseInt(newFilters.maxYear)
-          : undefined,
-    };
-
-    onFiltersChange(processedFilters);
+    setDraft(formValues(values));
+    setError("");
+  }, [values]);
+  const set = (key: string, value: string) =>
+    setDraft((previous) => ({ ...previous, [key]: value }));
+  const locate = () => {
+    if (!navigator.geolocation) {
+      setError("Location is unavailable. Enter coordinates below.");
+      return;
+    }
+    setLocating(true);
+    setError("");
+    navigator.geolocation.getCurrentPosition(
+      (position) => {
+        setDraft((previous) => ({
+          ...previous,
+          latitude: position.coords.latitude.toFixed(6),
+          longitude: position.coords.longitude.toFixed(6),
+          radiusMiles: previous.radiusMiles || "50",
+        }));
+        setLocating(false);
+      },
+      () => {
+        setError(
+          "Unable to use your location. Enter coordinates or filter by state.",
+        );
+        setLocating(false);
+      },
+      { timeout: 10000, maximumAge: 300000 },
+    );
   };
-
-  const clearFilters = () => {
-    const clearedFilters = {
-      make: "all",
-      model: "",
-      minPrice: "",
-      maxPrice: "",
-      minYear: "any",
-      maxYear: "any",
-    };
-    setFilters(clearedFilters);
-    onFiltersChange({});
+  const apply = (event: React.FormEvent) => {
+    event.preventDefault();
+    setError("");
+    if (
+      draft.radiusMiles?.trim() &&
+      (!draft.latitude?.trim() || !draft.longitude?.trim())
+    ) {
+      setError(
+        "Enter latitude and longitude or use your location to search by distance.",
+      );
+      return;
+    }
+    const params = new URLSearchParams(
+      Object.entries(draft).filter(([, value]) => value.trim()),
+    );
+    const filters = readDiscoveryUrl(params).filters;
+    for (const key of [
+      "minPrice",
+      "maxPrice",
+      "minYear",
+      "maxYear",
+      "maxMileage",
+      "state",
+      "latitude",
+      "longitude",
+    ] as const) {
+      if (draft[key]?.trim() && filters[key] === undefined) {
+        setError("Check the entered ranges, state, and coordinates.");
+        return;
+      }
+    }
+    if (
+      (draft.latitude?.trim() || draft.longitude?.trim()) &&
+      draft.radiusMiles?.trim() &&
+      filters.radiusMiles !== Number(draft.radiusMiles)
+    ) {
+      setError("Distance must be between 1 and 500 miles.");
+      return;
+    }
+    onFiltersChange(filters);
   };
-
-  const hasActiveFilters = Object.entries(filters).some(([key, value]) => {
-    if (key === "make" && value === "all") return false;
-    if ((key === "minYear" || key === "maxYear") && value === "any")
-      return false;
-    return value !== "";
-  });
-
   return (
     <Card className={`border-black/10 bg-white shadow-none ${className ?? ""}`}>
       <CardHeader className="border-b border-black/10 pb-4">
-        <div className="flex items-center justify-between">
-          <CardTitle className="text-lg flex items-center space-x-2">
-            <SlidersHorizontal className="h-4 w-4 text-primary" />
-            <span className="text-base">Filter inventory</span>
-          </CardTitle>
-          <div className="flex items-center space-x-2">
-            {hasActiveFilters && (
-              <Button variant="ghost" size="sm" onClick={clearFilters}>
-                <X className="h-4 w-4 mr-1" />
-                Clear
-              </Button>
-            )}
-          </div>
-        </div>
+        <CardTitle className="flex items-center gap-2 text-base">
+          <SlidersHorizontal className="h-4 w-4 text-primary" />
+          Filter inventory
+        </CardTitle>
       </CardHeader>
-
-      <CardContent className="space-y-5 p-5">
-        {/* Basic filters - always visible */}
-        <div className="grid grid-cols-1 gap-5">
+      <CardContent className="p-5">
+        <form onSubmit={apply} className="space-y-4">
           <div className="space-y-2">
-            <Label htmlFor="make">Make</Label>
-            <Select
-              value={filters.make}
-              onValueChange={(value) => handleFilterChange("make", value)}
+            <Label htmlFor="filter-make">Make</Label>
+            <select
+              id="filter-make"
+              value={draft.make ?? ""}
+              onChange={(event) => set("make", event.target.value)}
+              className="h-10 w-full rounded-md border bg-background px-3 text-sm"
             >
-              <SelectTrigger>
-                <SelectValue placeholder="Select make" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">All Makes</SelectItem>
-                {vehicleMakes.map((make) => (
-                  <SelectItem key={make} value={make}>
-                    {make}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+              <option value="">All makes</option>
+              {draft.make && !vehicleMakes.includes(draft.make) && (
+                <option value={draft.make}>{draft.make}</option>
+              )}
+              {vehicleMakes.map((make) => (
+                <option key={make}>{make}</option>
+              ))}
+            </select>
           </div>
-
-          <div className="space-y-2">
-            <Label htmlFor="model">Model</Label>
-            <Input
-              id="model"
-              placeholder="Enter model"
-              value={filters.model}
-              onChange={(e) => handleFilterChange("model", e.target.value)}
-            />
-          </div>
-        </div>
-
-        <div className="space-y-4 border-t border-black/10 pt-5">
-          <p className="font-mono text-[9px] font-semibold uppercase tracking-[0.12em] text-muted-foreground">
-            Price range
+          {fields.map(([key, label, placeholder, type]) => (
+            <div key={key} className="space-y-2">
+              <Label htmlFor={`filter-${key}`}>{label}</Label>
+              <Input
+                id={`filter-${key}`}
+                type={type}
+                step={key.includes("Year") ? "1" : "any"}
+                min={
+                  type === "number" && key !== "latitude" && key !== "longitude"
+                    ? key.includes("Year")
+                      ? 1886
+                      : key === "radiusMiles"
+                        ? 1
+                        : 0
+                    : undefined
+                }
+                max={
+                  key === "state"
+                    ? undefined
+                    : key === "radiusMiles"
+                      ? 500
+                      : key.includes("Year")
+                        ? new Date().getFullYear() + 1
+                        : key === "maxMileage"
+                          ? 2_000_000
+                          : key === "minPrice" || key === "maxPrice"
+                            ? 100_000_000
+                            : undefined
+                }
+                maxLength={
+                  key === "state"
+                    ? 2
+                    : key === "search"
+                      ? 120
+                      : key === "model"
+                        ? 60
+                        : undefined
+                }
+                placeholder={placeholder}
+                value={draft[key] ?? ""}
+                onChange={(event) => set(key, event.target.value)}
+              />
+            </div>
+          ))}
+          <Button
+            type="button"
+            variant="outline"
+            className="w-full"
+            onClick={locate}
+            disabled={locating}
+          >
+            <MapPin className="mr-2 h-4 w-4" />
+            {locating ? "Finding location…" : "Use my location"}
+          </Button>
+          <p className="text-xs leading-5 text-muted-foreground">
+            Distance uses listing coordinates. Listings without a mapped
+            location are excluded from distance searches.
           </p>
-            <div className="grid grid-cols-1 gap-4 xl:grid-cols-2">
-              <div className="space-y-2">
-                <Label htmlFor="minPrice">Min Price</Label>
-                <Input
-                  id="minPrice"
-                  type="number"
-                  placeholder="0"
-                  value={filters.minPrice}
-                  onChange={(e) =>
-                    handleFilterChange("minPrice", e.target.value)
-                  }
-                />
-              </div>
-
-              <div className="space-y-2">
-                <Label htmlFor="maxPrice">Max Price</Label>
-                <Input
-                  id="maxPrice"
-                  type="number"
-                  placeholder="100000"
-                  value={filters.maxPrice}
-                  onChange={(e) =>
-                    handleFilterChange("maxPrice", e.target.value)
-                  }
-                />
-              </div>
-            </div>
-
-        </div>
-
-        <div className="space-y-4 border-t border-black/10 pt-5">
-          <p className="font-mono text-[9px] font-semibold uppercase tracking-[0.12em] text-muted-foreground">
-            Model year
-          </p>
-          <div className="grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-1 xl:grid-cols-2">
-            <div className="space-y-2">
-              <Label htmlFor="minYear">From</Label>
-              <Select
-                value={filters.minYear}
-                onValueChange={(value) => handleFilterChange("minYear", value)}
-              >
-                <SelectTrigger id="minYear">
-                  <SelectValue placeholder="Any year" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="any">Any year</SelectItem>
-                  {years.map((year) => (
-                    <SelectItem key={year} value={year.toString()}>{year}</SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="maxYear">To</Label>
-              <Select
-                value={filters.maxYear}
-                onValueChange={(value) => handleFilterChange("maxYear", value)}
-              >
-                <SelectTrigger id="maxYear">
-                  <SelectValue placeholder="Any year" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="any">Any year</SelectItem>
-                  {years.map((year) => (
-                    <SelectItem key={year} value={year.toString()}>{year}</SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-          </div>
-        </div>
+          {error && (
+            <p role="alert" className="text-sm text-destructive">
+              {error}
+            </p>
+          )}
+          <Button type="submit" className="w-full">
+            Apply filters
+          </Button>
+          <Button
+            type="button"
+            variant="ghost"
+            className="w-full"
+            onClick={() => {
+              setDraft({});
+              setError("");
+              onFiltersChange({});
+            }}
+          >
+            Clear filters
+          </Button>
+        </form>
       </CardContent>
     </Card>
   );

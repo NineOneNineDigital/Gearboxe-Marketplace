@@ -1,4 +1,5 @@
 import { mutation } from "./_generated/server";
+import { syncDiscovery } from "./lib/discoveryIndex";
 import { requireSuperAdmin } from "./lib/authorization";
 
 export const seedDatabase = mutation({
@@ -254,6 +255,7 @@ export const seedDatabase = mutation({
         ...vehicle,
         createdAt: Date.now(),
       });
+      await syncDiscovery(ctx, vehicleId);
       vehicleIds.push(vehicleId);
     }
 

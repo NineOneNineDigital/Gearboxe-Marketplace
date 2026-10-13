@@ -1,12 +1,5 @@
-export interface DecodedVehicle {
-  vin: string; year: number; make: string; model: string;
-  trim?: string; bodyStyle?: string; engine?: string; transmission?: string; drivetrain?: string; fuelType?: string;
-}
-export function normalizeVin(vin: string) {
-  const normalized = vin.trim().toUpperCase();
-  if (!/^[A-HJ-NPR-Z0-9]{17}$/.test(normalized)) throw new Error("Enter a valid 17-character VIN to decode");
-  return normalized;
-}
+import type { DecodedVehicle, VinDecoder } from "./vinDecoder";
+
 export function parseDecodeResponse(payload: unknown, vin: string): DecodedVehicle {
   if (!payload || typeof payload !== "object") throw new Error("Auto.dev returned an invalid response");
   const data = payload as Record<string, unknown>;
@@ -23,7 +16,7 @@ export function parseDecodeResponse(payload: unknown, vin: string): DecodedVehic
 export async function fetchDecode(vin: string, apiKey: string, request: typeof fetch = fetch): Promise<DecodedVehicle> {
   let response: Response;
   try {
-    response = await request(`https://api.auto.dev/vin/${normalizeVin(vin)}`, {
+    response = await request(`https://api.auto.dev/vin/${encodeURIComponent(vin)}`, {
       headers: { Authorization: `Bearer ${apiKey}`, Accept: "application/json" }, signal: AbortSignal.timeout(10_000),
     });
   } catch { throw new Error("VIN decoding is temporarily unavailable; try again or enter details manually"); }
@@ -35,4 +28,8 @@ export async function fetchDecode(vin: string, apiKey: string, request: typeof f
   let payload: unknown;
   try { payload = await response.json(); } catch { throw new Error("Auto.dev returned an invalid response"); }
   return parseDecodeResponse(payload, vin);
+}
+
+export function autoDevDecoder(apiKey: string): VinDecoder {
+  return { decode: vin => fetchDecode(vin, apiKey) };
 }

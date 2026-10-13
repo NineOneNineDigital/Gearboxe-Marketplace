@@ -6,7 +6,7 @@ import { api } from "@/convex/_generated/api";
 import type { Doc } from "@/convex/_generated/dataModel";
 import { useCurrentUser } from "@/hooks/useCurrentUser";
 import * as Dialog from "@radix-ui/react-dialog";
-import { useConvexAuth, useMutation } from "convex/react";
+import { useConvexAuth, useMutation, useQuery } from "convex/react";
 import { Check, Loader2, Send, X } from "lucide-react";
 import Link from "next/link";
 import { useId, useRef, useState } from "react";
@@ -22,6 +22,7 @@ export function CheckAvailabilityDialog({ vehicle }: CheckAvailabilityDialogProp
   const { user, isLoading } = useCurrentUser();
   const { isAuthenticated } = useConvexAuth();
   const sendMessage = useMutation(api.messages.sendMessage);
+  const contact = useQuery(api.conversations.getContactState, user && isAuthenticated ? { otherUserId: vehicle.userId } : "skip");
   const vehicleLabel = `${vehicle.year} ${vehicle.make} ${vehicle.model}`;
   const initialMessage = `Hi, is your ${vehicleLabel} still available?`;
   const [open, setOpen] = useState(false);
@@ -47,7 +48,7 @@ export function CheckAvailabilityDialog({ vehicle }: CheckAvailabilityDialogProp
 
   const handleSend = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
-    if (sendInProgress.current || sent || isLoading || !user || ownsVehicle) return;
+    if (sendInProgress.current || sent || isLoading || !user || ownsVehicle || !contact?.canContact) return;
     const content = message.trim();
     if (!content || content.length > MAX_MESSAGE_LENGTH) {
       setError("Enter a message between 1 and 2,000 characters.");
@@ -59,14 +60,13 @@ export function CheckAvailabilityDialog({ vehicle }: CheckAvailabilityDialogProp
     setError("");
     try {
       await sendMessage({
-        senderId: user._id,
         recipientId: vehicle.userId,
         vehicleId: vehicle._id,
         content,
       });
       setSent(true);
-    } catch {
-      setError("Your message couldn’t be sent. Please try again.");
+    } catch (error) {
+      setError(error instanceof Error ? error.message : "Your message couldn’t be sent. Please try again.");
     } finally {
       sendInProgress.current = false;
       setSending(false);
@@ -80,7 +80,7 @@ export function CheckAvailabilityDialog({ vehicle }: CheckAvailabilityDialogProp
           type="button"
           variant="outline"
           className="relative z-20 w-full hover:translate-y-0"
-          disabled={ownsVehicle}
+          disabled={ownsVehicle || contact?.canContact === false}
           title={ownsVehicle ? "This is your listing" : undefined}
         >
           Check availability
@@ -121,6 +121,7 @@ export function CheckAvailabilityDialog({ vehicle }: CheckAvailabilityDialogProp
           ) : (
             <form onSubmit={handleSend} className="space-y-4">
               <div>
+                {contact?.canContact === false && <p role="status" className="text-sm">Messaging is unavailable between these accounts.</p>}
                 <label htmlFor={messageId} className="mb-2 block text-sm font-semibold">Your message</label>
                 <Textarea
                   id={messageId}
@@ -139,7 +140,7 @@ export function CheckAvailabilityDialog({ vehicle }: CheckAvailabilityDialogProp
               {isLoading ? (
                 <Button type="button" className="w-full" disabled><Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />Loading your account…</Button>
               ) : user ? (
-                <Button type="submit" className="w-full" disabled={!validMessage || sending || ownsVehicle}>
+                <Button type="submit" className="w-full" disabled={!validMessage || sending || ownsVehicle || !contact?.canContact}>
                   {sending ? <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" /> : <Send className="h-4 w-4" aria-hidden="true" />}
                   {sending ? "Sending…" : "Send message"}
                 </Button>

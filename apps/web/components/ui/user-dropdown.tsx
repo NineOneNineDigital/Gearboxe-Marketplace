@@ -7,6 +7,8 @@ import { useAuth, useUser } from "@clerk/nextjs";
 import { useQuery } from "convex/react";
 import {
   Car,
+  Calendar,
+  Bell,
   ChevronDown,
   Heart,
   LogOut,
@@ -69,6 +71,20 @@ export function UserDropdown({
   const userInitials = user?.fullName ? getInitials(user.fullName) : "U";
 
   const menuItems = [
+    { label: "Event staff operations", href: "/staff/events", icon: Calendar, active: pathname === "/staff/events" },
+    { label: "Event registrations", href: "/myAccount/registrations", icon: Calendar, active: pathname === "/myAccount/registrations" },
+    {
+      label: "Notifications",
+      href: "/myAccount/notifications",
+      icon: Bell,
+      active: pathname === "/myAccount/notifications",
+    },
+    {
+      label: "Trust & Safety",
+      href: "/myAccount/safety",
+      icon: Shield,
+      active: pathname === "/myAccount/safety",
+    },
     {
       label: "My Listings",
       href: "/myAccount/my-listings",

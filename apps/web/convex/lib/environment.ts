@@ -63,6 +63,8 @@ export function validateEnvironment(env: Environment, profile: Profile) {
   } else {
     origin("CLERK_JWT_ISSUER_DOMAIN");
     key("CLERK_WEBHOOK_SECRET", ["whsec_"]);
+    key("STRIPE_WEBHOOK_SECRET", ["whsec_"]);
+    origin("APP_URL", true);
   }
   if (profile !== "web-build") {
     const optionalLocalPayments = mode === "development" && profile === "web-runtime";

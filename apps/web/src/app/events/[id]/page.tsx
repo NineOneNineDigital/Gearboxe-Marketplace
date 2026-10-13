@@ -47,12 +47,14 @@ export default function EventPage({ params }: EventPageProps) {
     const date = new Date(timestamp);
     return {
       date: date.toLocaleDateString("en-US", {
+        timeZone: event.timeZone ?? "America/New_York",
         weekday: "long",
         year: "numeric",
         month: "long",
         day: "numeric",
       }),
       time: date.toLocaleTimeString("en-US", {
+        timeZone: event.timeZone ?? "America/New_York", timeZoneName: "short",
         hour: "numeric",
         minute: "2-digit",
         hour12: true,
@@ -61,7 +63,7 @@ export default function EventPage({ params }: EventPageProps) {
   };
 
   const { date, time } = formatDate(event.date);
-  const isUpcoming = event.date > Date.now();
+  const isUpcoming = event.date > Date.now() && !event.cancelledAt;
   const eventVehicles = registeredVehicles || [];
 
   return (
@@ -130,6 +132,14 @@ export default function EventPage({ params }: EventPageProps) {
           </div>
         </div>
 
+        {event.cancelledAt && <p role="status" className="mb-8 rounded-lg border bg-white p-5">This event has been cancelled. Paid registrations are being refunded. {event.cancellationReason}</p>}
+        <Card className="mb-8"><CardHeader><CardTitle>Vendor information</CardTitle></CardHeader><CardContent className="space-y-4">
+          <p>{event.registrationFeeCents !== undefined ? `Vehicle registration: ${new Intl.NumberFormat("en-US", { style: "currency", currency: "USD" }).format(event.registrationFeeCents / 100)}` : "View the registration page for the current fee"} · {event.timeZone ?? "America/New_York"}</p>
+          {event.registrationDeadline && <p>Register by {new Date(event.registrationDeadline).toLocaleString()}</p>}
+          {event.eventRules && <div><h3 className="font-semibold">Event rules</h3><p className="whitespace-pre-wrap">{event.eventRules}</p></div>}
+          {event.vendorInstructions && <div><h3 className="font-semibold">Vendor instructions</h3><p className="whitespace-pre-wrap">{event.vendorInstructions}</p></div>}
+          {event.onSiteContact && <div><h3 className="font-semibold">On-site contact</h3><p>{event.onSiteContact.name}: {event.onSiteContact.phone}{event.onSiteContact.email && ` · ${event.onSiteContact.email}`}</p></div>}
+        </CardContent></Card>
         {/* Registration CTA */}
         {isUpcoming && (
           <div className="bg-primary rounded-lg p-8 text-center text-white mb-12">
@@ -141,11 +151,11 @@ export default function EventPage({ params }: EventPageProps) {
             </p>
             {isAuthenticated || isSignedIn ? (
               <Button asChild size="lg" variant="secondary">
-                <Link href="/myAccount/new-listing">Register as Vendor</Link>
+                <Link href={`/events/${id}/register`}>Register this vehicle</Link>
               </Button>
             ) : (
               <Button asChild size="lg" variant="secondary">
-                <Link href="/sign-up">Sign Up to Register</Link>
+                <Link href={`/sign-in?redirect_url=${encodeURIComponent(`/events/${id}/register`)}`}>Sign In to Register</Link>
               </Button>
             )}
           </div>
@@ -176,7 +186,7 @@ export default function EventPage({ params }: EventPageProps) {
         </div>
 
         {/* Event Status */}
-        {!isUpcoming && (
+        {!isUpcoming && !event.cancelledAt && (
           <div className="mt-12 bg-gray-50 rounded-lg p-8 text-center">
             <h3 className="text-xl font-semibold text-gray-900 mb-2">
               Event Completed

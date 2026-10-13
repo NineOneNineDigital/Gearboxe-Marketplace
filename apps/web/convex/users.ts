@@ -30,10 +30,15 @@ export const bootstrapSuperAdmin = internalMutation({
 export const upsertFromClerk = internalMutation({
   args: { data: v.any() as Validator<UserJSON> }, // no runtime validation, trust Clerk
   async handler(ctx, { data }) {
+    const email = data.email_addresses?.find(address => address.id === data.primary_email_address_id);
+    const phone = data.phone_numbers?.find(number => number.id === data.primary_phone_number_id);
     const userAttributes = {
       name: `${data.first_name || ""} ${data.last_name || ""}`.trim() || "User",
       externalId: data.id,
-      email: data.email_addresses?.[0]?.email_address || "",
+      email: email?.email_address || "",
+      emailVerified: email?.verification?.status === "verified",
+      phone: phone?.phone_number,
+      phoneVerified: phone?.verification?.status === "verified",
       role: "user" as const, // Default role for new users
       createdAt: Date.now(),
     };
@@ -45,6 +50,9 @@ export const upsertFromClerk = internalMutation({
       await ctx.db.patch(user._id, {
         name: userAttributes.name,
         email: userAttributes.email,
+        emailVerified: userAttributes.emailVerified,
+        phone: userAttributes.phone,
+        phoneVerified: userAttributes.phoneVerified,
       });
     }
   },
@@ -86,6 +94,7 @@ export const updateUserRole = mutation({
     }
 
     await ctx.db.patch(user._id, { role: args.role });
+    await ctx.db.insert("adminAuditLog", { action: "role_changed", actorId: actor._id, targetUserId: user._id, source: "admin", reason: `Role changed to ${args.role}`, createdAt: Date.now() });
   },
 });
 
@@ -113,23 +122,13 @@ export const getUserRole = query({
   },
 });
 
-export const getUser = query({
-  args: { clerkId: v.string() },
-  handler: async (ctx, { clerkId }) => {
-    const currentUser = await requireCurrentUser(ctx);
-    if (currentUser.externalId !== clerkId) {
-      throw new Error("You do not have access to this account");
-    }
-    return currentUser;
-  },
-});
-
 export const getUserById = query({
   args: { id: v.id("users") },
   handler: async (ctx, { id }) => {
     const user = await ctx.db.get(id);
+    const identity = user ? await ctx.db.query("identityReviews").withIndex("by_user", q => q.eq("userId", user._id)).unique() : null;
     return user
-      ? { _id: user._id, name: user.name, createdAt: user.createdAt }
+      ? { _id: user._id, name: user.name, createdAt: user.createdAt, emailVerified: !!user.emailVerified, phoneVerified: !!user.phoneVerified, identityVerified: identity?.status === "verified" }
       : null;
   },
 });

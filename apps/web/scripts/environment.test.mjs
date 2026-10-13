@@ -9,6 +9,7 @@ const valid = {
   NEXT_PUBLIC_CONVEX_URL: "https://staging-example.convex.cloud",
   NEXT_PUBLIC_CONVEX_SITE_URL: "https://staging-example.convex.site",
   NEXT_PUBLIC_APP_URL: "https://staging.example.com",
+  APP_URL: "https://staging.example.com",
   STRIPE_SECRET_KEY: "sk_test_example",
   STRIPE_WEBHOOK_SECRET: "whsec_example",
   EVENT_REGISTRATION_PRICE_CENTS: "1000",
@@ -57,4 +58,10 @@ test("local marketplace can run without payments while supplied credentials rema
   validateEnvironment(local, "web-runtime");
   assert.throws(() => validateEnvironment({ ...local, STRIPE_SECRET_KEY: "sk_live_example" }, "web-runtime"), /wrong key type/);
   assert.throws(() => validateEnvironment(local, "convex"), /STRIPE_SECRET_KEY is required/);
+});
+
+
+test("backend checkout requires an isolated webhook secret and redirect origin", () => {
+  assert.throws(() => validateEnvironment({ ...valid, STRIPE_WEBHOOK_SECRET: undefined }, "convex"), /STRIPE_WEBHOOK_SECRET is required/);
+  assert.throws(() => validateEnvironment({ ...valid, APP_URL: "https://user:password@example.com/unsafe" }, "convex"), /APP_URL must be an HTTPS origin/);
 });
