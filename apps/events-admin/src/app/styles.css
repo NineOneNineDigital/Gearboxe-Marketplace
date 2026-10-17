@@ -1,0 +1,12 @@
+@import "tailwindcss";
+@config "../../../web/tailwind.config.ts";
+@source "../../../web/components/ui/event-operations-workspace.tsx";
+@source "../../../web/components/ui/qr-scanner.tsx";
+@source "../../../web/components/ui/button.tsx";
+@source "../../../web/components/ui/card.tsx";
+
+body { margin: 0; min-width: 320px; background: hsl(var(--background)); color: hsl(var(--foreground)); font-family: Arial, Helvetica, sans-serif; }
+.app-header { display: flex; align-items: center; justify-content: space-between; padding: 1rem 1.5rem; background: hsl(var(--midnight)); color: white; }
+.brand { color: inherit; text-decoration: none; font-size: 1.25rem; font-weight: 700; }
+.brand span { color: hsl(var(--torque)); }
+.sign-in { display: flex; justify-content: center; padding: 3rem 1rem; }

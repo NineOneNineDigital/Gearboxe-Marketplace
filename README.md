@@ -1,16 +1,18 @@
 # Gearboxe Market
 
-Gearboxe is a pnpm monorepo containing the public marketplace and a separate internal operations dashboard.
+Gearboxe is a pnpm monorepo containing the public marketplace, an internal dashboard, and a separate event operations app.
 
 ## Workspace
 
 ```text
 apps/
 ├── web/          # Public marketplace, account flows, APIs, and Convex backend
-└── dashboard/    # Internal operations dashboard
+├── dashboard/    # Internal operations dashboard
+└── events-admin/ # Assigned event staff operations
 ```
 
 The existing marketplace application and its Convex functions live together in `apps/web` so its generated imports and deployment workflow remain unchanged.
+The events admin app reuses the event operations screen and generated Convex API from `apps/web`. Event assignments and action permissions are enforced by the shared Convex backend.
 
 ## Requirements
 
@@ -73,7 +75,7 @@ Transactional email runs in Convex and requires `AUTOSEND_API_KEY`,
 
 ## Development
 
-Run both apps:
+Run all three apps:
 
 ```bash
 pnpm dev
@@ -81,12 +83,14 @@ pnpm dev
 
 - Marketplace: http://localhost:3000
 - Internal dashboard: http://localhost:3001
+- Event operations: http://localhost:3002
 
 Run one app at a time:
 
 ```bash
 pnpm dev:web
 pnpm dev:dashboard
+pnpm dev:events-admin
 ```
 
 Run Convex alongside the apps in a separate terminal:
@@ -105,7 +109,7 @@ pnpm build
 ```
 
 Run the full release baseline with `pnpm check`. Lint rejects warnings as well
-as errors. Type checking covers both applications and the shared design tokens.
+as errors. Type checking covers all three applications and the shared design tokens.
 Automated tests cover configuration, admin provisioning, marketplace backend
 policies, payments, notifications, event operations and design tokens. Live
 provider integration and browser end-to-end coverage still require staging.
@@ -114,7 +118,7 @@ GitHub Actions runs these same checks for pull requests and pushes to `main`,
 with a frozen lockfile and the Node/pnpm versions pinned in the repository.
 The workflow uses nonfunctional public build fixtures and does not require
 Stripe/Clerk secrets, contact production authentication/payment backends, or
-deploy either application. Builds fetch the existing Google Fonts over the network.
+deploy any application. Builds fetch the existing Google Fonts over the network.
 Runtime smoke tests need a separately configured staging environment.
 
 Public Clerk and Convex configuration is required for Next.js builds. Stripe
@@ -124,7 +128,7 @@ configured correctly.
 
 ## Deployment
 
-Deploy each Next.js app as its own project and set its project root to `apps/web` or `apps/dashboard`. Marketplace environment variables are configured on the `apps/web` deployment. Convex runtime variables must also be configured in the Convex deployment. Backend releases must use an explicit environment-scoped deploy key; do not rely on a developer's default deployment selection.
+Deploy each Next.js app as its own project and set its project root to `apps/web`, `apps/dashboard`, or `apps/events-admin`. Marketplace environment variables are configured on the `apps/web` deployment. Configure the events app with the same environment's Clerk instance and Convex URL, using [its environment example](apps/events-admin/.env.example). The Clerk instance must permit the events app origin. Convex runtime variables must also be configured in the Convex deployment. Backend releases must use an explicit environment-scoped deploy key; do not rely on a developer's default deployment selection.
 
 Use the [deployment runbook](docs/DEPLOYMENT.md) for environment isolation,
 Vercel preview/staging setup, secret ownership/rotation, first-super-admin
