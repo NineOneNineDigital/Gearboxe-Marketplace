@@ -10,9 +10,9 @@ import {
   Calendar,
   Bell,
   Heart,
+  LayoutDashboard,
   LogOut,
   MessageCircle,
-  Plus,
   Shield,
   UserRound,
 } from "lucide-react";
@@ -96,16 +96,16 @@ export function UserDropdown({
 
   const menuItems = [
     {
+      label: "Dashboard",
+      href: "/myAccount",
+      icon: LayoutDashboard,
+      active: pathname === "/myAccount",
+    },
+    {
       label: "My Listings",
       href: "/myAccount/my-listings",
       icon: Car,
       active: pathname === "/myAccount/my-listings",
-    },
-    {
-      label: "New Listing",
-      href: "/myAccount/new-listing",
-      icon: Plus,
-      active: pathname === "/myAccount/new-listing",
     },
     {
       label: "Messages",

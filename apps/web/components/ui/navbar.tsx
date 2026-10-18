@@ -20,6 +20,7 @@ export function Navbar() {
   const { isSignedIn, isLoaded } = useAuth();
   const pathname = usePathname();
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
+  const hasAccount = Boolean(isAuthenticated || isSignedIn);
 
   const isActive = (href: string) =>
     pathname === href || pathname.startsWith(`${href}/`);
@@ -55,8 +56,15 @@ export function Navbar() {
         <div className="flex items-center gap-2 sm:gap-3">
           {!isLoaded ? (
             <div className="h-9 w-24 animate-pulse rounded-lg bg-white/10" />
-          ) : isAuthenticated || isSignedIn ? (
-            <UserDropdown afterSignOutUrl="/" inverse />
+          ) : hasAccount ? (
+            <>
+              <Button asChild size="sm" className="hidden text-white md:inline-flex">
+                <Link href="/myAccount/new-listing">
+                  List a vehicle <ArrowUpRight className="h-3.5 w-3.5" />
+                </Link>
+              </Button>
+              <UserDropdown afterSignOutUrl="/" inverse />
+            </>
           ) : (
             <>
               <Button
@@ -103,6 +111,13 @@ export function Navbar() {
               <ArrowUpRight className="h-4 w-4" />
             </Link>
           ))}
+          {isLoaded && hasAccount && (
+            <Button asChild size="sm" className="mt-4 w-full text-white">
+              <Link href="/myAccount/new-listing" onClick={() => setIsMobileMenuOpen(false)}>
+                List a vehicle <ArrowUpRight className="h-3.5 w-3.5" />
+              </Link>
+            </Button>
+          )}
         </nav>
       )}
     </header>
