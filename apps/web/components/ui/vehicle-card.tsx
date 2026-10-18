@@ -104,10 +104,7 @@ export function VehicleCard({
   return (
     <Card
       className={cn(
-        "group relative overflow-hidden border-border bg-card",
-        showAvailability
-          ? "ring-1 ring-transparent transition-[border-color,box-shadow] duration-200 motion-reduce:transition-none hover:border-primary hover:ring-primary"
-          : "transition-[transform,box-shadow,border-color] duration-300 hover:-translate-y-1 hover:border-primary/35 hover:shadow-[0_20px_50px_hsl(var(--midnight)/0.13)]",
+        "group relative overflow-hidden border-border bg-card ring-1 ring-transparent transition-[border-color,box-shadow] duration-200 motion-reduce:transition-none hover:border-primary hover:ring-primary",
         layout === "list" && "md:grid md:grid-cols-[300px_1fr]"
       )}
     >
@@ -126,7 +123,6 @@ export function VehicleCard({
             height={300}
             className={cn(
               "w-full object-cover",
-              !showAvailability && "transition-transform duration-500 group-hover:scale-[1.035]",
               layout === "list" ? "h-60 md:h-full md:min-h-64" : showAvailability ? "h-60" : "h-56"
             )}
           />

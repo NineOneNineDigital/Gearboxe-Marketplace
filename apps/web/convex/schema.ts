@@ -94,7 +94,7 @@ export default defineSchema({
       v.literal("superAdmin")
     ),
     createdAt: v.number(),
-  }).index("byExternalId", ["externalId"]),
+  }).index("byExternalId", ["externalId"]).index("byEmail", ["email"]),
 
   cities: defineTable({
     name: v.string(),

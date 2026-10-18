@@ -9,12 +9,12 @@ import { QRScannerComponent } from "./qr-scanner";
 import { csvCell, isNetworkFailure, MAX_PENDING_CHECK_INS, PENDING_CHECK_IN_TTL, readPendingCheckIns, type PendingCheckIn } from "@/lib/event-operations-client";
 import Link from "next/link";
 type Row = { registrationId: Id<"registrations">; sellerName: string; vehicleLabel: string; paymentStatus: string; checkedIn: boolean; revision: number };
-export function EventOperationsWorkspace() {
+export function EventOperationsWorkspace({ hideHeading = false }: { hideHeading?: boolean } = {}) {
   const { user, isLoading } = useCurrentUser();
   const events = useQuery(api.eventOperations.assignedEvents, user ? {} : "skip");
   const [eventId, setEventId] = useState<Id<"events"> | null>(null);
   const event = events?.find(row => row._id === eventId);
-  return <main className="mx-auto max-w-6xl space-y-6 p-6"><h1 className="text-3xl font-bold">Popup market operations</h1><p>Only assigned events are available. Admission requires backend confirmation.</p>{isLoading ? <p>Loading account…</p> : !user ? <Link className="underline" href="/sign-in?redirect_url=%2Fstaff%2Fevents">Sign in to work an event</Link> : events === undefined ? <p>Loading assignments…</p> : <><label className="block">Assigned event<select className="ml-3 rounded border bg-white p-2" value={eventId ?? ""} onChange={e => setEventId(e.target.value as Id<"events"> || null)}><option value="">Select an event</option>{events.map(row => <option key={row._id} value={row._id}>{row.name} — {row.staffRole}</option>)}</select></label>{events.length === 0 && <p>No events are assigned to your account.</p>}{event && <EventDesk key={`${user._id}:${event._id}`} eventId={event._id} actorId={user._id} manager={event.staffRole === "manager"} contact={event.onSiteContact} />}</>}</main>;
+  return <main className="mx-auto max-w-6xl space-y-6 p-6">{!hideHeading && <h1 className="text-3xl font-bold">Popup market operations</h1>}<p>Only assigned events are available. Admission requires backend confirmation.</p>{isLoading ? <p>Loading account…</p> : !user ? <Link className="underline" href="/sign-in?redirect_url=%2Fstaff%2Fevents">Sign in to work an event</Link> : events === undefined ? <p>Loading assignments…</p> : <><label className="block">Assigned event<select className="ml-3 rounded border bg-white p-2" value={eventId ?? ""} onChange={e => setEventId(e.target.value as Id<"events"> || null)}><option value="">Select an event</option>{events.map(row => <option key={row._id} value={row._id}>{row.name} — {row.staffRole === "manager" ? "Events Admin" : "Events Staff"}</option>)}</select></label>{events.length === 0 && <p>No events are assigned to your account.</p>}{event && <EventDesk key={`${user._id}:${event._id}`} eventId={event._id} actorId={user._id} manager={event.staffRole === "manager"} contact={event.onSiteContact} />}</>}</main>;
 }
 function EventDesk({ eventId, actorId, manager, contact }: { eventId: Id<"events">; actorId: string; manager: boolean; contact?: { name: string; phone: string; email?: string } }) {
   const convex = useConvex();
@@ -29,6 +29,10 @@ function EventDesk({ eventId, actorId, manager, contact }: { eventId: Id<"events
   const [search, setSearch] = useState("");
   const roster = usePaginatedQuery(api.eventOperations.getRoster, { eventId, search }, { initialNumItems: 50 });
   const incidents = usePaginatedQuery(api.eventOperations.listIncidents, manager ? { eventId } : "skip", { initialNumItems: 25 });
+  const staff = useQuery(api.eventOperations.listStaff, manager ? { eventId } : "skip");
+  const assignCheckinStaff = useMutation(api.eventOperations.assignCheckinStaffByEmail);
+  const removeStaff = useMutation(api.eventOperations.removeStaff);
+  const [staffEmail, setStaffEmail] = useState("");
   const [lookupId, setLookupId] = useState("");
   const [candidate, setCandidate] = useState<Row | null>(null);
   const [pending, setPending] = useState<PendingCheckIn[]>([]);
@@ -95,6 +99,7 @@ function EventDesk({ eventId, actorId, manager, contact }: { eventId: Id<"events
   return <section className="space-y-6">
     {!connection.isWebSocketConnected && <p role="status" className="rounded border border-amber-500 p-3">Backend connection is unavailable. Check-ins remain pending. Do not admit until the backend confirms.</p>}
     {contact && <p>On-site contact: {contact.name} · {contact.phone}{contact.email && ` · ${contact.email}`}</p>}
+    {manager && <div className="space-y-3 rounded border bg-white p-4"><h2 className="text-xl font-semibold">Event team</h2><p className="text-sm">Add an existing Gearboxe account as Events Staff for this event. Gearboxe administrators assign Events Admins.</p><form className="flex flex-wrap gap-2" onSubmit={e => { e.preventDefault(); void perform(async () => { await assignCheckinStaff({ eventId, email: staffEmail }); setStaffEmail(""); }, "Events Staff assigned."); }}><label className="flex-1 text-sm">Account email<input type="email" required maxLength={254} className="mt-1 block w-full rounded border p-2" value={staffEmail} onChange={e => setStaffEmail(e.target.value)} /></label><Button disabled={busy || !connection.isWebSocketConnected || !staffEmail.trim()} className="self-end">Add staff</Button></form>{staff?.map(row => <div key={row._id} className="flex items-center justify-between gap-3 border-t pt-2 text-sm"><span>{row.name} · {row.role === "manager" ? "Events Admin" : "Events Staff"}</span>{row.role === "checkin" && <Button variant="outline" size="sm" disabled={busy || !connection.isWebSocketConnected} onClick={() => { if (window.confirm(`Remove ${row.name} from this event?`)) void perform(() => removeStaff({ eventId, userId: row.userId }), "Staff access removed."); }}>Remove</Button>}</div>)}</div>}
     {metrics && <div className="rounded border bg-white p-4">Capacity {metrics.capacity} · Confirmed {metrics.confirmed} · Checkout holds {metrics.held} · Waitlisted {metrics.waiting} · Attended {metrics.attended} · Available {metrics.available}{!metrics.complete && <p>Metrics incomplete: administrator migration required.</p>}</div>}
     {error && <p role="alert" className="text-red-700">{error}</p>}{notice && <p role="status" className="rounded border p-3">{notice}</p>}
     {pending.length > 0 && <div className="rounded border border-amber-500 p-4"><p>{pending.length} requests pending backend confirmation — these vendors are not admitted.</p><Button disabled={busy} onClick={() => perform(retry, "Pending requests processed. Check the current roster before admission.")}>Retry pending requests</Button><Button variant="outline" disabled={busy} onClick={() => save([])}>Discard pending requests</Button></div>}

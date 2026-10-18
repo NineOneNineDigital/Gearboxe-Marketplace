@@ -30,12 +30,17 @@ and payment. Offers preserve their fee and rules.
 
 ## Staff desk and admission
 
-Administrators assign `checkin` or `manager` staff to individual events in the
-event editor. Staff use `/staff/events`; they do not need global admin access.
+Gearboxe administrators assign Events Admin (`manager`) or Events Staff (`checkin`)
+to individual events in the event editor or the portal's Users & roles page.
+The Users & roles page displays each account's event assignments separately from
+its global `user`, `admin`, or `superAdmin` role. Staff use the unified administration
+portal at `/staff/events`; they do not need global admin access.
 Every backend operation derives the current account and verifies its event
 assignment. Managers can manage incidents, undo admission, export rosters and
-request refunds. Global administrators retain access to all events. Only global
-administrators assign or remove staff.
+request refunds. Global administrators retain access to all events and the Market
+section. Events Admins can add or remove Events Staff for their assigned events
+by exact account email. Only Gearboxe administrators can assign or remove Events
+Admins, create events, or change event settings.
 
 Scan a seller's QR or use seller/vehicle search and manual registration lookup.
 Search covers the event's indexed roster, not just the currently loaded page.

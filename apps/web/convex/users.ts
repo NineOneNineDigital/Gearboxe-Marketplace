@@ -9,6 +9,7 @@ import {
 } from "./_generated/server";
 import {
   getCurrentUser,
+  isAdmin as isActiveAdmin,
   requireCurrentUser,
   requireSuperAdmin,
 } from "./lib/authorization";
@@ -102,7 +103,7 @@ export const isAdmin = query({
   args: {},
   handler: async (ctx) => {
     const user = await getCurrentUser(ctx);
-    return user?.role === "admin" || user?.role === "superAdmin";
+    return user !== null && isActiveAdmin(user);
   },
 });
 
@@ -110,7 +111,7 @@ export const isSuperAdmin = query({
   args: {},
   handler: async (ctx) => {
     const user = await getCurrentUser(ctx);
-    return user?.role === "superAdmin";
+    return user?.suspendedAt === undefined && user?.role === "superAdmin";
   },
 });
 

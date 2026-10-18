@@ -141,28 +141,6 @@ h4 {
     0 10px 10px -5px rgba(0, 0, 0, 0.04);
 }
 
-/* Admin navbar styles */
-.admin-navbar {
-  background: linear-gradient(135deg, #1f2937 0%, #111827 100%);
-  border-bottom: 1px solid rgba(255, 255, 255, 0.1);
-}
-
-.admin-navbar::before {
-  content: "";
-  position: absolute;
-  top: 0;
-  left: 0;
-  right: 0;
-  bottom: 0;
-  background: linear-gradient(
-    90deg,
-    transparent 0%,
-    rgba(0, 127, 255, 0.1) 50%,
-    transparent 100%
-  );
-  pointer-events: none;
-}
-
 /* Admin status indicators */
 .status-pending {
   background: linear-gradient(135deg, #fbbf24 0%, #f59e0b 100%);

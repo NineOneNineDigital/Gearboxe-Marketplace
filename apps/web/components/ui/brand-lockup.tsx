@@ -4,12 +4,14 @@ interface BrandLockupProps {
   className?: string;
   compact?: boolean;
   inverse?: boolean;
+  label?: string;
 }
 
 export function BrandLockup({
   className,
   compact = false,
   inverse = false,
+  label = "Market",
 }: BrandLockupProps) {
   return (
     <span className={cn("inline-flex items-center gap-3", className)}>
@@ -38,7 +40,7 @@ export function BrandLockup({
                 : "border-border text-muted-foreground"
             )}
           >
-            Market
+            {label}
           </span>
         )}
       </span>

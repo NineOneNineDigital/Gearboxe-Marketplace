@@ -42,9 +42,14 @@ Prefer isolated [Stripe sandboxes](https://docs.stripe.com/sandboxes) for non-pr
    Configure custom domains for production Clerk and the marketplace.
 4. Create Vercel staging and production projects rooted at `apps/web`. Use Node 22,
    include workspace files outside the root directory, and retain the committed
-   `vercel.json` build/install commands. The dashboard is currently a placeholder:
-   if deployed, use a separate project rooted at `apps/dashboard`, `pnpm build`,
-   and Vercel deployment protection; it must not deploy the marketplace backend.
+   `vercel.json` build/install commands. Deploy the unified administration portal
+   as a separate project rooted at `apps/admin`, using the same environment's
+   Clerk and Convex configuration from `apps/admin/.env.example`. Set
+   `NEXT_PUBLIC_APP_URL` to that environment's public web origin and set
+   `NEXT_PUBLIC_ADMIN_PORTAL_URL` on the web project to the portal origin. Portal
+   Market routes require an active admin role; Events routes require that role or
+   an individual event assignment. The admin project does not deploy the
+   marketplace backend.
 5. Keep production deployment manual until the staging release gate passes.
    Disable automatic production Git deployment in Vercel project settings.
    Enable staging/PR deployments only for trusted contributors; require approval

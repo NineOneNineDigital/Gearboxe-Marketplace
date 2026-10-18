@@ -25,25 +25,48 @@ export const assignedEvents = query({ args: {}, handler: async ctx => {
   const events = await Promise.all(assignments.map(async assignment => { const event = await ctx.db.get(assignment.eventId); return event ? { ...event, staffRole: assignment.role } : null; }));
   return events.filter(event => event !== null);
 } });
+export const listAllStaffAssignments = query({ args: {}, handler: async ctx => {
+  await requireAdmin(ctx);
+  const assignments = await ctx.db.query("eventStaff").collect();
+  return Promise.all(assignments.map(async assignment => {
+    const event = await ctx.db.get(assignment.eventId);
+    return { _id: assignment._id, eventId: assignment.eventId, userId: assignment.userId, role: assignment.role, eventName: event?.name ?? "Deleted event" };
+  }));
+} });
 export const assignStaff = mutation({ args: { eventId: v.id("events"), userId: v.id("users"), role }, handler: async (ctx, args) => {
-  const actor = await requireAdmin(ctx);
+  const { actor } = await requireEventStaff(ctx, args.eventId, true);
+  if (!isAdmin(actor) && args.role !== "checkin") throw new Error("Only Gearboxe administrators can assign event managers");
   const [event, user] = await Promise.all([ctx.db.get(args.eventId), ctx.db.get(args.userId)]);
   if (!event || !user || user.suspendedAt !== undefined) throw new Error("Active user and event required");
   const existing = await ctx.db.query("eventStaff").withIndex("by_event_user", q => q.eq("eventId", args.eventId).eq("userId", args.userId)).unique();
+  if (!isAdmin(actor) && existing?.role === "manager") throw new Error("Only Gearboxe administrators can change event managers");
   if (existing) await ctx.db.patch(existing._id, { role: args.role, assignedBy: actor._id });
   else await ctx.db.insert("eventStaff", { ...args, assignedBy: actor._id, createdAt: Date.now() });
   await audit(ctx, actor._id, args.eventId, "assign_event_staff", `user=${args.userId}; role=${args.role}`);
 } });
 export const removeStaff = mutation({ args: { eventId: v.id("events"), userId: v.id("users") }, handler: async (ctx, args) => {
-  const actor = await requireAdmin(ctx);
+  const { actor } = await requireEventStaff(ctx, args.eventId, true);
   const assignment = await ctx.db.query("eventStaff").withIndex("by_event_user", q => q.eq("eventId", args.eventId).eq("userId", args.userId)).unique();
+  if (!isAdmin(actor) && assignment?.role === "manager") throw new Error("Only Gearboxe administrators can remove event managers");
   if (assignment) await ctx.db.delete(assignment._id);
   await audit(ctx, actor._id, args.eventId, "remove_event_staff", `user=${args.userId}`);
 } });
 export const listStaff = query({ args: { eventId: v.id("events") }, handler: async (ctx, args) => {
-  await requireAdmin(ctx);
+  await requireEventStaff(ctx, args.eventId, true);
   const rows = await ctx.db.query("eventStaff").withIndex("by_event", q => q.eq("eventId", args.eventId)).take(100);
   return Promise.all(rows.map(async row => ({ ...row, name: (await ctx.db.get(row.userId))?.name ?? "Unknown" })));
+} });
+export const assignCheckinStaffByEmail = mutation({ args: { eventId: v.id("events"), email: v.string() }, handler: async (ctx, args) => {
+  const { actor } = await requireEventStaff(ctx, args.eventId, true);
+  const email = args.email.trim().toLowerCase();
+  if (email.length > 254 || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) throw new Error("Enter a valid account email");
+  const user = await ctx.db.query("users").withIndex("byEmail", q => q.eq("email", email)).unique();
+  if (!user || user.suspendedAt !== undefined) throw new Error("No active Gearboxe account has that email");
+  const existing = await ctx.db.query("eventStaff").withIndex("by_event_user", q => q.eq("eventId", args.eventId).eq("userId", user._id)).unique();
+  if (existing?.role === "manager") throw new Error("This account is already an event manager");
+  if (existing) return;
+  await ctx.db.insert("eventStaff", { eventId: args.eventId, userId: user._id, role: "checkin", assignedBy: actor._id, createdAt: Date.now() });
+  await audit(ctx, actor._id, args.eventId, "assign_event_staff", `user=${user._id}; role=checkin`);
 } });
 export const getRoster = query({ args: { eventId: v.id("events"), paginationOpts: paginationOptsValidator, search: v.optional(v.string()) }, handler: async (ctx, args) => {
   await requireEventStaff(ctx, args.eventId);

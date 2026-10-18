@@ -1,18 +1,18 @@
 # Gearboxe Market
 
-Gearboxe is a pnpm monorepo containing the public marketplace, an internal dashboard, and a separate event operations app.
+Gearboxe is a pnpm monorepo containing the public marketplace and a unified administration portal.
 
 ## Workspace
 
 ```text
 apps/
-├── web/          # Public marketplace, account flows, APIs, and Convex backend
-├── dashboard/    # Internal operations dashboard
-└── events-admin/ # Assigned event staff operations
+├── web/   # Public marketplace, account flows, APIs, and Convex backend
+└── admin/ # Unified Market and Events administration portal
 ```
 
 The existing marketplace application and its Convex functions live together in `apps/web` so its generated imports and deployment workflow remain unchanged.
-The events admin app reuses the event operations screen and generated Convex API from `apps/web`. Event assignments and action permissions are enforced by the shared Convex backend.
+The admin app reuses the event operations screen and generated Convex API from `apps/web`. Event assignments and action permissions are enforced by the shared Convex backend.
+The unified administration portal lives in `apps/admin`. It contains Market tools at `/admin` for active admin and super-admin employees, and event operations at `/staff/events` for those employees or staff assigned to individual events. Set `NEXT_PUBLIC_ADMIN_PORTAL_URL` in the web deployment to the portal's HTTPS origin (localhost:3002 by default). Set `NEXT_PUBLIC_APP_URL` in the portal deployment to the public web origin so links to vehicles and events open the main site. The main web app has no admin routes.
 
 ## Requirements
 
@@ -82,15 +82,13 @@ pnpm dev
 ```
 
 - Marketplace: http://localhost:3000
-- Internal dashboard: http://localhost:3001
-- Event operations: http://localhost:3002
+- Administration portal: http://localhost:3002
 
 Run one app at a time:
 
 ```bash
 pnpm dev:web
-pnpm dev:dashboard
-pnpm dev:events-admin
+pnpm dev:admin
 ```
 
 Run Convex alongside the apps in a separate terminal:
@@ -128,7 +126,7 @@ configured correctly.
 
 ## Deployment
 
-Deploy each Next.js app as its own project and set its project root to `apps/web`, `apps/dashboard`, or `apps/events-admin`. Marketplace environment variables are configured on the `apps/web` deployment. Configure the events app with the same environment's Clerk instance and Convex URL, using [its environment example](apps/events-admin/.env.example). The Clerk instance must permit the events app origin. Convex runtime variables must also be configured in the Convex deployment. Backend releases must use an explicit environment-scoped deploy key; do not rely on a developer's default deployment selection.
+Deploy `apps/web` and `apps/admin` as separate Next.js projects. Configure the portal with the same environment's Clerk instance and Convex URL, plus `NEXT_PUBLIC_APP_URL` for public site links. Configure `NEXT_PUBLIC_ADMIN_PORTAL_URL` on the web project. The Clerk instance must permit both origins. Convex runtime variables must also be configured in the Convex deployment. Backend releases must use an explicit environment-scoped deploy key; do not rely on a developer's default deployment selection.
 
 Use the [deployment runbook](docs/DEPLOYMENT.md) for environment isolation,
 Vercel preview/staging setup, secret ownership/rotation, first-super-admin
