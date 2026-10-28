@@ -1,13 +1,15 @@
 import { v } from "convex/values";
+import { isVehicleFacetValue, type VehicleFacetFilters } from "../../lib/vehicle-facets";
 
 export const discoveryFilters = v.object({
   search: v.optional(v.string()), make: v.optional(v.string()), model: v.optional(v.string()),
+  bodyStyle: v.optional(v.string()), fuelType: v.optional(v.string()), transmission: v.optional(v.string()), titleStatus: v.optional(v.string()),
   minPrice: v.optional(v.number()), maxPrice: v.optional(v.number()),
   minYear: v.optional(v.number()), maxYear: v.optional(v.number()), maxMileage: v.optional(v.number()),
-  state: v.optional(v.string()), latitude: v.optional(v.number()), longitude: v.optional(v.number()), radiusMiles: v.optional(v.number()),
+  state: v.optional(v.string()), zip: v.optional(v.string()), latitude: v.optional(v.number()), longitude: v.optional(v.number()), radiusMiles: v.optional(v.number()),
 });
 export const discoverySort = v.union(v.literal("newest"), v.literal("price-low"), v.literal("price-high"), v.literal("mileage-low"), v.literal("mileage-high"), v.literal("year-new"), v.literal("year-old"));
-export type DiscoveryFilters = { search?: string; make?: string; model?: string; minPrice?: number; maxPrice?: number; minYear?: number; maxYear?: number; maxMileage?: number; state?: string; latitude?: number; longitude?: number; radiusMiles?: number };
+export type DiscoveryFilters = VehicleFacetFilters & { search?: string; make?: string; model?: string; minPrice?: number; maxPrice?: number; minYear?: number; maxYear?: number; maxMileage?: number; state?: string; zip?: string; latitude?: number; longitude?: number; radiusMiles?: number };
 export type DiscoverySort = "newest" | "price-low" | "price-high" | "mileage-low" | "mileage-high" | "year-new" | "year-old";
 export function words(value: string) { return value.normalize("NFKD").replace(/[\u0300-\u036f]/g, "").toLowerCase().match(/[a-z0-9]+/g) ?? []; }
 export function key(value: string) { return words(value).join(" "); }
@@ -23,8 +25,13 @@ export function validateFilters(input: DiscoveryFilters): DiscoveryFilters {
   if (f.minPrice !== undefined && f.maxPrice !== undefined && f.minPrice > f.maxPrice) throw new Error("Minimum price must not exceed maximum price");
   if (f.minYear !== undefined && f.maxYear !== undefined && f.minYear > f.maxYear) throw new Error("Minimum year must not exceed maximum year");
   if (f.state && !/^[A-Z]{2}$/.test(f.state)) throw new Error("Use a two-letter state code");
+  for (const field of ["bodyStyle", "fuelType", "transmission", "titleStatus"] as const) {
+    if (f[field] !== undefined && !isVehicleFacetValue(field, f[field])) throw new Error(`Invalid ${field}`);
+  }
+  if (f.zip !== undefined && !/^\d{5}$/.test(f.zip)) throw new Error("Use a five-digit ZIP code");
   const coordinates = [f.latitude, f.longitude, f.radiusMiles].filter(n => n !== undefined).length;
   if (coordinates !== 0 && coordinates !== 3) throw new Error("Distance search requires latitude, longitude and radius");
+  if (f.zip !== undefined && coordinates !== 3) throw new Error("ZIP search requires a distance");
   return f;
 }
 export function distanceMiles(a: number, b: number, c: number, d: number) {

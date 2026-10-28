@@ -25,7 +25,7 @@ export const getAdminStats = query({
 
     const pendingVehicles = vehicles.filter((v) => v.status === "pending");
     const approvedVehicles = vehicles.filter((v) => (v.status === "approved" || v.status === "active"));
-    const upcomingEvents = events.filter((e) => e.date > Date.now());
+    const upcomingEvents = events.filter((e) => e.date > Date.now() && e.cancelledAt === undefined);
 
     return {
       totalVehicles: vehicles.length,

@@ -88,7 +88,7 @@ function fixture(inventory = []) {
         assert.ok(Number.isInteger(options.numItems) && options.numItems > 0 && options.numItems <= 1000);
         reads.push({ table, operation: "paginate", options, index });
         const start = Number(options.cursor ?? 0), result = rows();
-        return { page: result.slice(start, start + options.numItems), isDone: start + options.numItems >= result.length, continueCursor: String(start + options.numItems) };
+        return { page: result.slice(start, start + options.numItems), isDone: start + options.numItems > result.length, continueCursor: String(start + options.numItems) };
       },
     };
     return q;
@@ -109,8 +109,11 @@ function fixture(inventory = []) {
 test("server rejects unbounded and inconsistent discovery filters", () => {
   for (const filters of [{ minPrice: -1 }, { maxPrice: Infinity }, { minPrice: 30, maxPrice: 20 }, { minYear: 2024, maxYear: 2023 },
     { minYear: 2020.5 }, { maxMileage: 2000001 }, { latitude: 91, longitude: 0, radiusMiles: 50 }, { latitude: 0 },
-    { state: "North Carolina" }, { search: "x".repeat(121) }, { radiusMiles: 501, latitude: 0, longitude: 0 }]) assert.throws(() => validateFilters(filters));
+    { state: "North Carolina" }, { search: "x".repeat(121) }, { radiusMiles: 501, latitude: 0, longitude: 0 },
+    { zip: "27601" }, { zip: "wrong", latitude: 35, longitude: -78, radiusMiles: 50 },
+    { bodyStyle: "airplane" }, { fuelType: "solar" }, { transmission: "unknown" }, { titleStatus: "invalid" }]) assert.throws(() => validateFilters(filters));
   assert.equal(validateFilters({ state: " nc ", search: " Camry " }).state, "NC");
+  assert.equal(validateFilters({ zip: "27601", latitude: 35, longitude: -78, radiusMiles: 50 }).zip, "27601");
 });
 
 test("distance uses great-circle miles, crosses antimeridian, and excludes unknown coordinates", () => {
@@ -192,6 +195,20 @@ test("search combines indexed make/state scope with all identity words and remai
   assert.equal(publicRow.contactInfo, ""); assert.equal(publicRow.moderationReason, undefined); assert.deepEqual(publicRow.moderationHistory, []);
 });
 
+test("vehicle facets match decoded and seller-entered specifications", async () => {
+  const f = await indexedFixture([
+    listing("match", { bodyStyle: "Sport Utility Vehicle (SUV)", fuelType: "Plug-in Hybrid Electric", transmission: "CVT", titleStatus: "clean", createdAt: 3 }),
+    listing("gas", { bodyStyle: "SUV", fuelType: "Gasoline", transmission: "6-Speed Manual", titleStatus: "clean", createdAt: 2 }),
+    listing("rebuilt", { bodyStyle: "SUV", fuelType: "Plug-in Hybrid", transmission: "Automatic", titleStatus: "rebuilt", createdAt: 1 }),
+    listing("hybrid", { bodyStyle: "Sedan", fuelType: "Gasoline/Electric", transmission: "Automatic", titleStatus: "clean", createdAt: 0 }),
+  ]);
+  const filters = { bodyStyle: "suv", fuelType: "plug-in-hybrid", transmission: "automatic", titleStatus: "clean" };
+  assert.deepEqual((await browse(f, filters)).page.map(row => row._id), ["match"]);
+  assert.deepEqual((await browse(f, { ...filters, transmission: "manual" })).page, []);
+  assert.deepEqual((await browse(f, { fuelType: "gasoline", transmission: "manual" })).page.map(row => row._id), ["gas"]);
+  assert.deepEqual((await browse(f, { fuelType: "hybrid", bodyStyle: "sedan" })).page.map(row => row._id), ["hybrid"]);
+});
+
 test("browse and metadata recheck visibility even when a stale index contains private inventory", async () => {
   const f = await indexedFixture([listing("active"), listing("legacy", { status: "approved" }), listing("hidden")]);
   f.rows("vehicles").find(row => row._id === "hidden").status = "draft";
@@ -211,8 +228,9 @@ test("indexed distance pages apply exact radius and omit listings without coordi
 
 test("saved searches validate bounds, cap storage, and enforce owner-only reads and deletion", async () => {
   const f = fixture();
-  const id = await savedSearches.save._handler(f.ctx, { name: " Raleigh Camrys ", filters: { make: "Toyota", state: "nc", maxPrice: 30000 }, sort: "price-low" });
+  const id = await savedSearches.save._handler(f.ctx, { name: " Raleigh Camrys ", filters: { make: "Toyota", state: "nc", maxPrice: 30000, bodyStyle: "sedan", titleStatus: "clean" }, sort: "price-low" });
   assert.equal(f.rows("savedSearches")[0].userId, "buyer"); assert.equal(f.rows("savedSearches")[0].name, "Raleigh Camrys");
+  assert.equal(f.rows("savedSearches")[0].filters.bodyStyle, "sedan");
   assert.equal((await savedSearches.list._handler(f.ctx, {})).length, 1);
   await assert.rejects(savedSearches.save._handler(f.ctx, { name: "Invalid", filters: { maxPrice: -1 }, sort: "newest" }), /Invalid/);
   f.as("other"); assert.deepEqual(await savedSearches.list._handler(f.ctx, {}), []);
@@ -316,7 +334,9 @@ test("backfill requires administrator access and advances one bounded vehicle pe
   const pageRead = f.reads.find(read => read.operation === "paginate");
   assert.equal(pageRead.options.numItems, 1); assert.equal(pageRead.options.maximumRowsRead, 1);
   const second = await discovery.backfill._handler(f.ctx, { cursor: first.continueCursor });
-  assert.equal(second.isDone, true); assert.equal(f.rows("vehicleCatalog").length, 2);
+  assert.equal(second.isDone, false); assert.equal(f.rows("vehicleCatalog").length, 2);
+  const end = await discovery.backfill._handler(f.ctx, { cursor: second.continueCursor });
+  assert.equal(end.isDone, true);
 });
 
 test("seller coordinates are validated before rounding and stored only at approximate precision", async () => {

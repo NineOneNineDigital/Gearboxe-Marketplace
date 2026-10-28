@@ -55,6 +55,8 @@ test("Auto.dev requests use server bearer auth and sanitize provider errors", as
   for (const status of [400, 404, 429, 500, 401]) {
     await assert.rejects(fetchDecode(vin, "private-secret", async () => new Response("private-secret", { status })), error => !error.message.includes("private-secret"));
   }
+  await assert.rejects(fetchDecode(vin, "secret", async () => new Response(JSON.stringify({ vin, vinValid: true, reason: "class_not_covered" }), { status: 207 })), /partial vehicle details/);
+  await assert.rejects(fetchDecode(vin, "secret", async () => new Response("", { status: 403 })), /credentials were rejected/);
   await assert.rejects(fetchDecode(vin, "secret", async () => { throw new Error("private-secret"); }), /temporarily unavailable/);
   await assert.rejects(fetchDecode(vin, "secret", async () => new Response("not JSON")), /invalid response/);
 });

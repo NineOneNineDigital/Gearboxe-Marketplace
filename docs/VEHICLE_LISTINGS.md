@@ -68,12 +68,17 @@ Sellers cannot send availability messages to themselves.
 ## Buyer discovery
 
 `discovery.browse` returns cursor pages, not full inventory collections. The
-browser requests 12 rows at a time; the server caps page requests at 48 and sets
-read budgets of 256 rows / 2 MB. Counts describe loaded results rather than a
-costly inventory-wide total. Filters and all seven sort orders persist in the
-URL, including navigation back/forward. Error boundaries offer retry while
-leaving filters editable. Sparse pages can contain no matches with a continuation
-cursor; the UI distinguishes these from an exhausted, empty search.
+browser initially requests 13 rows, displays 12, and keeps one result ahead to
+detect the end of a full batch. Later requests fill 12 more visible results.
+The server caps page requests at 48 and sets read budgets of 256 rows / 2 MB.
+Counts describe displayed results rather than a costly inventory-wide total.
+Filters and all seven sort orders persist in the URL, including navigation
+back/forward, and changing them restarts the result set. The browser remembers
+up to 240 displayed results, layout and scroll position for 15 minutes as buyers
+browse, then restores them after refresh or return from a vehicle. Error boundaries offer retry while
+leaving filters editable. If secondary filters make a page sparse, the browser
+continues through a bounded number of cursor pages automatically; buyers can
+continue searching beyond that limit.
 
 Public inventory has a transactional catalog and keyword posting index. Approval
 and reservation release publish index entries; editing, reservation, sale,
@@ -83,7 +88,11 @@ contact details, private descriptions or disclosures. Keyword search matches
 whole words, case/accent-insensitively, with AND semantics. Make/state scopes and
 price, normalized mileage, year and creation-time ordering use compound indexes.
 Remaining ranges, model equality and additional search words are checked only on
-the bounded page. There is no relevance ranking or fuzzy/prefix matching.
+the bounded page. Body style, fuel type, transmission and title status filters
+check listing specifications after each indexed page is read; common decoded and
+seller-entered names are normalized into buyer-facing choices. Listings without
+a matching value are excluded. There is no relevance ranking or fuzzy/prefix
+matching.
 
 Distance searches first choose an indexed geographic rectangle containing the
 entire radius, with latitude-strip fallbacks at poles/date-line crossings. Exact
@@ -92,9 +101,13 @@ Listings without coordinates are excluded only from distance searches. Sellers
 can explicitly add their approximate current location while near the vehicle;
 both client and server round coordinates to two decimal places for discovery.
 Public responses expose city/state only; postal codes are discarded on write.
-Changing vehicle city/state clears the editor's coordinates. No geocoder or
-location-provider account is required. Browser geolocation requests permission
-only after the user chooses that control. Mileage sorting and maximum mileage
+Changing vehicle city/state clears the editor's coordinates. Buyers enter a
+five-digit US ZIP code and a 1–500 mile radius; the browser looks up the ZIP
+centroid through Zippopotam.us before using the existing distance index. The
+shareable URL and saved searches retain the ZIP alongside the centroid, while
+older coordinate links remain readable. ZIP lookup failures leave filters
+editable. No location-provider account is required. Sellers can still choose
+browser geolocation while editing a listing. Mileage sorting and maximum mileage
 filters normalize kilometers to miles, while cards retain the declared unit.
 
 Authenticated buyers can save up to 25 named filter/sort combinations and remove
@@ -104,6 +117,15 @@ distinct views in browser storage, falling back to session memory when storage
 is unavailable. All history resolutions recheck public listing status and never
 reveal draft/rejected/closed records. Featured and related inventory queries are
 bounded as well.
+
+For local pagination testing, the development-only `seedPagination:addBatch`
+internal mutation adds ten clearly labeled synthetic listings per call. From
+`apps/web`, run it with `{"start":0}`, `{"start":10}`, `{"start":20}`,
+`{"start":30}`, `{"start":40}`, and `{"start":50}` to create 60 listings.
+Repeating a batch does not duplicate them. Search for `Pagination Test` on
+`/vehicles` to isolate the fixture; it displays five batches of 12 results.
+The extra buffered row prevents an empty sixth "Load more" step. The mutation refuses non-development
+deployments.
 
 Vehicle detail metadata uses a separate minimal public query with request-scoped
 deduplication. It emits canonical URLs, Open Graph/Twitter previews and escaped
@@ -181,7 +203,14 @@ retry, save/edit, captions/order, image delivery and cleanup before release.
 
 ## Provider-neutral VIN decoding
 
-The listing workflow calls the authenticated `vin.decodeVin` action and consumes
+New listings begin with VIN entry. A successful 17-character VIN lookup fills
+available identity and specifications; the seller reviews and completes the
+editable listing form. If lookup fails, the seller can continue with the VIN
+and enter details manually. Pre-1981 manufacturer serial numbers also continue
+to manual details. VIN input autosaves into an incomplete draft as the seller
+types; there is no separate draft save action.
+
+The VIN path calls the authenticated `vin.decodeVin` action and consumes
 only the shared `DecodedVehicle` contract. Provider adapters implement
 `VinDecoder.decode`; their payloads, credentials and endpoints stay behind that
 interface. Adding another commercial adapter changes provider selection rather
@@ -199,6 +228,13 @@ Set `VIN_DECODER_PROVIDER` in the **Convex deployment** environment:
   complete year/make/model is accepted; partial or ambiguous decoding remains
   unverified and can be completed manually.
 
+To activate Auto.dev for a deployment, obtain an API key from Auto.dev, set
+`VIN_DECODER_PROVIDER=auto_dev` and `AUTO_DEV_API_KEY` in that deployment's
+Convex environment, then deploy the Convex functions. Keep the key out of the
+browser environment. In the first listing step, enter a 17-character VIN and
+select **Look up VIN**; review the filled fields before saving or submitting. Test with
+a known valid VIN in staging before enabling the provider in production.
+
 Do not prefix credentials with NEXT_PUBLIC or put them in frontend configuration.
 Both adapters use a ten-second timeout and return normalized vehicle fields only.
 There is no automatic provider fallback: provider failures remain visible and
@@ -207,10 +243,10 @@ manual entry is always available.
 Requests are limited to one per user every ten seconds. Successful normalized
 decodes are cached by VIN for 30 days, independent of provider, so switching
 providers preserves existing verified specifications until the cache expires.
-Invalid, missing, ambiguous or malformed results and rate/network failures show
-recoverable errors. Vehicles before 1981 may use manufacturer serials and manual
-review. Optional specifications absent from either provider must be completed by
-the seller.
+Invalid, missing, ambiguous, partial (HTTP 207) or malformed results and
+rate/network failures show recoverable errors. Vehicles before 1981 may use
+manufacturer serials and manual review. Optional specifications absent from
+either provider must be completed by the seller.
 
 Verification status is server controlled: a listing is `decoded` only if a cached
 successful decode matches its VIN, year, make and model; otherwise it is

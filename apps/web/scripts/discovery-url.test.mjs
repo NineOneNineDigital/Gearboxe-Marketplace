@@ -1,22 +1,34 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import {
-  discoveryUrl,
-  readDiscoveryUrl,
-  discoverySorts,
-} from "../lib/discovery-url.ts";
+import { registerHooks } from "node:module";
+import { existsSync } from "node:fs";
+import { fileURLToPath } from "node:url";
+
+registerHooks({ resolve(specifier, context, nextResolve) {
+  if (specifier.startsWith(".") && !/\.[a-z]+$/i.test(specifier)) {
+    const candidate = new URL(`${specifier}.ts`, context.parentURL);
+    if (existsSync(fileURLToPath(candidate))) return nextResolve(candidate.href, context);
+  }
+  return nextResolve(specifier, context);
+} });
+const { discoveryUrl, readDiscoveryUrl, discoverySorts } = await import("../lib/discovery-url.ts");
 
 test("discovery URL round-trips every filter and sort", () => {
   const filters = {
     search: "Toyota wagon",
     make: "Toyota",
     model: "Prius",
+    bodyStyle: "hatchback",
+    fuelType: "hybrid",
+    transmission: "automatic",
+    titleStatus: "clean",
     minPrice: 1000,
     maxPrice: 40000,
     minYear: 2000,
     maxYear: 2022,
     maxMileage: 90000,
     state: "NC",
+    zip: "27601",
     latitude: 35.78,
     longitude: -78.64,
     radiusMiles: 25,
@@ -36,6 +48,10 @@ test("invalid URL values never reach server query arguments", () => {
     ),
   );
   assert.deepEqual(state, { filters: {}, sort: "newest" });
+  assert.deepEqual(
+    readDiscoveryUrl(new URLSearchParams("bodyStyle=spaceship&fuelType=water&transmission=other&titleStatus=unknown")).filters,
+    {},
+  );
 });
 test("reversed ranges retain a valid lower bound", () => {
   assert.deepEqual(
@@ -58,6 +74,14 @@ test("coordinates require a valid pair and default their radius", () => {
     readDiscoveryUrl(
       new URLSearchParams("latitude=35&longitude=-78&radiusMiles=900"),
     ).filters,
+    { latitude: 35, longitude: -78, radiusMiles: 50 },
+  );
+  assert.deepEqual(
+    readDiscoveryUrl(new URLSearchParams("zip=27601")).filters,
+    {},
+  );
+  assert.deepEqual(
+    readDiscoveryUrl(new URLSearchParams("zip=invalid&latitude=35&longitude=-78")).filters,
     { latitude: 35, longitude: -78, radiusMiles: 50 },
   );
 });

@@ -8,6 +8,7 @@ import { resolveVehicleMedia } from "./lib/vehicleMedia";
 import { syncDiscovery } from "./lib/discoveryIndex";
 import { requireAdmin } from "./lib/authorization";
 import { mutation } from "./_generated/server";
+import { matchesVehicleFacets } from "../lib/vehicle-facets";
 
 function boundedPagination(options: PaginationOptions, cap: number, rows = 256) {
   if (!Number.isFinite(options.numItems) || options.numItems < 1) throw new Error("Invalid page size");
@@ -33,12 +34,12 @@ export const browse = query({
           ? base.withIndex("by_year", q => { const start = q.eq("token", token).eq("scope", scope); if (f.minYear !== undefined && f.maxYear !== undefined) return start.gte("year", f.minYear).lte("year", f.maxYear); if (f.minYear !== undefined) return start.gte("year", f.minYear); if (f.maxYear !== undefined) return start.lte("year", f.maxYear); return start; })
           : base.withIndex("by_recency", q => q.eq("token", token).eq("scope", scope));
     const direction = ["newest", "price-high", "mileage-high", "year-new"].includes(args.sort) ? "desc" : "asc";
-    // Bound work independently of result count. The cursor advances even when
-    // remaining filters eliminate every row in a sparse page.
+    // Bound work independently of result count. Secondary filters may leave a
+    // sparse page, which the client fills by requesting the next cursor.
     const result = await indexed.order(direction).paginate(boundedPagination(args.paginationOpts, 48));
     const page = await Promise.all(result.page.filter(row => matches(row, f)).map(async row => {
       const vehicle = await ctx.db.get(row.vehicleId);
-      if (!vehicle || !["active", "approved"].includes(vehicle.status)) return null;
+      if (!vehicle || !["active", "approved"].includes(vehicle.status) || !matchesVehicleFacets(vehicle, f)) return null;
       return resolveVehicleMedia(ctx, publicVehicle(vehicle));
     }));
     return { ...result, page: page.filter(row => row !== null) };

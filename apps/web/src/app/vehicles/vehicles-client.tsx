@@ -16,12 +16,16 @@ import {
 } from "@/lib/discovery-url";
 import { vehicleResults } from "@/lib/vehicle-results";
 import { localViewsSnapshot, subscribeLocalViews } from "@/lib/recently-viewed";
+import { vehicleFacetLabel, vehicleFacetOptions, type VehicleFacet } from "@/lib/vehicle-facets";
+import { readInventoryReturn, saveInventoryReturn, type InventoryReturn } from "@/lib/inventory-return";
 import { useMutation, usePaginatedQuery, useQuery } from "convex/react";
-import { Car, Grid, List, SlidersHorizontal } from "lucide-react";
+import { Car, Grid, List, X } from "lucide-react";
 import { useRouter, useSearchParams } from "next/navigation";
 import {
   Component,
+  useEffect,
   useMemo,
+  useRef,
   useState,
   useSyncExternalStore,
   type ReactNode,
@@ -64,24 +68,79 @@ function Inventory({
   state,
   layout,
   clear,
+  stateKey,
+  onRestoreLayout,
 }: {
   state: DiscoveryState;
   layout: "grid" | "list";
   clear: () => void;
+  stateKey: string;
+  onRestoreLayout: (layout: "grid" | "list") => void;
 }) {
   const { results, status, loadMore } = usePaginatedQuery(
     api.discovery.browse,
     state,
-    { initialNumItems: 12 },
+    { initialNumItems: 13 },
   );
-  const vehicles = vehicleResults(results) ?? [];
-  const [loadingError, setLoadingError] = useState("");
-  const more = () => {
-    setLoadingError("");
+  const [visibleCount, setVisibleCount] = useState(12);
+  const [autoPages, setAutoPages] = useState(0);
+  const requestedRef = useRef("");
+  const vehicles = (vehicleResults(results) ?? []).slice(0, visibleCount);
+  const [restoration, setRestoration] = useState<InventoryReturn | null>(null);
+  useEffect(() => {
     try {
-      loadMore(12);
-    } catch {
-      setLoadingError("Unable to load more listings. Try again.");
+      const saved = readInventoryReturn(window.sessionStorage, stateKey);
+      if (saved) {
+        onRestoreLayout(saved.layout);
+        setVisibleCount(saved.count);
+        setRestoration(saved);
+      }
+    } catch { /* Browsers can disable session storage. */ }
+  }, [stateKey, onRestoreLayout]);
+  useEffect(() => {
+    const rememberOnExit = () => {
+      try {
+        saveInventoryReturn(window.sessionStorage, { url: stateKey, count: visibleCount, scrollY: window.scrollY, layout });
+      } catch { /* Browsing still works without session storage. */ }
+    };
+    window.addEventListener("pagehide", rememberOnExit);
+    return () => window.removeEventListener("pagehide", rememberOnExit);
+  }, [stateKey, visibleCount, layout]);
+  const autoLimit = restoration ? 20 : 5;
+  useEffect(() => {
+    if (status !== "CanLoadMore" || results.length > visibleCount || autoPages >= autoLimit) return;
+    const key = `${results.length}:${visibleCount}:${autoPages}`;
+    if (requestedRef.current === key) return;
+    requestedRef.current = key;
+    const needed = visibleCount + 1 - results.length;
+    setAutoPages(autoPages + 1);
+    loadMore(Math.min(48, Math.max(12, needed * (autoPages + 1))));
+  }, [status, results.length, visibleCount, autoPages, autoLimit, loadMore]);
+  useEffect(() => {
+    if (!restoration || status === "LoadingFirstPage" || status === "LoadingMore") return;
+    if (vehicles.length < restoration.count && status === "CanLoadMore" && autoPages < autoLimit) return;
+    const frame = requestAnimationFrame(() => {
+      window.scrollTo({ top: restoration.scrollY, behavior: "instant" });
+      setRestoration(null);
+    });
+    return () => cancelAnimationFrame(frame);
+  }, [restoration, status, vehicles.length, autoPages, autoLimit]);
+  const rememberPosition = (event: React.MouseEvent<HTMLDivElement>) => {
+    const link = event.target instanceof Element ? event.target.closest("a[href^='/vehicles/']") : null;
+    if (!link) return;
+    try {
+      saveInventoryReturn(window.sessionStorage, { url: stateKey, count: visibleCount, scrollY: window.scrollY, layout });
+    } catch { /* Browsing still works without session storage. */ }
+  };
+  const more = () => {
+    requestedRef.current = "";
+    setAutoPages(0);
+    if (results.length > visibleCount) {
+      const nextCount = visibleCount + 12;
+      try {
+        saveInventoryReturn(window.sessionStorage, { url: stateKey, count: nextCount, scrollY: window.scrollY, layout });
+      } catch { /* Browsing still works without session storage. */ }
+      setVisibleCount(nextCount);
     }
   };
   if (status === "LoadingFirstPage")
@@ -100,15 +159,20 @@ function Inventory({
       </div>
     );
   const exhausted = status === "Exhausted";
+  const hasBuffered = results.length > visibleCount;
+  const canLoadMore = status === "CanLoadMore";
+  const seeking = !hasBuffered && canLoadMore && autoPages < autoLimit;
+  const finished = exhausted && !hasBuffered;
   return (
     <>
       {vehicles.length > 0 ? (
         <>
           <p className="mb-4 text-xs text-muted-foreground">
             {vehicles.length} {vehicles.length === 1 ? "vehicle" : "vehicles"}{" "}
-            loaded{exhausted ? " · End of results" : ""}
+            loaded{finished ? " · End of results" : ""}
           </p>
           <div
+            onClickCapture={rememberPosition}
             className={
               layout === "grid"
                 ? "grid gap-4 md:grid-cols-2 xl:grid-cols-3"
@@ -125,7 +189,7 @@ function Inventory({
             ))}
           </div>
         </>
-      ) : exhausted ? (
+      ) : finished ? (
         <div className="market-grid rounded-2xl border border-black/10 bg-white/50 px-6 py-20 text-center">
           <Car className="mx-auto h-9 w-9 text-primary" />
           <h3 className="mt-5 text-2xl font-semibold">
@@ -140,23 +204,18 @@ function Inventory({
         </div>
       ) : (
         <p className="rounded-xl bg-white p-6 text-sm">
-          No matches in this page yet. Continue searching the next page.
+          {seeking || status === "LoadingMore" ? "Searching more listings…" : "No matches in the scanned listings yet. Continue searching."}
         </p>
       )}
-      {!exhausted && (
+      {(hasBuffered || canLoadMore || status === "LoadingMore") && (
         <div className="mt-7 text-center">
           <Button
             variant="outline"
-            disabled={status === "LoadingMore"}
+            disabled={status === "LoadingMore" || seeking}
             onClick={more}
           >
-            {status === "LoadingMore" ? "Loading…" : "Load more vehicles"}
+            {status === "LoadingMore" || seeking ? "Loading…" : "Load more vehicles"}
           </Button>
-          {loadingError && (
-            <p role="alert" className="mt-3 text-sm text-destructive">
-              {loadingError}
-            </p>
-          )}
         </div>
       )}
     </>
@@ -312,9 +371,40 @@ export default function VehiclesClient() {
   const { user } = useCurrentUser();
   const apply = (filters: DiscoveryFilters, sort: DiscoverySort = state.sort) =>
     router.push(discoveryUrl(filters, sort), { scroll: false });
-  const filterCount = Object.keys(state.filters).filter(
-    (key) => key !== "longitude" && key !== "radiusMiles",
-  ).length;
+  const activeFilters = Object.entries(state.filters).filter(
+    ([key]) =>
+      key !== "longitude" &&
+      key !== "radiusMiles" &&
+      (key !== "latitude" || !state.filters.zip),
+  ) as [keyof DiscoveryFilters, string | number][];
+  const filterLabels: Partial<Record<keyof DiscoveryFilters, string>> = {
+    search: "Search",
+    make: "Make",
+    model: "Model",
+    bodyStyle: "Body style",
+    fuelType: "Fuel type",
+    transmission: "Transmission",
+    titleStatus: "Title status",
+    minPrice: "Min price",
+    maxPrice: "Max price",
+    minYear: "From",
+    maxYear: "To",
+    maxMileage: "Max mileage",
+    state: "State",
+    zip: "ZIP",
+    latitude: "Within",
+  };
+  const removeFilter = (key: keyof DiscoveryFilters) => {
+    const next = { ...state.filters };
+    delete next[key];
+    if (key === "latitude" || key === "zip") {
+      delete next.zip;
+      delete next.latitude;
+      delete next.longitude;
+      delete next.radiusMiles;
+    }
+    apply(next);
+  };
   const stateKey = discoveryUrl(state.filters, state.sort);
   return (
     <div className="market-page flex min-h-screen flex-col">
@@ -337,12 +427,8 @@ export default function VehiclesClient() {
           </div>
         </section>
         <section className="bg-[hsl(var(--bone))] py-10 text-[hsl(var(--midnight))] sm:py-14">
-          <div className="market-shell grid grid-cols-1 gap-5 lg:grid-cols-[260px_minmax(0,1fr)]">
+          <div className="market-shell grid grid-cols-1 gap-6 lg:grid-cols-[288px_minmax(0,1fr)] lg:gap-8">
             <aside className="lg:self-start">
-              <div className="mb-4 flex items-center gap-2 font-mono text-[10px] font-semibold uppercase tracking-[0.12em] text-[hsl(var(--gunmetal))] lg:hidden">
-                <SlidersHorizontal className="h-4 w-4 text-primary" />
-                Search controls
-              </div>
               <VehicleFilters
                 values={state.filters}
                 onFiltersChange={(filters) => apply(filters)}
@@ -369,12 +455,9 @@ export default function VehiclesClient() {
                   <h2 className="mt-1 text-xl font-semibold">
                     Find your next vehicle
                   </h2>
-                  {filterCount > 0 && (
-                    <p className="mt-1 text-xs text-muted-foreground">
-                      {filterCount} active{" "}
-                      {filterCount === 1 ? "filter" : "filters"}
-                    </p>
-                  )}
+                  <p className="mt-1 text-xs text-muted-foreground">
+                    Explore cars from private sellers.
+                  </p>
                 </div>
                 <div className="flex flex-wrap items-center gap-2">
                   <label className="sr-only" htmlFor="vehicle-sort">
@@ -420,6 +503,42 @@ export default function VehiclesClient() {
                   </div>
                 </div>
               </div>
+              {activeFilters.length > 0 && (
+                <div className="mb-6 flex flex-wrap items-center gap-2" aria-label="Active filters">
+                  {activeFilters.map(([key, value]) => {
+                    const displayValue = key in vehicleFacetOptions
+                      ? vehicleFacetLabel(key as VehicleFacet, String(value))
+                      : key === "zip"
+                        ? `${value} · ${state.filters.radiusMiles ?? 50} mi`
+                        : key === "latitude"
+                          ? `${state.filters.radiusMiles ?? 50} mi radius`
+                          : key === "minPrice" || key === "maxPrice"
+                            ? `$${Number(value).toLocaleString()}`
+                            : key === "maxMileage"
+                              ? `${Number(value).toLocaleString()} mi`
+                              : String(value);
+                    return (
+                      <button
+                        key={key}
+                        type="button"
+                        onClick={() => removeFilter(key)}
+                        aria-label={`Remove ${filterLabels[key]} filter`}
+                        className="inline-flex max-w-full items-center gap-2 rounded-full border border-primary/25 bg-white px-3 py-1.5 text-xs font-medium text-[hsl(var(--midnight))] transition-colors hover:border-primary hover:bg-primary/5"
+                      >
+                        <span className="truncate">{filterLabels[key]}: {displayValue}</span>
+                        <X className="h-3.5 w-3.5 shrink-0 text-primary" />
+                      </button>
+                    );
+                  })}
+                  <button
+                    type="button"
+                    className="px-2 py-1 text-xs font-semibold text-primary underline-offset-4 hover:underline"
+                    onClick={() => apply({})}
+                  >
+                    Clear all
+                  </button>
+                </div>
+              )}
               <QueryBoundary
                 key={stateKey}
                 message="Inventory could not be loaded. Please try again."
@@ -428,6 +547,8 @@ export default function VehiclesClient() {
                   state={state}
                   layout={layout}
                   clear={() => apply({}, "newest")}
+                  stateKey={stateKey}
+                  onRestoreLayout={setLayout}
                 />
               </QueryBoundary>
               <QueryBoundary

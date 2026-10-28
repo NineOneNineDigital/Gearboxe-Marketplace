@@ -20,9 +20,11 @@ export async function fetchDecode(vin: string, apiKey: string, request: typeof f
       headers: { Authorization: `Bearer ${apiKey}`, Accept: "application/json" }, signal: AbortSignal.timeout(10_000),
     });
   } catch { throw new Error("VIN decoding is temporarily unavailable; try again or enter details manually"); }
+  if (response.status === 207) throw new Error("Auto.dev returned only partial vehicle details; enter specifications for manual review");
   if (!response.ok) {
     if (response.status === 404 || response.status === 400) throw new Error("Auto.dev could not decode this VIN");
     if (response.status === 429) throw new Error("VIN decoder rate limit reached; try again later");
+    if (response.status === 401 || response.status === 403) throw new Error("Auto.dev credentials were rejected; enter vehicle details manually");
     throw new Error("VIN decoding is temporarily unavailable; enter details manually");
   }
   let payload: unknown;

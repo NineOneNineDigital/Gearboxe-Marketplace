@@ -62,6 +62,9 @@ const makes = [
 ];
 
 const currentYear = new Date().getFullYear();
+function suggestedTitle(year: number, make: string, model: string, trim?: string) {
+  return `${year} ${make} ${model}${trim ? ` ${trim}` : ""}`.slice(0, 120).trim();
+}
 
 export default function NewListingPage() {
   return <Suspense fallback={<p className="p-8">Loading listing...</p>}><ListingEditorBoundary /></Suspense>;
@@ -95,7 +98,9 @@ function ListingForm({ editId, isCurrentSession, onDraftCreated }: {
   const decodeVin = useAction(api.vin.decodeVin);
   const [isDecoding, setIsDecoding] = useState(false);
   const [errorMessage, setErrorMessage] = useState("");
+  const [saveErrorMessage, setSaveErrorMessage] = useState("");
   const [vinMessage, setVinMessage] = useState("Not verified");
+  const [vinLookupFailed, setVinLookupFailed] = useState(false);
 
   const [media, setMedia] = useState<ListingMedia[]>([]);
   const [mediaBusy, setMediaBusy] = useState(false);
@@ -106,6 +111,7 @@ function ListingForm({ editId, isCurrentSession, onDraftCreated }: {
   const saveQueue = useRef<Promise<unknown>>(Promise.resolve());
   const submissionLock = useRef(false);
   const saveBlocked = useRef(false);
+  const blockedSnapshot = useRef("");
   const requestId = useRef<string | undefined>(undefined);
   const mounted = useRef(true);
   const sessionLive = useCallback(() => mounted.current && isCurrentSession(), [isCurrentSession]);
@@ -115,7 +121,7 @@ function ListingForm({ editId, isCurrentSession, onDraftCreated }: {
   }, []);
   const [saveStatus, setSaveStatus] = useState("Draft not saved yet");
 
-  const [step, setStep] = useState(1);
+  const [step, setStep] = useState(editId ? 1 : 0);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [formData, setFormData] = useState({
     title: "",
@@ -167,6 +173,10 @@ function ListingForm({ editId, isCurrentSession, onDraftCreated }: {
     savedSnapshot.current = JSON.stringify({ formData: loaded, media: existing.media ?? [] });
     setSaveStatus("All changes saved");
     setVinMessage(existing.vinVerificationStatus === "decoded" ? "VIN decoded" : "Not verified");
+    if (existing.status === "draft" && !existing.title) {
+      setVinLookupFailed(/^[A-HJ-NPR-Z0-9]{17}$/.test(existing.vin ?? ""));
+      setStep(0);
+    }
     // Hydrate once per listing; reactive server updates must not replace local edits.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [existing, owned, terminal]);
@@ -216,6 +226,7 @@ function ListingForm({ editId, isCurrentSession, onDraftCreated }: {
       if (next.mediaBusy) throw new Error("Finish uploads, or remove failed photos, before saving.");
       if (next.snapshot === savedSnapshot.current && listingId.current) {
         saveBlocked.current = false;
+        setSaveErrorMessage("");
         setSaveStatus("All changes saved");
         return listingId.current;
       }
@@ -235,6 +246,7 @@ function ListingForm({ editId, isCurrentSession, onDraftCreated }: {
       requestId.current = undefined;
       savedSnapshot.current = next.snapshot;
       saveBlocked.current = false;
+      setSaveErrorMessage("");
       setSaveStatus(latest.current.snapshot === next.snapshot ? "All changes saved" : "Unsaved changes");
       if (!editId) {
         onDraftCreated(result.id);
@@ -248,6 +260,7 @@ function ListingForm({ editId, isCurrentSession, onDraftCreated }: {
   const persistRef = useRef(persistDraft);
   persistRef.current = persistDraft;
   useEffect(() => {
+    if (saveBlocked.current && blockedSnapshot.current !== snapshot) saveBlocked.current = false;
     if (!currentUser || !canAutosave || !meaningful || mediaBusy || isSubmitting || saveBlocked.current || snapshot === savedSnapshot.current || (editId && hydratedId.current !== editId)) return;
     setSaveStatus("Unsaved changes");
     const timer = window.setTimeout(() => {
@@ -255,8 +268,9 @@ function ListingForm({ editId, isCurrentSession, onDraftCreated }: {
       void persistRef.current().catch(error => {
         if (!sessionLive()) return;
         saveBlocked.current = true;
-        setSaveStatus("Draft save failed. Retry to save your changes.");
-        setErrorMessage(error instanceof Error ? error.message : "Unable to save draft.");
+        blockedSnapshot.current = snapshot;
+        setSaveStatus("Draft save failed. Edit a field to retry automatically.");
+        setSaveErrorMessage(error instanceof Error ? error.message : "Unable to save draft.");
       });
     }, 1000);
     return () => window.clearTimeout(timer);
@@ -315,28 +329,34 @@ function ListingForm({ editId, isCurrentSession, onDraftCreated }: {
     }, () => { if (sessionLive()) setErrorMessage("Location could not be read. You can continue without distance-search coordinates."); }, { enableHighAccuracy: false, timeout: 10000 });
   };
 
-  const handleDecode = async () => {
-    const vin = formData.vin.trim().toUpperCase();
+  const handleDecode = async (vinInput = formData.vin, advance = false) => {
+    const vin = vinInput.trim().toUpperCase();
     setIsDecoding(true);
     setErrorMessage("");
     try {
       const result = await decodeVin({ vin });
       if (!sessionLive()) return;
       setFormData((prev) => {
-        if (prev.vin.trim().toUpperCase() !== vin) return prev;
+        if (!advance && prev.vin.trim().toUpperCase() !== vin) return prev;
         return { ...prev, vin: result.vin, make: result.make, model: result.model,
+          title: prev.title || suggestedTitle(result.year, result.make, result.model, result.trim),
           year: result.year ? String(result.year) : prev.year,
-          trim: result.trim ?? prev.trim, bodyStyle: result.bodyStyle ?? prev.bodyStyle,
+          trim: result.trim ?? (advance ? "" : prev.trim), bodyStyle: result.bodyStyle ?? (advance ? "" : prev.bodyStyle),
           engine: result.engine ?? prev.engine, transmission: result.transmission ?? prev.transmission,
           drivetrain: result.drivetrain ?? prev.drivetrain, fuelType: result.fuelType ?? prev.fuelType };
       });
       setVinMessage("VIN decoded. Review the decoded specifications before submitting.");
+      setVinLookupFailed(false);
+      if (advance) setStep(1);
     } catch (error) {
-      if (sessionLive()) setErrorMessage(error instanceof Error ? error.message : "VIN decoding failed. Please try again.");
+      if (sessionLive()) {
+        setErrorMessage(error instanceof Error ? error.message : "VIN decoding failed. Please try again.");
+        if (advance) setVinLookupFailed(true);
+      }
     } finally { if (sessionLive()) setIsDecoding(false); }
   };
 
-  const handleSubmit = async (status: "draft" | "pending" = "pending") => {
+  const handleSubmit = async () => {
     if (!currentUser || !editable || !sessionLive() || mediaBusy || isDecoding || submissionLock.current) return;
     submissionLock.current = true;
     setErrorMessage("");
@@ -346,11 +366,9 @@ function ListingForm({ editId, isCurrentSession, onDraftCreated }: {
         const id = await persistDraft();
         if (!sessionLive()) return;
         if (!id) throw new Error("Save your draft before submitting.");
-        if (status === "pending") {
-          await submitVehicle({ id, expectedUpdatedAt: revision.current });
-          if (!sessionLive()) return;
-          router.push(`/myAccount/my-listings?submitted=${id}`);
-        }
+        await submitVehicle({ id, expectedUpdatedAt: revision.current });
+        if (!sessionLive()) return;
+        router.push(`/myAccount/my-listings?submitted=${id}`);
       } else {
         await updateVehicle({ id: editId as Id<"vehicles">, expectedUpdatedAt: revision.current, ...latest.current.values, numberOfOwners: latest.current.values.numberOfOwners ?? null });
         if (!sessionLive()) return;
@@ -360,6 +378,7 @@ function ListingForm({ editId, isCurrentSession, onDraftCreated }: {
     } catch (error) {
       if (!sessionLive()) return;
       saveBlocked.current = true;
+      blockedSnapshot.current = snapshot;
       setSaveStatus("Save failed. Your changes are still in this editor.");
       setErrorMessage(error instanceof Error ? error.message : "Unable to save listing. Please try again.");
     } finally {
@@ -373,6 +392,8 @@ function ListingForm({ editId, isCurrentSession, onDraftCreated }: {
   } catch (error) {
     specificationError = error instanceof Error ? error.message : "Complete the required listing information.";
   }
+  const standardVin = /^[A-HJ-NPR-Z0-9]{17}$/.test(formData.vin.trim());
+  const serialNumber = /^[A-Z0-9-]{3,30}$/.test(formData.vin.trim());
 
   return (
     <div className="market-page min-h-screen flex flex-col">
@@ -390,61 +411,22 @@ function ListingForm({ editId, isCurrentSession, onDraftCreated }: {
           </p>
         </div>
 
-        {/* Progress Steps */}
-        <div className="mb-8">
-          <div className="flex items-center space-x-4">
-            <div
-              className={`flex items-center space-x-2 ${step >= 1 ? "text-primary" : "text-gray-400"}`}
-            >
-              <div
-                className={`w-8 h-8 rounded-full flex items-center justify-center text-sm font-medium ${
-                  step >= 1
-                    ? "bg-primary text-white"
-                    : "bg-gray-200 text-gray-600"
-                }`}
-              >
-                1
-              </div>
-              <span className="text-sm font-medium">Vehicle Details</span>
+        <div className="mb-8 flex flex-wrap items-center gap-3" aria-label="Listing progress">
+          {(["Find vehicle", "Vehicle details", "Description & photos", "Review & submit"] as const).map((label, index) => (
+            <div key={label} className={`flex items-center gap-2 text-sm ${step >= index ? "text-primary" : "text-gray-400"}`} aria-current={step === index ? "step" : undefined}>
+              <span className={`flex h-8 w-8 items-center justify-center rounded-full font-medium ${step >= index ? "bg-primary text-white" : "bg-gray-200 text-gray-600"}`}>{index + 1}</span>
+              <span className="font-medium">{label}</span>
             </div>
-            <div className="flex-1 h-px bg-gray-200"></div>
-            <div
-              className={`flex items-center space-x-2 ${step >= 2 ? "text-primary" : "text-gray-400"}`}
-            >
-              <div
-                className={`w-8 h-8 rounded-full flex items-center justify-center text-sm font-medium ${
-                  step >= 2
-                    ? "bg-primary text-white"
-                    : "bg-gray-200 text-gray-600"
-                }`}
-              >
-                2
-              </div>
-              <span className="text-sm font-medium">Description & Photos</span>
-            </div>
-            <div className="flex-1 h-px bg-gray-200"></div>
-            <div
-              className={`flex items-center space-x-2 ${step >= 3 ? "text-primary" : "text-gray-400"}`}
-            >
-              <div
-                className={`w-8 h-8 rounded-full flex items-center justify-center text-sm font-medium ${
-                  step >= 3
-                    ? "bg-primary text-white"
-                    : "bg-gray-200 text-gray-600"
-                }`}
-              >
-                3
-              </div>
-              <span className="text-sm font-medium">Review & Submit</span>
-            </div>
-          </div>
+          ))}
         </div>
 
         <Card>
           <CardHeader>
             <CardTitle>
-              Step {step}:{" "}
-              {step === 1
+              Step {step + 1}:{" "}
+              {step === 0
+                ? "Find your vehicle"
+                : step === 1
                 ? "Vehicle Information"
                 : step === 2
                   ? "Description & Photos"
@@ -454,11 +436,23 @@ function ListingForm({ editId, isCurrentSession, onDraftCreated }: {
           <CardContent>
             <fieldset disabled={isSubmitting} className="space-y-6 min-w-0">
             {errorMessage && <p role="alert" className="text-red-700">{errorMessage}</p>}
+            {saveErrorMessage && <p role="alert" className="text-red-700">{saveErrorMessage}</p>}
             {canAutosave && <p role="status" className="text-sm text-muted-foreground">{saveStatus}</p>}
             {existing?.status === "rejected" && <div role="alert" className="rounded-lg border border-red-200 bg-red-50 p-4"><h3 className="font-semibold">Changes requested</h3><p className="mt-1 text-sm">{existing.moderationReason || "Review your listing and resubmit for moderation."}</p></div>}
-            {canAutosave && <Button variant="outline" disabled={isSubmitting || isDecoding || mediaBusy || !meaningful} onClick={() => handleSubmit("draft")}>
-              {isSubmitting ? "Saving..." : "Save Draft"}
-            </Button>}
+            {step === 0 && (
+              <div className="space-y-6">
+                <p className="text-sm text-muted-foreground">Enter your vehicle&apos;s VIN to fill available details. You can review and complete the listing afterward.</p>
+                <div className="max-w-xl space-y-3">
+                  <Label htmlFor="lookup-vin">VIN</Label>
+                  <Input id="lookup-vin" autoComplete="off" maxLength={30} placeholder="17-character VIN" value={formData.vin} disabled={isDecoding} onChange={event => { handleInputChange("vin", event.target.value.toUpperCase()); setVinMessage("Not verified"); setVinLookupFailed(false); setErrorMessage(""); }} />
+                  <div className="flex flex-wrap gap-2">
+                    {standardVin && <Button type="button" disabled={isDecoding} onClick={() => void handleDecode(formData.vin, true)}>{isDecoding ? "Looking up vehicle..." : "Look up VIN"}</Button>}
+                    {((vinLookupFailed && standardVin) || (serialNumber && !standardVin)) && <Button type="button" variant={standardVin ? "outline" : "default"} disabled={isDecoding} onClick={() => { setErrorMessage(""); setStep(1); }}>{standardVin ? "Continue with VIN" : "Continue with serial number"}</Button>}
+                  </div>
+                  <p className="text-xs text-muted-foreground">For vehicles built before 1981, enter the manufacturer serial number and complete the details yourself. If VIN lookup is unavailable, you can still continue with your VIN.</p>
+                </div>
+              </div>
+            )}
             {step === 1 && (
               <div className="space-y-6">
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
@@ -546,7 +540,7 @@ function ListingForm({ editId, isCurrentSession, onDraftCreated }: {
                       value={formData.vin}
                       onChange={(e) => { handleInputChange("vin", e.target.value.toUpperCase()); setVinMessage("Not verified"); }}
                     />
-                    <Button type="button" variant="outline" onClick={handleDecode} disabled={isDecoding || !/^[A-HJ-NPR-Z0-9]{17}$/.test(formData.vin.trim())}>
+                    <Button type="button" variant="outline" onClick={() => void handleDecode()} disabled={isDecoding || !/^[A-HJ-NPR-Z0-9]{17}$/.test(formData.vin.trim())}>
                       {isDecoding ? "Decoding..." : "Decode VIN"}
                     </Button>
                     <p className="text-sm text-gray-600" role="status">{vinMessage}</p>
@@ -690,7 +684,7 @@ function ListingForm({ editId, isCurrentSession, onDraftCreated }: {
                     <Button variant="outline" onClick={() => setStep(2)}>
                       Previous Step
                     </Button>
-                    <Button onClick={() => handleSubmit("pending")} disabled={isSubmitting || isDecoding || mediaBusy || Boolean(specificationError) || !media.length || formData.photos.length > 0 || duplicate?.duplicate}>
+                    <Button onClick={handleSubmit} disabled={isSubmitting || isDecoding || mediaBusy || Boolean(specificationError) || !media.length || formData.photos.length > 0 || duplicate?.duplicate}>
                       {isSubmitting ? "Submitting..." : existing?.status === "rejected" ? "Resubmit for review" : "Submit for review"}
                     </Button>
                   </div>

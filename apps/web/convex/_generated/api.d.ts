@@ -63,6 +63,7 @@ import type * as registrationPayments from "../registrationPayments.js";
 import type * as registrations from "../registrations.js";
 import type * as savedSearches from "../savedSearches.js";
 import type * as seed from "../seed.js";
+import type * as seedPagination from "../seedPagination.js";
 import type * as trust from "../trust.js";
 import type * as trustDocuments from "../trustDocuments.js";
 import type * as users from "../users.js";
@@ -128,6 +129,7 @@ declare const fullApi: ApiFromModules<{
   registrations: typeof registrations;
   savedSearches: typeof savedSearches;
   seed: typeof seed;
+  seedPagination: typeof seedPagination;
   trust: typeof trust;
   trustDocuments: typeof trustDocuments;
   users: typeof users;

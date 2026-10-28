@@ -1,5 +1,7 @@
 /** The URL is the shareable source of truth for inventory discovery. */
-export interface DiscoveryFilters {
+import { isVehicleFacetValue, type VehicleFacetFilters } from "./vehicle-facets";
+
+export interface DiscoveryFilters extends VehicleFacetFilters {
   search?: string;
   make?: string;
   model?: string;
@@ -9,6 +11,7 @@ export interface DiscoveryFilters {
   maxYear?: number;
   maxMileage?: number;
   state?: string;
+  zip?: string;
   latitude?: number;
   longitude?: number;
   radiusMiles?: number;
@@ -38,6 +41,10 @@ export function readDiscoveryUrl(
       ?.trim()
       .slice(0, key === "search" ? 120 : 60);
     if (value) filters[key] = value;
+  }
+  for (const field of ["bodyStyle", "fuelType", "transmission", "titleStatus"] as const) {
+    const value = params.get(field)?.trim();
+    if (value && isVehicleFacetValue(field, value)) filters[field] = value;
   }
   for (const key of [
     "minPrice",
@@ -92,6 +99,8 @@ export function readDiscoveryUrl(
     const radius = radiusRaw?.trim() ? Number(radiusRaw) : NaN;
     filters.radiusMiles =
       Number.isFinite(radius) && radius >= 1 && radius <= 500 ? radius : 50;
+    const zip = params.get("zip")?.trim();
+    if (zip && /^\d{5}$/.test(zip)) filters.zip = zip;
   }
   const requestedSort = params.get("sort");
   const sort: DiscoverySort =
