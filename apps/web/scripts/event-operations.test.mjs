@@ -41,7 +41,10 @@ test("event staff cannot cross event boundaries or call administrator functions"
   const f = staffFixture();
   await assert.rejects(ops.getRoster._handler(f.ctx, { eventId: "other-event", paginationOpts: { cursor: null, numItems: 20 } }), /Access to this event/);
   await assert.rejects(authorization.requireAdmin(f.ctx), /Administrator/);
-  await assert.rejects(ops.assignStaff._handler(f.ctx, { eventId: "other-event", userId: "seller", role: "manager" }), /Administrator/);
+  await assert.rejects(ops.assignStaff._handler(f.ctx, { eventId: "other-event", userId: "seller", role: "manager" }), /Access to this event/);
+  f.as("other");
+  await assert.rejects(ops.assignStaff._handler(f.ctx, { eventId: "event", userId: "seller", role: "manager" }), /administrators can assign event managers/);
+  f.as("seller");
   await assert.rejects(ops.undoCheckIn._handler(f.ctx, { ...command, reason: "Mistake" }), /Access/);
   f.as("admin"); assert.ok(await ops.getMetrics._handler(f.ctx, { eventId: "other-event" }));
   f.as("seller"); await f.ctx.db.patch("seller", { suspendedAt: Date.now() });
