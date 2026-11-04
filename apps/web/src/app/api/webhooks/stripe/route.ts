@@ -1,67 +1,21 @@
-import { api } from "@gearboxe-market/convex/_generated/api";
+import { api } from "@/convex/_generated/api";
+import { readRequestBody } from "@/lib/request-body";
+import { getStripe } from "@/lib/stripe";
 import { ConvexHttpClient } from "convex/browser";
-import { type NextRequest, NextResponse } from "next/server";
-import QRCode from "qrcode";
-import { stripe } from "@/lib/stripe";
-
-const convex = new ConvexHttpClient(process.env.NEXT_PUBLIC_CONVEX_URL!);
+import { NextRequest, NextResponse } from "next/server";
 
 export async function POST(request: NextRequest) {
-  const body = await request.text();
   const signature = request.headers.get("stripe-signature");
-
-  if (!signature) {
-    return NextResponse.json({ error: "No signature" }, { status: 400 });
-  }
-
-  let event;
-
+  if (!signature) return NextResponse.json({ error: "No signature" }, { status: 400 });
+  if (!process.env.STRIPE_WEBHOOK_SECRET || !process.env.STRIPE_SECRET_KEY) return NextResponse.json({ error: "Payment processing is unavailable" }, { status: 503 });
+  const body = await readRequestBody(request, 262_144);
+  if (body === null) return NextResponse.json({ error: "Webhook too large" }, { status: 413 });
+  try { getStripe().webhooks.constructEvent(body, signature, process.env.STRIPE_WEBHOOK_SECRET); }
+  catch { return NextResponse.json({ error: "Invalid signature" }, { status: 400 }); }
   try {
-    event = stripe.webhooks.constructEvent(
-      body,
-      signature,
-      process.env.STRIPE_WEBHOOK_SECRET!
-    );
-  } catch (err) {
-    console.error("Webhook signature verification failed:", err);
-    return NextResponse.json({ error: "Invalid signature" }, { status: 400 });
-  }
-
-  if (event.type === "checkout.session.completed") {
-    const session = event.data.object as any;
-
-    try {
-      const { userId, eventId, vehicleId } = session.metadata;
-
-      // Generate QR code data
-      const qrCodeData = `${userId}-${eventId}-${vehicleId}-${Date.now()}`;
-
-      // Generate QR code image
-      const qrCodeImage = await QRCode.toDataURL(qrCodeData);
-
-      // Create registration record
-      await convex.mutation(api.registrations.createRegistration, {
-        eventId,
-        vehicleId,
-        userId,
-        stripePaymentId: session.id,
-        qrCodeData,
-      });
-
-      console.log("Registration created successfully:", {
-        userId,
-        eventId,
-        vehicleId,
-        sessionId: session.id,
-      });
-    } catch (error) {
-      console.error("Error processing payment completion:", error);
-      return NextResponse.json(
-        { error: "Failed to process payment" },
-        { status: 500 }
-      );
-    }
-  }
-
-  return NextResponse.json({ received: true });
+    const convex = new ConvexHttpClient(process.env.NEXT_PUBLIC_CONVEX_URL!);
+    // Convex repeats signature verification: the public action never accepts caller payment claims.
+    await convex.action(api.registrationPayments.receiveWebhook, { body, signature });
+    return NextResponse.json({ received: true });
+  } catch { return NextResponse.json({ error: "Payment reconciliation queued for retry" }, { status: 500 }); }
 }

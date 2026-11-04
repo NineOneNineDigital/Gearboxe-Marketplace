@@ -1,80 +1,51 @@
 name: CI
 
 on:
+  pull_request:
   push:
     branches: [main]
-  pull_request:
-    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
 
 jobs:
-  lint:
-    name: Lint
+  verify:
+    name: Lint, types, tests, and builds
     runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      CI: true
+      MARKETPLACE_ENV: ci
+      NEXT_TELEMETRY_DISABLED: 1
+      # Public, nonfunctional build fixtures. No production secrets or deployments.
+      NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY: pk_test_ZXhhbXBsZS5jbGVyay5hY2NvdW50cy5kZXYk
+      NEXT_PUBLIC_CONVEX_URL: https://ci-build-only.convex.cloud
+      NEXT_PUBLIC_CONVEX_SITE_URL: https://ci-build-only.convex.site
+      NEXT_PUBLIC_APP_URL: http://localhost:3000
     steps:
-      - name: Checkout
+      - name: Check out source
         uses: actions/checkout@v4
-
-      - name: Setup pnpm
+      - name: Install pinned pnpm
         uses: pnpm/action-setup@v4
-
-      - name: Setup Node.js
+        with:
+          run_install: false
+      - name: Set up Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: 20
-          cache: 'pnpm'
-
+          node-version-file: .nvmrc
+          cache: pnpm
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
-
-      - name: Run lint
+      - name: Lint (zero warnings)
         run: pnpm lint
-
-  typecheck:
-    name: Type Check
-    runs-on: ubuntu-latest
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-
-      - name: Setup pnpm
-        uses: pnpm/action-setup@v4
-
-      - name: Setup Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: 20
-          cache: 'pnpm'
-
-      - name: Install dependencies
-        run: pnpm install --frozen-lockfile
-
-      - name: Run typecheck
+      - name: Type-check workspace
         run: pnpm typecheck
-
-  build:
-    name: Build
-    runs-on: ubuntu-latest
-    needs: [lint, typecheck]
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-
-      - name: Setup pnpm
-        uses: pnpm/action-setup@v4
-
-      - name: Setup Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: 20
-          cache: 'pnpm'
-
-      - name: Install dependencies
-        run: pnpm install --frozen-lockfile
-
-      - name: Build
+      - name: Run tests
+        run: pnpm test
+      - name: Build both applications
         run: pnpm build
-        env:
-          NEXT_PUBLIC_CONVEX_URL: ${{ secrets.NEXT_PUBLIC_CONVEX_URL }}
-          NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY: ${{ secrets.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY }}
-          NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY: ${{ secrets.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY }}
-          NEXT_PUBLIC_CLOUDINARY_CLOUD_NAME: ${{ secrets.NEXT_PUBLIC_CLOUDINARY_CLOUD_NAME }}

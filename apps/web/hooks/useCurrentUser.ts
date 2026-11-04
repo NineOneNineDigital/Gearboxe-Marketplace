@@ -1,9 +1,9 @@
-import { api } from "@gearboxe-market/convex/_generated/api";
+import { api } from "@/convex/_generated/api";
 import { useConvexAuth, useQuery } from "convex/react";
 
 export function useCurrentUser() {
   const { isLoading, isAuthenticated } = useConvexAuth();
-  const user = useQuery(api.users.current);
+  const user = useQuery(api.users.current, isAuthenticated ? {} : "skip");
 
   // If Convex is still loading, show loading
   if (isLoading) {

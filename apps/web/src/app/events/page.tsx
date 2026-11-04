@@ -1,103 +1,86 @@
 "use client";
 
-import { api } from "@gearboxe-market/convex/_generated/api";
+import { EventCard } from "@/components/ui/event-card";
+import { Footer } from "@/components/ui/footer";
+import { Navbar } from "@/components/ui/navbar";
+import { api } from "@/convex/_generated/api";
 import { useQuery } from "convex/react";
-import { Calendar, MapPin } from "lucide-react";
-import { EventCard } from "../../../components/event-card";
-import { Footer } from "../../../components/footer";
-import { Navbar } from "../../../components/navbar";
+import { Calendar, Car, MapPin, MessageCircle } from "lucide-react";
+
+const expectations = [
+  { icon: Car, title: "See the cars", text: "Walk the lineup and take in the details in person." },
+  { icon: MessageCircle, title: "Meet the owners", text: "Ask direct questions and hear the story behind the vehicle." },
+  { icon: MapPin, title: "Gather locally", text: "Weekend events built around the regional car community." },
+];
 
 export default function EventsPage() {
   const upcomingEvents = useQuery(api.events.getUpcomingEvents);
 
   return (
-    <div className="flex min-h-screen flex-col bg-white">
+    <div className="market-page flex min-h-screen flex-col">
       <Navbar />
-
-      <div className="mx-auto max-w-7xl flex-1 px-4 py-12 sm:px-6 lg:px-8">
-        {/* Header */}
-        <div className="mb-12 text-center">
-          <h1 className="mb-4 font-bold text-4xl text-gray-900">
-            Upcoming Events
-          </h1>
-          <p className="mx-auto max-w-3xl text-gray-600 text-xl">
-            Join us at our monthly Gearboxe Market events. Meet sellers, browse
-            vehicles, and find your next car in person.
-          </p>
-        </div>
-
-        {/* Events Grid */}
-        {upcomingEvents && upcomingEvents.length > 0 ? (
-          <div className="grid grid-cols-1 gap-6 md:grid-cols-2 lg:grid-cols-3">
-            {upcomingEvents.map((event) => (
-              <EventCard event={event} key={event._id} showRegister={true} />
-            ))}
-          </div>
-        ) : (
-          <div className="py-16 text-center">
-            <Calendar className="mx-auto mb-4 h-16 w-16 text-gray-400" />
-            <h3 className="mb-2 font-semibold text-gray-900 text-xl">
-              No Upcoming Events
-            </h3>
-            <p className="text-gray-600">
-              Check back soon for our next Gearboxe Market event!
-            </p>
-          </div>
-        )}
-
-        {/* Event Info */}
-        <div className="mt-16 rounded-lg border border-gray-200 bg-white p-8 shadow-sm">
-          <div className="grid grid-cols-1 gap-8 md:grid-cols-2">
-            <div>
-              <h3 className="mb-4 font-semibold text-gray-900 text-xl">
-                What to Expect
-              </h3>
-              <ul className="space-y-2 text-gray-600">
-                <li className="flex items-start space-x-2">
-                  <span className="text-primary">•</span>
-                  <span>Browse dozens of vehicles in one location</span>
-                </li>
-                <li className="flex items-start space-x-2">
-                  <span className="text-primary">•</span>
-                  <span>Meet sellers face-to-face</span>
-                </li>
-                <li className="flex items-start space-x-2">
-                  <span className="text-primary">•</span>
-                  <span>Test drive vehicles on-site</span>
-                </li>
-                <li className="flex items-start space-x-2">
-                  <span className="text-primary">•</span>
-                  <span>Get expert advice from our team</span>
-                </li>
-              </ul>
-            </div>
-            <div>
-              <h3 className="mb-4 font-semibold text-gray-900 text-xl">
-                Event Details
-              </h3>
-              <ul className="space-y-2 text-gray-600">
-                <li className="flex items-center space-x-2">
-                  <Calendar className="h-4 w-4 text-primary" />
-                  <span>Monthly events on weekends</span>
-                </li>
-                <li className="flex items-center space-x-2">
-                  <MapPin className="h-4 w-4 text-primary" />
-                  <span>Various locations in the Raleigh area</span>
-                </li>
-                <li className="flex items-start space-x-2">
-                  <span className="text-primary">•</span>
-                  <span>Free admission for buyers</span>
-                </li>
-                <li className="flex items-start space-x-2">
-                  <span className="text-primary">•</span>
-                  <span>Food trucks and refreshments available</span>
-                </li>
-              </ul>
+      <main className="flex-1">
+        <section className="market-grid border-b border-white/10 bg-[hsl(var(--midnight))] py-16 text-[hsl(var(--bone))] sm:py-20">
+          <div className="market-shell">
+            <p className="market-eyebrow text-[hsl(var(--chrome))]">Gearboxe in person</p>
+            <div className="mt-6 grid gap-7 lg:grid-cols-[1.35fr_0.65fr] lg:items-end">
+              <h1 className="market-section-title max-w-3xl text-white">The marketplace is better around the cars.</h1>
+              <p className="max-w-md text-sm leading-7 text-[hsl(var(--chrome))] lg:justify-self-end">
+                Meet sellers, explore the lineup, and connect with the local
+                Gearboxe community at our popup markets.
+              </p>
             </div>
           </div>
-        </div>
-      </div>
+        </section>
 
+        <section className="bg-[hsl(var(--bone))] py-16 text-[hsl(var(--midnight))] sm:py-24">
+          <div className="market-shell">
+            <div className="flex items-end justify-between gap-6 border-b border-black/10 pb-6">
+              <div>
+                <p className="font-mono text-[9px] uppercase tracking-[0.12em] text-[hsl(var(--gunmetal))]">On the calendar</p>
+                <h2 className="mt-2 text-3xl font-semibold">Upcoming events</h2>
+              </div>
+              <span className="market-metric text-sm text-[hsl(var(--gunmetal))]">
+                {upcomingEvents?.length ?? 0} scheduled
+              </span>
+            </div>
+
+            {upcomingEvents === undefined ? (
+              <div className="mt-8 grid gap-6 md:grid-cols-2 lg:grid-cols-3">
+                {[0, 1, 2].map((item) => <div key={item} className="h-96 animate-pulse rounded-xl bg-black/5" />)}
+              </div>
+            ) : upcomingEvents.length > 0 ? (
+              <div className="mt-8 grid gap-6 md:grid-cols-2 lg:grid-cols-3">
+                {upcomingEvents.map((event) => <EventCard key={event._id} event={event} />)}
+              </div>
+            ) : (
+              <div className="market-grid mt-8 rounded-2xl border border-black/10 bg-white/50 px-6 py-20 text-center">
+                <Calendar className="mx-auto h-9 w-9 text-primary" />
+                <h3 className="mt-5 text-2xl font-semibold">The next date is being lined up.</h3>
+                <p className="mt-3 text-sm text-[hsl(var(--gunmetal))]">Check back soon for the next Gearboxe Market gathering.</p>
+              </div>
+            )}
+          </div>
+        </section>
+
+        <section className="market-grid border-t border-border bg-background py-16 sm:py-20">
+          <div className="market-shell">
+            <p className="market-eyebrow">What to expect</p>
+            <div className="mt-8 grid gap-px overflow-hidden rounded-2xl border border-border bg-border md:grid-cols-3">
+              {expectations.map(({ icon: Icon, title, text }, index) => (
+                <article key={title} className="bg-card p-7 sm:p-8">
+                  <div className="flex items-center justify-between">
+                    <Icon className="h-5 w-5 text-primary" />
+                    <span className="font-mono text-[9px] text-muted-foreground">0{index + 1}</span>
+                  </div>
+                  <h3 className="mt-8 text-xl font-semibold">{title}</h3>
+                  <p className="mt-3 text-sm leading-6 text-muted-foreground">{text}</p>
+                </article>
+              ))}
+            </div>
+          </div>
+        </section>
+      </main>
       <Footer />
     </div>
   );

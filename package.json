@@ -1,49 +1,19 @@
 {
-  "name": "gearboxe-market-monorepo",
+  "name": "gearboxe-market",
   "version": "0.1.0",
   "private": true,
+  "packageManager": "pnpm@10.18.0",
   "scripts": {
-    "dev": "turbo run dev",
-    "dev:web": "turbo run dev --filter @gearboxe-market/web",
-    "dev:admin": "turbo run dev --filter @gearboxe-market/admin",
-    "dev:waitlist": "turbo run dev --filter @gearboxe-market/waitlist",
-    "dev:convex": "pnpm --filter @gearboxe-market/convex dev",
-    "build": "turbo run build",
-    "build:web": "turbo run build --filter @gearboxe-market/web",
-    "build:admin": "turbo run build --filter @gearboxe-market/admin",
-    "start": "turbo run start",
-    "start:web": "turbo run start --filter @gearboxe-market/web",
-    "start:admin": "turbo run start --filter @gearboxe-market/admin",
-    "lint": "turbo run lint",
-    "format": "turbo run format",
-    "typecheck": "turbo run typecheck",
-    "test": "vitest",
-    "test:run": "vitest run",
-    "test:coverage": "vitest run --coverage",
-    "clean": "turbo run clean && rm -rf node_modules",
-    "prepare": "husky"
-  },
-  "devDependencies": {
-    "@biomejs/biome": "2.3.1",
-    "@vitest/coverage-v8": "^4.0.18",
-    "husky": "^9.1.7",
-    "lint-staged": "^16.2.7",
-    "turbo": "^2.1.0",
-    "typescript": "^5",
-    "ultracite": "6.0.3",
-    "vitest": "^4.0.18"
-  },
-  "packageManager": "pnpm@9.0.0",
-  "engines": {
-    "node": ">=18",
-    "pnpm": ">=9"
-  },
-  "lint-staged": {
-    "*.{ts,tsx,js,jsx}": [
-      "pnpm exec biome check --write"
-    ],
-    "*.{json,md}": [
-      "pnpm exec biome format --write"
-    ]
+    "dev": "pnpm --parallel --filter './apps/*' dev",
+    "dev:web": "pnpm --filter @gearboxe/web dev",
+    "dev:admin": "pnpm --filter @gearboxe/admin dev",
+    "build": "pnpm --filter './apps/*' build",
+    "lint": "pnpm --filter './apps/*' lint",
+    "typecheck": "pnpm -r typecheck",
+    "test": "pnpm --filter @gearboxe/web test && pnpm --filter @workspace/design-tokens test",
+    "check": "pnpm lint && pnpm typecheck && pnpm test && pnpm build",
+    "check:tokens": "pnpm --filter @workspace/design-tokens typecheck && pnpm --filter @workspace/design-tokens test",
+    "convex:dev": "pnpm --filter @gearboxe/web exec convex dev",
+    "convex:deploy": "pnpm --filter @gearboxe/web exec convex deploy"
   }
 }

@@ -1,21 +1,24 @@
 "use client";
 
-import { api } from "@gearboxe-market/convex/_generated/api";
-import { Button } from "@gearboxe-market/ui/button";
-import { Card, CardContent } from "@gearboxe-market/ui/card";
+import { Button } from "@/components/ui/button";
+import { Card, CardContent } from "@/components/ui/card";
+import { Footer } from "@/components/ui/footer";
+import { Navbar } from "@/components/ui/navbar";
+import { api } from "@/convex/_generated/api";
+import type { Id } from "@/convex/_generated/dataModel";
+import { useCurrentUser } from "@/hooks/useCurrentUser";
+import { useToast } from "@/hooks/useToast";
 import { useAuth } from "@clerk/nextjs";
 import { useMutation, useQuery } from "convex/react";
 import { Eye, Heart, SortAsc } from "lucide-react";
 import Link from "next/link";
+import Image from "next/image";
+import { isTrustedImageUrl } from "@/lib/trusted-images";
 import { redirect } from "next/navigation";
 import { useState } from "react";
-import { useCurrentUser } from "@/hooks/useCurrentUser";
-import { useToast } from "@/hooks/useToast";
-import { Footer } from "../../../../components/footer";
-import { Navbar } from "../../../../components/navbar";
 
 export default function FavoritesPage() {
-  const { isLoading, isAuthenticated, user } = useCurrentUser();
+  const { isLoading, user } = useCurrentUser();
   const { isSignedIn, isLoaded: authLoaded } = useAuth();
   const [sortBy, setSortBy] = useState<
     "newest" | "oldest" | "price-low" | "price-high"
@@ -25,16 +28,16 @@ export default function FavoritesPage() {
   // Always call hooks to maintain hook order
   const favorites = useQuery(
     api.favorites.getFavoritesByUser,
-    user?._id ? { userId: user._id } : "skip"
+    user?._id ? {} : "skip"
   );
   const removeFavorite = useMutation(api.favorites.removeFavorite);
 
   // Show loading while auth is being determined
   if (!authLoaded || isLoading) {
     return (
-      <div className="flex min-h-screen items-center justify-center bg-white">
+      <div className="min-h-screen bg-white flex items-center justify-center">
         <div className="text-center">
-          <div className="mx-auto h-32 w-32 animate-spin rounded-full border-primary border-b-2" />
+          <div className="animate-spin rounded-full h-32 w-32 border-b-2 border-primary mx-auto"></div>
           <p className="mt-4 text-gray-600">Loading favorites...</p>
         </div>
       </div>
@@ -49,9 +52,9 @@ export default function FavoritesPage() {
   // Show loading while Convex user data is being fetched
   if (!user) {
     return (
-      <div className="flex min-h-screen items-center justify-center bg-white">
+      <div className="min-h-screen bg-white flex items-center justify-center">
         <div className="text-center">
-          <div className="mx-auto h-32 w-32 animate-spin rounded-full border-primary border-b-2" />
+          <div className="animate-spin rounded-full h-32 w-32 border-b-2 border-primary mx-auto"></div>
           <p className="mt-4 text-gray-600">Setting up your account...</p>
         </div>
       </div>
@@ -62,8 +65,7 @@ export default function FavoritesPage() {
     try {
       const vehicle = favorites?.find((v) => v._id === vehicleId);
       await removeFavorite({
-        userId: user._id,
-        vehicleId: vehicleId as any,
+        vehicleId: vehicleId as Id<"vehicles">,
       });
       toast({
         title: "Removed from favorites",
@@ -81,16 +83,18 @@ export default function FavoritesPage() {
     }
   };
 
-  const formatPrice = (price: number) =>
-    new Intl.NumberFormat("en-US", {
+  const formatPrice = (price: number) => {
+    return new Intl.NumberFormat("en-US", {
       style: "currency",
       currency: "USD",
       minimumFractionDigits: 0,
       maximumFractionDigits: 0,
     }).format(price);
+  };
 
-  const formatMileage = (mileage: number) =>
-    new Intl.NumberFormat("en-US").format(mileage);
+  const formatMileage = (mileage: number) => {
+    return new Intl.NumberFormat("en-US").format(mileage);
+  };
 
   // Sort favorites based on selected sort option
   const sortedFavorites = favorites
@@ -111,15 +115,15 @@ export default function FavoritesPage() {
     : [];
 
   return (
-    <div className="flex min-h-screen flex-col bg-white">
+    <div className="market-page min-h-screen flex flex-col">
       <Navbar />
 
-      <div className="mx-auto w-full max-w-7xl flex-1 px-4 py-12 sm:px-6 lg:px-8">
+      <div className="flex-1 w-full max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12">
         {/* Header */}
         <div className="mb-8">
           <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between">
             <div>
-              <h1 className="font-bold text-3xl text-gray-900">My Favorites</h1>
+              <h1 className="text-3xl font-bold text-gray-900">My Favorites</h1>
               <p className="text-gray-600">
                 {favorites
                   ? `${favorites.length} vehicles saved`
@@ -129,14 +133,14 @@ export default function FavoritesPage() {
 
             {/* Controls */}
             {favorites && favorites.length > 0 && (
-              <div className="mt-4 flex items-center space-x-4 sm:mt-0">
+              <div className="flex items-center space-x-4 mt-4 sm:mt-0">
                 {/* Sort Dropdown */}
                 <div className="flex items-center space-x-2">
                   <SortAsc className="h-4 w-4 text-gray-500" />
                   <select
-                    className="rounded-lg border border-gray-300 bg-white px-3 py-2 text-gray-900 text-sm transition-colors hover:border-gray-400 focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary"
-                    onChange={(e) => setSortBy(e.target.value as any)}
                     value={sortBy}
+                    onChange={(e) => setSortBy(e.target.value as typeof sortBy)}
+                    className="text-sm text-gray-900 border border-gray-300 rounded-lg px-3 py-2 bg-white hover:border-gray-400 focus:outline-none focus:ring-2 focus:ring-primary focus:border-primary transition-colors"
                   >
                     <option value="newest">Newest First</option>
                     <option value="oldest">Oldest First</option>
@@ -151,31 +155,33 @@ export default function FavoritesPage() {
 
         {/* Favorites Grid */}
         {sortedFavorites && sortedFavorites.length > 0 ? (
-          <div className="grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+          <div className="grid gap-6 grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
             {sortedFavorites.map((vehicle) => (
               <Card
-                className="overflow-hidden transition-shadow hover:shadow-lg"
                 key={vehicle._id}
+                className="overflow-hidden hover:shadow-lg transition-shadow"
               >
                 <div className="relative">
-                  {vehicle.photos.length > 0 ? (
-                    <img
+                  {isTrustedImageUrl(vehicle.thumbnailPhotos?.[0] ?? vehicle.photos[0] ?? "") ? (
+                    <Image
+                      width={800}
+                      height={600}
+                      src={vehicle.thumbnailPhotos?.[0] ?? vehicle.photos[0]}
                       alt={vehicle.title}
-                      className="h-48 w-full object-cover"
-                      src={vehicle.photos[0]}
+                      className="w-full object-cover h-48"
                     />
                   ) : (
-                    <div className="flex h-48 w-full items-center justify-center bg-gray-200">
+                    <div className="w-full bg-gray-200 flex items-center justify-center h-48">
                       <span className="text-gray-500">No Image</span>
                     </div>
                   )}
 
                   {/* Remove from favorites button */}
                   <Button
-                    className="absolute top-2 right-2 bg-white/90 text-red-600"
-                    onClick={() => handleRemoveFavorite(vehicle._id)}
-                    size="sm"
                     variant="ghost"
+                    size="sm"
+                    onClick={() => handleRemoveFavorite(vehicle._id)}
+                    className="absolute top-2 right-2 bg-white/90 hover:bg-white text-red-600 hover:text-red-700"
                   >
                     <Heart className="h-4 w-4 fill-current" />
                   </Button>
@@ -183,24 +189,24 @@ export default function FavoritesPage() {
 
                 <CardContent className="p-4">
                   <div>
-                    <h3 className="mb-2 line-clamp-1 font-semibold text-lg">
+                    <h3 className="font-semibold text-lg line-clamp-1 mb-2">
                       {vehicle.title}
                     </h3>
-                    <p className="mb-2 text-gray-600 text-sm">
+                    <p className="text-sm text-gray-600 mb-2">
                       {vehicle.year} {vehicle.make} {vehicle.model}
                     </p>
-                    <div className="mb-4 flex items-center justify-between text-gray-600 text-sm">
+                    <div className="flex justify-between items-center text-sm text-gray-600 mb-4">
                       <span>{formatMileage(vehicle.mileage)} miles</span>
-                      <span className="font-semibold text-lg text-primary">
+                      <span className="font-semibold text-primary text-lg">
                         {formatPrice(vehicle.price)}
                       </span>
                     </div>
                   </div>
 
                   <div className="flex gap-2">
-                    <Button asChild className="w-full">
+                    <Button asChild className="w-full text-white">
                       <Link href={`/vehicles/${vehicle._id}`}>
-                        <Eye className="mr-1 h-4 w-4" />
+                        <Eye className="h-4 w-4 mr-1" />
                         View Details
                       </Link>
                     </Button>
@@ -211,22 +217,21 @@ export default function FavoritesPage() {
           </div>
         ) : (
           <div className="w-full">
-            <Card className="border-0 shadow-md">
-              <CardContent className="py-20 text-center">
-                <div className="mx-auto mb-6 flex h-24 w-24 items-center justify-center rounded-full bg-gradient-to-br from-primary/20 to-primary/10">
-                  <Heart className="h-12 w-12 text-primary" />
+            <Card>
+              <CardContent className="text-center py-16">
+                <div className="text-gray-400 mb-4">
+                  <Heart className="h-16 w-16 mx-auto" />
                 </div>
-                <h3 className="mb-3 font-semibold text-2xl text-gray-900">
+                <h3 className="text-xl font-semibold text-gray-900 mb-2">
                   No favorites yet
                 </h3>
-                <p className="mx-auto mb-8 max-w-md text-gray-600 leading-relaxed">
+                <p className="text-gray-600 mb-6">
                   Start browsing vehicles and save your favorites for easy
-                  access. Favorited vehicles will appear here so you can
-                  quickly find them later.
+                  access
                 </p>
-                <Button asChild>
+                <Button asChild className="text-white">
                   <Link href="/vehicles">
-                    <Eye className="mr-2 h-4 w-4" />
+                    <Eye className="h-4 w-4 mr-2" />
                     Browse Vehicles
                   </Link>
                 </Button>

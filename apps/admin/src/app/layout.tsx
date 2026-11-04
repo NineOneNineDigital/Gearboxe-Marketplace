@@ -1,39 +1,37 @@
 import { ClerkProvider } from "@clerk/nextjs";
 import type { Metadata } from "next";
-import { Inter, Poppins } from "next/font/google";
-import { Toaster } from "sonner";
-import { ErrorBoundary } from "../../components/ui/error-boundary";
-import { ConvexClientProvider } from "../../lib/convex-provider";
-import AdminLayout from "./admin-layout";
-import "./global.css";
+import { Azeret_Mono, Plus_Jakarta_Sans } from "next/font/google";
+import { ConvexClientProvider } from "../convex-provider";
+import "@workspace/design-tokens/css";
+import "./styles.css";
 
-const inter = Inter({ subsets: ["latin"], variable: "--font-inter" });
-const poppins = Poppins({
+const jakarta = Plus_Jakarta_Sans({
   subsets: ["latin"],
-  weight: ["400", "500", "600", "700"],
-  variable: "--font-poppins",
+  variable: "--font-jakarta",
+  display: "swap",
+});
+
+const azeret = Azeret_Mono({
+  subsets: ["latin"],
+  variable: "--font-azeret-mono",
+  display: "swap",
 });
 
 export const metadata: Metadata = {
-  title: "Gearboxe Market - Admin",
-  description: "Admin panel for Gearboxe Market",
+  title: "Gearboxe Admin",
+  description: "Gearboxe marketplace and event operations",
 };
 
-export default function RootLayout({
-  children,
-}: Readonly<{
-  children: React.ReactNode;
-}>) {
+export default function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {
   return (
-    <ClerkProvider signInFallbackRedirectUrl="/" signUpFallbackRedirectUrl="/">
-      <html className={`${inter.variable} ${poppins.variable}`} lang="en">
-        <body className="font-sans antialiased">
-          <ErrorBoundary>
-            <ConvexClientProvider>
-              <AdminLayout>{children}</AdminLayout>
-              <Toaster richColors />
-            </ConvexClientProvider>
-          </ErrorBoundary>
+    <ClerkProvider signInFallbackRedirectUrl="/">
+      <html lang="en">
+        <body className={`${jakarta.variable} ${azeret.variable} antialiased`}>
+          <ConvexClientProvider>
+            <div className="market-page flex h-dvh flex-col overflow-hidden">
+              {children}
+            </div>
+          </ConvexClientProvider>
         </body>
       </html>
     </ClerkProvider>
