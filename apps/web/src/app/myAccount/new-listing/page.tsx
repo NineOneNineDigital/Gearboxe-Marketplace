@@ -1,28 +1,30 @@
 "use client";
 
-import { api } from "@gearboxe-market/convex/_generated/api";
-import { Button } from "@gearboxe-market/ui/button";
-import { Card, CardContent, CardHeader, CardTitle } from "@gearboxe-market/ui/card";
-import { Input } from "@gearboxe-market/ui/input";
-import { Label } from "@gearboxe-market/ui/label";
+import { Button } from "@/components/ui/button";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Footer } from "@/components/ui/footer";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Navbar } from "@/components/ui/navbar";
 import {
   Select,
   SelectContent,
   SelectItem,
   SelectTrigger,
   SelectValue,
-} from "@gearboxe-market/ui/select";
-import { Textarea } from "@gearboxe-market/ui/textarea";
-import { useUser } from "@clerk/nextjs";
-import { useMutation, useQuery } from "convex/react";
-import { Car } from "lucide-react";
-import { redirect, useRouter } from "next/navigation";
-import { useState } from "react";
+} from "@/components/ui/select";
+import { Textarea } from "@/components/ui/textarea";
+import { api } from "@/convex/_generated/api";
 import { useCurrentUser } from "@/hooks/useCurrentUser";
-import { useToast } from "@/hooks/useToast";
-import { Footer } from "../../../../components/footer";
-import { Navbar } from "../../../../components/navbar";
-import { ImageUpload } from "../../../../components/image-upload";
+import { useAction, useMutation, useQuery } from "convex/react";
+import { VehiclePhotoCarousel } from "@/components/ui/vehicle-photo-carousel";
+import { redirect, useRouter, useSearchParams } from "next/navigation";
+import { Suspense, useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
+import { VehicleMediaEditor, type ListingMedia } from "@/components/ui/vehicle-media-editor";
+import type { Id } from "@/convex/_generated/dataModel";
+import { validateVehicle } from "@/convex/lib/vehicleValidation";
+import { transitionListingEditorSession, type ListingEditorSession } from "@/lib/listing-editor-session";
+import Link from "next/link";
 
 const makes = [
   "Acura",
@@ -60,17 +62,67 @@ const makes = [
 ];
 
 const currentYear = new Date().getFullYear();
-const years = Array.from({ length: 30 }, (_, i) => currentYear - i);
+function suggestedTitle(year: number, make: string, model: string, trim?: string) {
+  return `${year} ${make} ${model}${trim ? ` ${trim}` : ""}`.slice(0, 120).trim();
+}
 
 export default function NewListingPage() {
+  return <Suspense fallback={<p className="p-8">Loading listing...</p>}><ListingEditorBoundary /></Suspense>;
+}
+
+function ListingEditorBoundary() {
+  const editId = useSearchParams().get("edit");
+  const [session, setSession] = useState<ListingEditorSession>(() => ({ routeId: editId, generation: 0, createdId: null }));
+  const next = transitionListingEditorSession(session, editId);
+  const currentGeneration = useRef(next.generation);
+  currentGeneration.current = next.generation;
+  if (next !== session) setSession(next);
+  return <ListingForm key={next.generation} editId={editId}
+    isCurrentSession={() => currentGeneration.current === next.generation}
+    onDraftCreated={id => setSession(previous => previous.generation === next.generation ? { ...previous, createdId: id } : previous)} />;
+}
+
+function ListingForm({ editId, isCurrentSession, onDraftCreated }: {
+  editId: string | null;
+  isCurrentSession: () => boolean;
+  onDraftCreated: (id: string) => void;
+}) {
+  const existing = useQuery(api.vehicles.getVehicleById, editId ? { id: editId as Id<"vehicles"> } : "skip");
+  const updateVehicle = useMutation(api.vehicles.updateVehicle);
+  const saveDraft = useMutation(api.vehicles.saveDraft);
+  const submitVehicle = useMutation(api.vehicles.submitVehicle);
   const router = useRouter();
   const { isLoading, isAuthenticated, user: currentUser } = useCurrentUser();
-  const { user } = useUser();
-  const { toast } = useToast();
 
-  const [step, setStep] = useState(1);
+
+  const decodeVin = useAction(api.vin.decodeVin);
+  const [isDecoding, setIsDecoding] = useState(false);
+  const [errorMessage, setErrorMessage] = useState("");
+  const [saveErrorMessage, setSaveErrorMessage] = useState("");
+  const [vinMessage, setVinMessage] = useState("Not verified");
+  const [vinLookupFailed, setVinLookupFailed] = useState(false);
+
+  const [media, setMedia] = useState<ListingMedia[]>([]);
+  const [mediaBusy, setMediaBusy] = useState(false);
+  const hydratedId = useRef<string | null>(null);
+  const listingId = useRef<Id<"vehicles"> | undefined>(editId ? editId as Id<"vehicles"> : undefined);
+  const revision = useRef<number | undefined>(undefined);
+  const savedSnapshot = useRef("");
+  const saveQueue = useRef<Promise<unknown>>(Promise.resolve());
+  const submissionLock = useRef(false);
+  const saveBlocked = useRef(false);
+  const blockedSnapshot = useRef("");
+  const requestId = useRef<string | undefined>(undefined);
+  const mounted = useRef(true);
+  const sessionLive = useCallback(() => mounted.current && isCurrentSession(), [isCurrentSession]);
+  useLayoutEffect(() => {
+    mounted.current = true;
+    return () => { mounted.current = false; };
+  }, []);
+  const [saveStatus, setSaveStatus] = useState("Draft not saved yet");
+
+  const [step, setStep] = useState(editId ? 1 : 0);
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const [errors, setErrors] = useState<Record<string, string>>({});
   const [formData, setFormData] = useState({
     title: "",
     make: "",
@@ -81,25 +133,170 @@ export default function NewListingPage() {
     vin: "",
     description: "",
     contactInfo: "",
+    trim: "", bodyStyle: "", engine: "", transmission: "", drivetrain: "", fuelType: "",
+    exteriorColor: "", interiorColor: "", mileageUnit: "mi" as "mi" | "km", odometerStatus: "actual" as "actual" | "exempt" | "not_actual",
+    titleStatus: "unknown" as "clean" | "rebuilt" | "salvage" | "flood" | "lemon" | "other" | "unknown", sellerState: "", condition: "good" as "excellent" | "good" | "fair" | "poor", mechanicalIssues: "",
+    accidentDisclosure: "unknown", damageDisclosure: "unknown", numberOfOwners: "",
+    serviceRecords: "unknown" as "available" | "partial" | "unavailable" | "unknown", modifications: "", sellerType: "private" as "private" | "dealer", location: "", locationState: "", latitude: "", longitude: "",
+    features: "", negotiable: false,
     photos: [] as string[],
-    eventId: "",
   });
+
+  const owned = Boolean(existing && currentUser && existing.userId === currentUser._id);
+  const terminal = existing && ["sold", "withdrawn", "archived"].includes(existing.status);
+  const editable = Boolean(!editId || (!existing && hydratedId.current === editId) || (owned && !terminal));
+  useEffect(() => {
+    if (!existing || !owned || terminal || hydratedId.current === existing._id) return;
+    hydratedId.current = existing._id;
+    setMedia(existing.media ?? []);
+    const loaded = {
+      ...formData,
+      title: existing.title, make: existing.make, model: existing.model,
+      year: existing.year ? String(existing.year) : "", mileage: String(existing.mileage), price: String(existing.price),
+      vin: existing.vin ?? "", description: existing.description, contactInfo: existing.contactInfo,
+      photos: existing.legacyPhotos ?? existing.photos, trim: existing.trim ?? "", bodyStyle: existing.bodyStyle ?? "",
+      engine: existing.engine ?? "", transmission: existing.transmission ?? "", drivetrain: existing.drivetrain ?? "",
+      fuelType: existing.fuelType ?? "", exteriorColor: existing.exteriorColor ?? "", interiorColor: existing.interiorColor ?? "",
+      mileageUnit: existing.mileageUnit ?? "mi", odometerStatus: existing.odometerStatus ?? "actual",
+      titleStatus: existing.titleStatus ?? "unknown", sellerState: existing.sellerState ?? "",
+      condition: existing.condition ?? "good", mechanicalIssues: existing.mechanicalIssues ?? "",
+      accidentDisclosure: existing.accidentDisclosure ?? "unknown", damageDisclosure: existing.damageDisclosure ?? "unknown",
+      numberOfOwners: existing.numberOfOwners ? String(existing.numberOfOwners) : "", serviceRecords: existing.serviceRecords ?? "unknown",
+      modifications: existing.modifications ?? "", sellerType: existing.sellerType ?? "private",
+      location: existing.location?.city ?? "", locationState: existing.location?.state ?? "",
+      latitude: existing.location?.latitude?.toString() ?? "", longitude: existing.location?.longitude?.toString() ?? "",
+      features: existing.features?.join("\n") ?? "", negotiable: existing.negotiable ?? false,
+    };
+    setFormData(loaded);
+    listingId.current = existing._id;
+    revision.current = existing.updatedAt ?? existing.createdAt;
+    savedSnapshot.current = JSON.stringify({ formData: loaded, media: existing.media ?? [] });
+    setSaveStatus("All changes saved");
+    setVinMessage(existing.vinVerificationStatus === "decoded" ? "VIN decoded" : "Not verified");
+    if (existing.status === "draft" && !existing.title) {
+      setVinLookupFailed(/^[A-HJ-NPR-Z0-9]{17}$/.test(existing.vin ?? ""));
+      setStep(0);
+    }
+    // Hydrate once per listing; reactive server updates must not replace local edits.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [existing, owned, terminal]);
+
+  const valuesForSave = () => {
+    return {
+        title: formData.title,
+        make: formData.make,
+        model: formData.model,
+        year: formData.year ? Number(formData.year) : 0,
+        mileage: formData.mileage ? Number(formData.mileage) : 0,
+        price: formData.price ? Number(formData.price) : 0,
+        vin: formData.vin.trim().toUpperCase() || undefined,
+        trim: formData.trim, bodyStyle: formData.bodyStyle, engine: formData.engine,
+        transmission: formData.transmission, drivetrain: formData.drivetrain, fuelType: formData.fuelType,
+        exteriorColor: formData.exteriorColor, interiorColor: formData.interiorColor,
+        mileageUnit: formData.mileageUnit, odometerStatus: formData.odometerStatus, titleStatus: formData.titleStatus,
+        sellerState: formData.sellerState, condition: formData.condition,
+        mechanicalIssues: formData.mechanicalIssues, accidentDisclosure: formData.accidentDisclosure,
+        damageDisclosure: formData.damageDisclosure,
+        numberOfOwners: formData.numberOfOwners ? Number(formData.numberOfOwners) : undefined,
+        serviceRecords: formData.serviceRecords, modifications: formData.modifications,
+        sellerType: formData.sellerType, location: { city: formData.location, state: formData.locationState, latitude: formData.latitude ? Number(formData.latitude) : undefined, longitude: formData.longitude ? Number(formData.longitude) : undefined },
+        features: formData.features.split("\n").map((item) => item.trim()).filter(Boolean),
+        negotiable: formData.negotiable,
+        photos: formData.photos,
+        media: media.map(({ id, caption }) => ({ id, caption })),
+        description: formData.description,
+        contactInfo: formData.contactInfo,
+      };
+  };
+  const snapshot = JSON.stringify({ formData, media });
+  const latest = useRef({ snapshot, values: valuesForSave(), mediaBusy });
+  const initialSnapshot = useRef(snapshot);
+  latest.current = { snapshot, values: valuesForSave(), mediaBusy };
+  const canAutosave = !editId || ((!existing && hydratedId.current === editId) || (editable && (existing?.status === "draft" || existing?.status === "rejected")));
+  const meaningful = Boolean(listingId.current || snapshot !== initialSnapshot.current);
+  const duplicate = useQuery(api.vehicles.checkDuplicateVin,
+    isAuthenticated && currentUser && formData.vin.trim().length >= 3
+      ? { vin: formData.vin.trim().toUpperCase(), excludeId: listingId.current }
+      : "skip");
+
+  const persistDraft = () => {
+    const task = saveQueue.current.catch(() => undefined).then(async () => {
+      if (!sessionLive()) throw new Error("The listing editor has changed.");
+      const next = latest.current;
+      if (next.mediaBusy) throw new Error("Finish uploads, or remove failed photos, before saving.");
+      if (next.snapshot === savedSnapshot.current && listingId.current) {
+        saveBlocked.current = false;
+        setSaveErrorMessage("");
+        setSaveStatus("All changes saved");
+        return listingId.current;
+      }
+      setSaveStatus("Saving draft...");
+      requestId.current ??= crypto.randomUUID();
+      let result = await saveDraft({ ...next.values, id: listingId.current, expectedUpdatedAt: revision.current, clientRequestId: requestId.current });
+      if (!sessionLive()) throw new Error("The listing editor has changed.");
+      if (result.reused) {
+        listingId.current = result.id;
+        revision.current = result.updatedAt;
+        result = await saveDraft({ ...next.values, id: result.id, expectedUpdatedAt: result.updatedAt });
+        if (!sessionLive()) throw new Error("The listing editor has changed.");
+      }
+      listingId.current = result.id;
+      hydratedId.current = result.id;
+      revision.current = result.updatedAt;
+      requestId.current = undefined;
+      savedSnapshot.current = next.snapshot;
+      saveBlocked.current = false;
+      setSaveErrorMessage("");
+      setSaveStatus(latest.current.snapshot === next.snapshot ? "All changes saved" : "Unsaved changes");
+      if (!editId) {
+        onDraftCreated(result.id);
+        router.replace(`/myAccount/new-listing?edit=${result.id}`, { scroll: false });
+      }
+      return result.id;
+    });
+    saveQueue.current = task;
+    return task;
+  };
+  const persistRef = useRef(persistDraft);
+  persistRef.current = persistDraft;
+  useEffect(() => {
+    if (saveBlocked.current && blockedSnapshot.current !== snapshot) saveBlocked.current = false;
+    if (!currentUser || !canAutosave || !meaningful || mediaBusy || isSubmitting || saveBlocked.current || snapshot === savedSnapshot.current || (editId && hydratedId.current !== editId)) return;
+    setSaveStatus("Unsaved changes");
+    const timer = window.setTimeout(() => {
+      if (submissionLock.current || !sessionLive()) return;
+      void persistRef.current().catch(error => {
+        if (!sessionLive()) return;
+        saveBlocked.current = true;
+        blockedSnapshot.current = snapshot;
+        setSaveStatus("Draft save failed. Edit a field to retry automatically.");
+        setSaveErrorMessage(error instanceof Error ? error.message : "Unable to save draft.");
+      });
+    }, 1000);
+    return () => window.clearTimeout(timer);
+  }, [snapshot, canAutosave, meaningful, mediaBusy, isSubmitting, currentUser, editId, sessionLive]);
+  useEffect(() => {
+    const warn = (event: BeforeUnloadEvent) => {
+      if (latest.current.mediaBusy || latest.current.snapshot !== (savedSnapshot.current || initialSnapshot.current)) {
+        event.preventDefault();
+        event.returnValue = "";
+      }
+    };
+    window.addEventListener("beforeunload", warn);
+    return () => window.removeEventListener("beforeunload", warn);
+  }, []);
 
   if (isLoading) {
     return (
-      <div className="flex min-h-screen items-center justify-center bg-white">
+      <div className="min-h-screen bg-white flex items-center justify-center">
         <div className="text-center">
-          <div className="mx-auto h-32 w-32 animate-spin rounded-full border-primary border-b-2" />
+          <div className="animate-spin rounded-full h-32 w-32 border-b-2 border-primary mx-auto"></div>
           <p className="mt-4 text-gray-600">Loading...</p>
         </div>
       </div>
     );
   }
 
-  // Always call hooks to maintain hook order
-  const upcomingEvents = useQuery(api.events.getUpcomingEvents);
-  const createVehicle = useMutation(api.vehicles.createVehicle);
-  const createPendingRegistration = useMutation(api.registrations.createPendingRegistration);
 
   if (!isAuthenticated) {
     redirect("/sign-in");
@@ -107,480 +304,327 @@ export default function NewListingPage() {
 
   if (!currentUser) {
     return (
-      <div className="flex min-h-screen items-center justify-center bg-white">
+      <div className="min-h-screen bg-white flex items-center justify-center">
         <div className="text-center">
-          <div className="mx-auto h-32 w-32 animate-spin rounded-full border-primary border-b-2" />
+          <div className="animate-spin rounded-full h-32 w-32 border-b-2 border-primary mx-auto"></div>
           <p className="mt-4 text-gray-600">Setting up your account...</p>
         </div>
       </div>
     );
   }
 
+  if (editId && existing === undefined && hydratedId.current !== editId) return <p className="p-8" role="status">Loading listing...</p>;
+  if (editId && existing === null) return <p className="p-8" role="alert">This listing is unavailable.</p>;
+  if (editId && existing && (!owned || terminal)) return <div className="p-8"><p role="alert">{!owned ? "Only the seller can edit this listing." : "This listing is closed for editing. Reopen an eligible listing from your listings page."}</p><Link href="/myAccount/my-listings" className="mt-4 inline-block text-primary underline">Back to my listings</Link></div>;
+
   const handleInputChange = (field: string, value: string) => {
-    setFormData((prev) => ({ ...prev, [field]: value }));
+    setFormData((prev) => ({ ...prev, ...(field === "location" || field === "locationState" ? { latitude: "", longitude: "" } : {}), [field]: field === "sellerState" || field === "locationState" ? value.toUpperCase() : value }));
+  };
+  const useApproximateLocation = () => {
+    if (!navigator.geolocation) { setErrorMessage("Location is unavailable in this browser."); return; }
+    const city = formData.location, state = formData.locationState;
+    navigator.geolocation.getCurrentPosition(position => {
+      if (!sessionLive()) return;
+      setFormData(previous => previous.location !== city || previous.locationState !== state ? previous : ({ ...previous, latitude: position.coords.latitude.toFixed(2), longitude: position.coords.longitude.toFixed(2) }));
+    }, () => { if (sessionLive()) setErrorMessage("Location could not be read. You can continue without distance-search coordinates."); }, { enableHighAccuracy: false, timeout: 10000 });
   };
 
-  const validateForm = (): boolean => {
-    const newErrors: Record<string, string> = {};
-
-    if (!formData.title.trim()) {
-      newErrors.title = "Listing title is required";
-    }
-    if (!formData.make) {
-      newErrors.make = "Make is required";
-    }
-    if (!formData.model.trim()) {
-      newErrors.model = "Model is required";
-    }
-    if (formData.year) {
-      const yearNum = Number.parseInt(formData.year);
-      if (isNaN(yearNum) || yearNum < 1900 || yearNum > new Date().getFullYear() + 1) {
-        newErrors.year = "Please enter a valid year";
+  const handleDecode = async (vinInput = formData.vin, advance = false) => {
+    const vin = vinInput.trim().toUpperCase();
+    setIsDecoding(true);
+    setErrorMessage("");
+    try {
+      const result = await decodeVin({ vin });
+      if (!sessionLive()) return;
+      setFormData((prev) => {
+        if (!advance && prev.vin.trim().toUpperCase() !== vin) return prev;
+        return { ...prev, vin: result.vin, make: result.make, model: result.model,
+          title: prev.title || suggestedTitle(result.year, result.make, result.model, result.trim),
+          year: result.year ? String(result.year) : prev.year,
+          trim: result.trim ?? (advance ? "" : prev.trim), bodyStyle: result.bodyStyle ?? (advance ? "" : prev.bodyStyle),
+          engine: result.engine ?? prev.engine, transmission: result.transmission ?? prev.transmission,
+          drivetrain: result.drivetrain ?? prev.drivetrain, fuelType: result.fuelType ?? prev.fuelType };
+      });
+      setVinMessage("VIN decoded. Review the decoded specifications before submitting.");
+      setVinLookupFailed(false);
+      if (advance) setStep(1);
+    } catch (error) {
+      if (sessionLive()) {
+        setErrorMessage(error instanceof Error ? error.message : "VIN decoding failed. Please try again.");
+        if (advance) setVinLookupFailed(true);
       }
-    } else {
-      newErrors.year = "Year is required";
-    }
-    if (formData.mileage.trim()) {
-      const mileageNum = Number.parseInt(formData.mileage);
-      if (isNaN(mileageNum) || mileageNum < 0) {
-        newErrors.mileage = "Please enter a valid mileage";
-      }
-    } else {
-      newErrors.mileage = "Mileage is required";
-    }
-    if (formData.price.trim()) {
-      const priceNum = Number.parseFloat(formData.price);
-      if (isNaN(priceNum) || priceNum <= 0) {
-        newErrors.price = "Please enter a valid price";
-      }
-    } else {
-      newErrors.price = "Price is required";
-    }
-    if (formData.vin && formData.vin.length !== 17) {
-      newErrors.vin = "VIN must be exactly 17 characters";
-    }
-    if (!formData.description.trim()) {
-      newErrors.description = "Description is required";
-    } else if (formData.description.trim().length < 50) {
-      newErrors.description = "Description must be at least 50 characters";
-    }
-    if (!formData.contactInfo.trim()) {
-      newErrors.contactInfo = "Contact information is required";
-    }
-    if (formData.eventId) {
-      // Check if selected event is full
-      const selectedEvent = upcomingEvents?.find((e) => e._id === formData.eventId);
-      if (selectedEvent?.isFull) {
-        newErrors.eventId = "This event is full. Please select a different event.";
-      }
-    } else {
-      newErrors.eventId = "Please select an event";
-    }
-
-    setErrors(newErrors);
-    return Object.keys(newErrors).length === 0;
+    } finally { if (sessionLive()) setIsDecoding(false); }
   };
 
   const handleSubmit = async () => {
-    if (!(currentUser && formData.eventId)) return;
-
-    // Validate form before submission
-    if (!validateForm()) {
-      toast({
-        title: "Validation Error",
-        description: "Please fix the errors in the form before submitting.",
-        variant: "destructive",
-      });
-      return;
-    }
-
-    // Check capacity BEFORE creating vehicle
-    const event = upcomingEvents?.find((e) => e._id === formData.eventId);
-    if (event && event.isFull) {
-      toast({
-        title: "Event is Full",
-        description: "This event has reached its capacity. Please select a different event.",
-        variant: "destructive",
-      });
-      setErrors((prev) => ({ ...prev, eventId: "This event is full" }));
-      return;
-    }
-
+    if (!currentUser || !editable || !sessionLive() || mediaBusy || isDecoding || submissionLock.current) return;
+    submissionLock.current = true;
+    setErrorMessage("");
     setIsSubmitting(true);
-    setErrors({});
     try {
-      // Create vehicle first
-      const vehicleId = await createVehicle({
-        userId: currentUser._id,
-        eventId: formData.eventId as any,
-        title: formData.title.trim(),
-        make: formData.make,
-        model: formData.model.trim(),
-        year: Number.parseInt(formData.year),
-        mileage: Number.parseInt(formData.mileage),
-        price: Number.parseFloat(formData.price),
-        vin: formData.vin || undefined,
-        photos: formData.photos,
-        description: formData.description.trim(),
-        contactInfo: formData.contactInfo.trim(),
-      });
-
-      // Get event to check if payment is required
-      if (event && event.vendorPrice > 0) {
-        // Create pending registration (will also check capacity as final validation)
-        const registrationId = await createPendingRegistration({
-          eventId: formData.eventId as any,
-          vehicleId: vehicleId as any,
-          userId: currentUser._id,
-        });
-
-        // Redirect to payment page
-        router.push(`/myAccount/payment?registrationId=${registrationId}&vehicleId=${vehicleId}&eventId=${formData.eventId}`);
+      if (canAutosave) {
+        const id = await persistDraft();
+        if (!sessionLive()) return;
+        if (!id) throw new Error("Save your draft before submitting.");
+        await submitVehicle({ id, expectedUpdatedAt: revision.current });
+        if (!sessionLive()) return;
+        router.push(`/myAccount/my-listings?submitted=${id}`);
       } else {
-        // No payment required, redirect to listings
-        toast({
-          title: "Listing Created",
-          description: "Your vehicle listing has been created successfully and is pending review.",
-        });
-        router.push(`/myAccount/my-listings?created=${vehicleId}`);
+        await updateVehicle({ id: editId as Id<"vehicles">, expectedUpdatedAt: revision.current, ...latest.current.values, numberOfOwners: latest.current.values.numberOfOwners ?? null });
+        if (!sessionLive()) return;
+        savedSnapshot.current = latest.current.snapshot;
+        router.push(`/myAccount/my-listings?submitted=${editId}`);
       }
-    } catch (error: any) {
-      console.error("Error creating vehicle:", error);
-      const errorMessage =
-        error?.message || "Failed to create listing. Please try again.";
-      
-      // Handle specific error messages
-      if (errorMessage.includes("full") || errorMessage.includes("capacity")) {
-        setErrors((prev) => ({ ...prev, eventId: "This event is now full" }));
-        toast({
-          title: "Event is Full",
-          description: "This event has reached its capacity. Please select a different event.",
-          variant: "destructive",
-        });
-      } else {
-        toast({
-          title: "Error Creating Listing",
-          description: errorMessage,
-          variant: "destructive",
-        });
-      }
+    } catch (error) {
+      if (!sessionLive()) return;
+      saveBlocked.current = true;
+      blockedSnapshot.current = snapshot;
+      setSaveStatus("Save failed. Your changes are still in this editor.");
+      setErrorMessage(error instanceof Error ? error.message : "Unable to save listing. Please try again.");
     } finally {
-      setIsSubmitting(false);
+      if (sessionLive()) { submissionLock.current = false; setIsSubmitting(false); }
     }
   };
 
-  const isStep1Valid =
-    formData.title &&
-    formData.make &&
-    formData.model &&
-    formData.year &&
-    formData.mileage &&
-    formData.price;
-  const isStep2Valid = formData.description && formData.contactInfo;
+  let specificationError = "";
+  try {
+    validateVehicle(valuesForSave(), true);
+  } catch (error) {
+    specificationError = error instanceof Error ? error.message : "Complete the required listing information.";
+  }
+  const standardVin = /^[A-HJ-NPR-Z0-9]{17}$/.test(formData.vin.trim());
+  const serialNumber = /^[A-Z0-9-]{3,30}$/.test(formData.vin.trim());
 
   return (
-    <div className="flex min-h-screen flex-col bg-white">
+    <div className="market-page min-h-screen flex flex-col">
       <Navbar />
 
-      <div className="mx-auto max-w-7xl flex-1 px-4 py-12 sm:px-6 lg:px-8">
+      <div className="flex-1 max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12">
         {/* Header */}
         <div className="mb-8">
-          <h1 className="font-bold text-3xl text-gray-900">
-            List Your Vehicle
+          <h1 className="text-3xl font-bold text-gray-900">
+            {editId ? "Edit Your Vehicle" : "List Your Vehicle"}
           </h1>
+          <p className="mt-2 text-sm text-gray-600">Before submitting, verify your seller contact details and attest vehicle ownership in <Link href="/myAccount/safety" className="underline text-primary">Trust & safety</Link>. Private ownership documents belong there.</p>
           <p className="text-gray-600">
-            Create a new vehicle listing to showcase at our events
+            {canAutosave ? "Your draft saves automatically. Preview your listing before submitting it for review." : "Preview your changes and submit them for review when you are ready."}
           </p>
         </div>
 
-        {/* Progress Steps */}
-        <div className="mb-8">
-          <div className="flex items-center space-x-4">
-            <div
-              className={`flex items-center space-x-2 ${step >= 1 ? "text-primary" : "text-gray-400"}`}
-            >
-              <div
-                className={`flex h-8 w-8 items-center justify-center rounded-full font-medium text-sm ${
-                  step >= 1
-                    ? "bg-primary text-white"
-                    : "bg-gray-200 text-gray-600"
-                }`}
-              >
-                1
-              </div>
-              <span className="font-medium text-sm">Vehicle Details</span>
+        <div className="mb-8 flex flex-wrap items-center gap-3" aria-label="Listing progress">
+          {(["Find vehicle", "Vehicle details", "Description & photos", "Review & submit"] as const).map((label, index) => (
+            <div key={label} className={`flex items-center gap-2 text-sm ${step >= index ? "text-primary" : "text-gray-400"}`} aria-current={step === index ? "step" : undefined}>
+              <span className={`flex h-8 w-8 items-center justify-center rounded-full font-medium ${step >= index ? "bg-primary text-white" : "bg-gray-200 text-gray-600"}`}>{index + 1}</span>
+              <span className="font-medium">{label}</span>
             </div>
-            <div className="h-px flex-1 bg-gray-200" />
-            <div
-              className={`flex items-center space-x-2 ${step >= 2 ? "text-primary" : "text-gray-400"}`}
-            >
-              <div
-                className={`flex h-8 w-8 items-center justify-center rounded-full font-medium text-sm ${
-                  step >= 2
-                    ? "bg-primary text-white"
-                    : "bg-gray-200 text-gray-600"
-                }`}
-              >
-                2
-              </div>
-              <span className="font-medium text-sm">Description & Photos</span>
-            </div>
-            <div className="h-px flex-1 bg-gray-200" />
-            <div
-              className={`flex items-center space-x-2 ${step >= 3 ? "text-primary" : "text-gray-400"}`}
-            >
-              <div
-                className={`flex h-8 w-8 items-center justify-center rounded-full font-medium text-sm ${
-                  step >= 3
-                    ? "bg-primary text-white"
-                    : "bg-gray-200 text-gray-600"
-                }`}
-              >
-                3
-              </div>
-              <span className="font-medium text-sm">Event Registration</span>
-            </div>
-          </div>
+          ))}
         </div>
 
         <Card>
           <CardHeader>
             <CardTitle>
-              Step {step}:{" "}
-              {step === 1
+              Step {step + 1}:{" "}
+              {step === 0
+                ? "Find your vehicle"
+                : step === 1
                 ? "Vehicle Information"
                 : step === 2
                   ? "Description & Photos"
-                  : "Event Registration"}
+                  : "Review & Submit"}
             </CardTitle>
           </CardHeader>
-          <CardContent className="space-y-6">
+          <CardContent>
+            <fieldset disabled={isSubmitting} className="space-y-6 min-w-0">
+            {errorMessage && <p role="alert" className="text-red-700">{errorMessage}</p>}
+            {saveErrorMessage && <p role="alert" className="text-red-700">{saveErrorMessage}</p>}
+            {canAutosave && <p role="status" className="text-sm text-muted-foreground">{saveStatus}</p>}
+            {existing?.status === "rejected" && <div role="alert" className="rounded-lg border border-red-200 bg-red-50 p-4"><h3 className="font-semibold">Changes requested</h3><p className="mt-1 text-sm">{existing.moderationReason || "Review your listing and resubmit for moderation."}</p></div>}
+            {step === 0 && (
+              <div className="space-y-6">
+                <p className="text-sm text-muted-foreground">Enter your vehicle&apos;s VIN to fill available details. You can review and complete the listing afterward.</p>
+                <div className="max-w-xl space-y-3">
+                  <Label htmlFor="lookup-vin">VIN</Label>
+                  <Input id="lookup-vin" autoComplete="off" maxLength={30} placeholder="17-character VIN" value={formData.vin} disabled={isDecoding} onChange={event => { handleInputChange("vin", event.target.value.toUpperCase()); setVinMessage("Not verified"); setVinLookupFailed(false); setErrorMessage(""); }} />
+                  <div className="flex flex-wrap gap-2">
+                    {standardVin && <Button type="button" disabled={isDecoding} onClick={() => void handleDecode(formData.vin, true)}>{isDecoding ? "Looking up vehicle..." : "Look up VIN"}</Button>}
+                    {((vinLookupFailed && standardVin) || (serialNumber && !standardVin)) && <Button type="button" variant={standardVin ? "outline" : "default"} disabled={isDecoding} onClick={() => { setErrorMessage(""); setStep(1); }}>{standardVin ? "Continue with VIN" : "Continue with serial number"}</Button>}
+                  </div>
+                  <p className="text-xs text-muted-foreground">For vehicles built before 1981, enter the manufacturer serial number and complete the details yourself. If VIN lookup is unavailable, you can still continue with your VIN.</p>
+                </div>
+              </div>
+            )}
             {step === 1 && (
               <div className="space-y-6">
-                <div className="grid grid-cols-1 gap-6 md:grid-cols-2">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                   <div className="space-y-2">
                     <Label htmlFor="title">Listing Title *</Label>
                     <Input
                       id="title"
-                      onChange={(e) => {
-                        handleInputChange("title", e.target.value);
-                        if (errors.title) {
-                          setErrors((prev) => ({ ...prev, title: "" }));
-                        }
-                      }}
                       placeholder="e.g., 2020 Honda Civic - Excellent Condition"
                       value={formData.title}
-                      className={errors.title ? "border-red-500" : ""}
+                      onChange={(e) =>
+                        handleInputChange("title", e.target.value)
+                      }
                     />
-                    {errors.title && (
-                      <p className="text-red-600 text-sm">{errors.title}</p>
-                    )}
                   </div>
 
                   <div className="space-y-2">
                     <Label htmlFor="make">Make *</Label>
                     <Select
-                      onValueChange={(value) => {
-                        handleInputChange("make", value);
-                        if (errors.make) {
-                          setErrors((prev) => ({ ...prev, make: "" }));
-                        }
-                      }}
                       value={formData.make}
+                      onValueChange={(value) =>
+                        handleInputChange("make", value)
+                      }
                     >
-                      <SelectTrigger className={errors.make ? "border-red-500" : ""}>
+                      <SelectTrigger>
                         <SelectValue placeholder="Select make" />
                       </SelectTrigger>
                       <SelectContent>
-                        {makes.map((make) => (
+                        {(formData.make && !makes.includes(formData.make) ? [formData.make, ...makes] : makes).map((make) => (
                           <SelectItem key={make} value={make}>
                             {make}
                           </SelectItem>
                         ))}
                       </SelectContent>
                     </Select>
-                    {errors.make && (
-                      <p className="text-red-600 text-sm">{errors.make}</p>
-                    )}
                   </div>
 
                   <div className="space-y-2">
                     <Label htmlFor="model">Model *</Label>
                     <Input
                       id="model"
-                      onChange={(e) => {
-                        handleInputChange("model", e.target.value);
-                        if (errors.model) {
-                          setErrors((prev) => ({ ...prev, model: "" }));
-                        }
-                      }}
                       placeholder="e.g., Civic"
                       value={formData.model}
-                      className={errors.model ? "border-red-500" : ""}
+                      onChange={(e) =>
+                        handleInputChange("model", e.target.value)
+                      }
                     />
-                    {errors.model && (
-                      <p className="text-red-600 text-sm">{errors.model}</p>
-                    )}
                   </div>
 
                   <div className="space-y-2">
                     <Label htmlFor="year">Year *</Label>
-                    <Select
-                      onValueChange={(value) => {
-                        handleInputChange("year", value);
-                        if (errors.year) {
-                          setErrors((prev) => ({ ...prev, year: "" }));
-                        }
-                      }}
-                      value={formData.year}
-                    >
-                      <SelectTrigger className={errors.year ? "border-red-500" : ""}>
-                        <SelectValue placeholder="Select year" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {years.map((year) => (
-                          <SelectItem key={year} value={year.toString()}>
-                            {year}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                    {errors.year && (
-                      <p className="text-red-600 text-sm">{errors.year}</p>
-                    )}
+                    <Input id="year" type="number" step={1} min={1886} max={currentYear + 1} value={formData.year} onChange={(e) => handleInputChange("year", e.target.value)} />
                   </div>
 
                   <div className="space-y-2">
                     <Label htmlFor="mileage">Mileage *</Label>
                     <Input
                       id="mileage"
-                      onChange={(e) => {
-                        handleInputChange("mileage", e.target.value);
-                        if (errors.mileage) {
-                          setErrors((prev) => ({ ...prev, mileage: "" }));
-                        }
-                      }}
+                      type="number" min={0} step={1}
                       placeholder="e.g., 50000"
-                      type="number"
                       value={formData.mileage}
-                      className={errors.mileage ? "border-red-500" : ""}
+                      onChange={(e) =>
+                        handleInputChange("mileage", e.target.value)
+                      }
                     />
-                    {errors.mileage && (
-                      <p className="text-red-600 text-sm">{errors.mileage}</p>
-                    )}
                   </div>
 
                   <div className="space-y-2">
                     <Label htmlFor="price">Price ($) *</Label>
                     <Input
                       id="price"
-                      onChange={(e) => {
-                        handleInputChange("price", e.target.value);
-                        if (errors.price) {
-                          setErrors((prev) => ({ ...prev, price: "" }));
-                        }
-                      }}
-                      placeholder="e.g., 25000"
                       type="number"
+                      placeholder="e.g., 25000"
                       value={formData.price}
-                      className={errors.price ? "border-red-500" : ""}
+                      onChange={(e) =>
+                        handleInputChange("price", e.target.value)
+                      }
                     />
-                    {errors.price && (
-                      <p className="text-red-600 text-sm">{errors.price}</p>
-                    )}
                   </div>
 
                   <div className="space-y-2">
-                    <Label htmlFor="vin">VIN (Optional)</Label>
+                    <Label htmlFor="vin">VIN *</Label>
                     <Input
                       id="vin"
-                      onChange={(e) => {
-                        handleInputChange("vin", e.target.value);
-                        if (errors.vin) {
-                          setErrors((prev) => ({ ...prev, vin: "" }));
-                        }
-                      }}
-                      placeholder="17-character VIN"
+                      placeholder="17-character VIN (or pre-1981 serial number)"
                       value={formData.vin}
-                      className={errors.vin ? "border-red-500" : ""}
-                      maxLength={17}
+                      onChange={(e) => { handleInputChange("vin", e.target.value.toUpperCase()); setVinMessage("Not verified"); }}
                     />
-                    {errors.vin && (
-                      <p className="text-red-600 text-sm">{errors.vin}</p>
-                    )}
+                    <Button type="button" variant="outline" onClick={() => void handleDecode()} disabled={isDecoding || !/^[A-HJ-NPR-Z0-9]{17}$/.test(formData.vin.trim())}>
+                      {isDecoding ? "Decoding..." : "Decode VIN"}
+                    </Button>
+                    <p className="text-sm text-gray-600" role="status">{vinMessage}</p>
+                    {duplicate?.duplicate && <p role="alert" className="text-sm text-red-700">A current listing already uses this VIN. Resolve the duplicate before submitting.</p>}
                   </div>
+                  <p className="text-sm text-gray-600 md:col-span-2">Complete each specification. Enter Unknown if a specification is unavailable.</p>
+                  {([ ["trim", "Trim"], ["bodyStyle", "Body style"], ["engine", "Engine"], ["transmission", "Transmission"], ["drivetrain", "Drivetrain"], ["fuelType", "Fuel type"], ["exteriorColor", "Exterior color"], ["interiorColor", "Interior color"] ] as const).map(([field, label]) => (
+                    <div className="space-y-2" key={field}>
+                      <Label htmlFor={field}>{label}</Label>
+                      <Input id={field} value={formData[field]} onChange={(e) => handleInputChange(field, e.target.value)} />
+                    </div>
+                  ))}
+                  <div className="space-y-2">
+                    <Label htmlFor="mileageUnit">Mileage unit *</Label>
+                    <select id="mileageUnit" className="w-full rounded-md border p-2" value={formData.mileageUnit} onChange={(e) => handleInputChange("mileageUnit", e.target.value)}>
+                      <option value="mi">Miles</option><option value="km">Kilometers</option>
+                    </select>
+                  </div>
+                  <div className="space-y-2"><Label htmlFor="odometerStatus">Mileage declaration</Label><select id="odometerStatus" className="w-full rounded-md border p-2" value={formData.odometerStatus} onChange={(e) => handleInputChange("odometerStatus", e.target.value)}><option value="actual">Actual mileage</option><option value="exempt">Odometer exempt</option><option value="not_actual">Not actual mileage</option></select></div>
+                  <label className="flex items-center gap-2"><input type="checkbox" checked={formData.negotiable} onChange={(e) => setFormData((prev) => ({ ...prev, negotiable: e.target.checked }))} /> Asking price is negotiable</label>
                 </div>
 
                 <div className="flex justify-end">
-                  <Button disabled={!isStep1Valid} onClick={() => setStep(2)}>
+                  <Button onClick={() => setStep(2)}>
                     Next Step
                   </Button>
                 </div>
               </div>
             )}
 
+            <div className={step === 2 ? "" : "hidden"}>
+              <VehicleMediaEditor value={media} legacyPhotos={formData.photos} onChange={setMedia} onLegacyChange={photos => setFormData(previous => ({ ...previous, photos }))} onBusyChange={setMediaBusy} disabled={isSubmitting} />
+            </div>
+
             {step === 2 && (
               <div className="space-y-6">
+                <div className="grid gap-6 md:grid-cols-2">
+                  {([ ["sellerState", "Seller state *"], ["location", "Vehicle city *"], ["locationState", "Vehicle state *"], ["numberOfOwners", "Number of owners (leave blank if unknown)"] ] as const).map(([field, label]) => (
+                    <div className="space-y-2" key={field}><Label htmlFor={field}>{label}</Label><Input id={field} type={field === "numberOfOwners" ? "number" : "text"} min={field === "numberOfOwners" ? 1 : undefined} value={formData[field]} onChange={(e) => handleInputChange(field, e.target.value)} /></div>
+                  ))}
+                  <div className="space-y-2 md:col-span-2">
+                    <p className="text-sm font-medium">Distance-search location (optional)</p>
+                    <p className="text-xs text-muted-foreground">Use this while you are near the vehicle. Coordinates are rounded to roughly a mile and visible publicly; they do not show your street address.</p>
+                    <Button type="button" variant="outline" onClick={useApproximateLocation}>Use my approximate location</Button>
+                    {formData.latitude && formData.longitude && <div className="flex items-center gap-3 text-xs"><span>Approximate coordinates: {formData.latitude}, {formData.longitude}</span><Button type="button" size="sm" variant="ghost" onClick={() => setFormData(previous => ({ ...previous, latitude: "", longitude: "" }))}>Remove</Button></div>}
+                  </div>
+                  <div className="space-y-2"><Label htmlFor="titleStatus">Title status</Label><select id="titleStatus" className="w-full rounded-md border p-2" value={formData.titleStatus} onChange={(e) => handleInputChange("titleStatus", e.target.value)}>{["clean", "rebuilt", "salvage", "flood", "lemon", "other", "unknown"].map((value) => <option key={value} value={value}>{value}</option>)}</select></div>
+                  <div className="space-y-2"><Label htmlFor="condition">Condition</Label><select id="condition" className="w-full rounded-md border p-2" value={formData.condition} onChange={(e) => handleInputChange("condition", e.target.value)}>{["excellent", "good", "fair", "poor"].map((value) => <option key={value} value={value}>{value}</option>)}</select></div>
+                  <div className="space-y-2"><Label htmlFor="sellerType">Seller type</Label><select id="sellerType" className="w-full rounded-md border p-2" value={formData.sellerType} onChange={(e) => handleInputChange("sellerType", e.target.value)}><option value="private">Private seller</option></select></div>
+                  <div className="space-y-2"><Label htmlFor="serviceRecords">Service records</Label><select id="serviceRecords" className="w-full rounded-md border p-2" value={formData.serviceRecords} onChange={(e) => handleInputChange("serviceRecords", e.target.value)}><option value="unknown">Unknown</option><option value="available">Available</option><option value="partial">Partial records</option><option value="unavailable">Unavailable</option></select></div>
+                </div>
+                {([ ["mechanicalIssues", "Known mechanical issues * (write None or Unknown if applicable)"], ["accidentDisclosure", "Accident disclosure"], ["damageDisclosure", "Damage disclosure"], ["modifications", "Modifications * (write None if unmodified)"], ["features", "Features / options (one per line)"] ] as const).map(([field, label]) => (
+                  <div className="space-y-2" key={field}><Label htmlFor={field}>{label}</Label><Textarea id={field} value={formData[field]} onChange={(e) => handleInputChange(field, e.target.value)} /></div>
+                ))}
                 <div className="space-y-2">
                   <Label htmlFor="description">Description *</Label>
                   <Textarea
                     id="description"
-                    onChange={(e) => {
-                      handleInputChange("description", e.target.value);
-                      if (errors.description) {
-                        setErrors((prev) => ({ ...prev, description: "" }));
-                      }
-                    }}
                     placeholder="Describe your vehicle's condition, features, and any important details..."
                     rows={6}
                     value={formData.description}
-                    className={errors.description ? "border-red-500" : ""}
+                    onChange={(e) =>
+                      handleInputChange("description", e.target.value)
+                    }
                   />
-                  {errors.description && (
-                    <p className="text-red-600 text-sm">{errors.description}</p>
-                  )}
-                  {!errors.description && formData.description && (
-                    <p className="text-gray-500 text-sm">
-                      {formData.description.length}/50 characters minimum
-                    </p>
-                  )}
                 </div>
 
                 <div className="space-y-2">
                   <Label htmlFor="contactInfo">Contact Information *</Label>
                   <Input
                     id="contactInfo"
-                    onChange={(e) => {
-                      handleInputChange("contactInfo", e.target.value);
-                      if (errors.contactInfo) {
-                        setErrors((prev) => ({ ...prev, contactInfo: "" }));
-                      }
-                    }}
                     placeholder="e.g., Phone: (555) 123-4567, Email: seller@example.com"
                     value={formData.contactInfo}
-                    className={errors.contactInfo ? "border-red-500" : ""}
-                  />
-                  {errors.contactInfo && (
-                    <p className="text-red-600 text-sm">{errors.contactInfo}</p>
-                  )}
-                </div>
-
-                <div className="space-y-2">
-                  <Label>Photos</Label>
-                  <ImageUpload
-                    maxImages={10}
-                    onChange={(keys) => {
-                      setFormData((prev) => ({ ...prev, photos: keys }));
-                    }}
-                    value={formData.photos}
+                    onChange={(e) =>
+                      handleInputChange("contactInfo", e.target.value)
+                    }
                   />
                 </div>
 
                 <div className="flex justify-between">
-                  <Button onClick={() => setStep(1)} variant="outline">
+                  <Button variant="outline" onClick={() => setStep(1)}>
                     Previous Step
                   </Button>
-                  <Button disabled={!isStep2Valid} onClick={() => setStep(3)}>
+                  <Button onClick={() => setStep(3)}>
                     Next Step
                   </Button>
                 </div>
@@ -589,97 +633,30 @@ export default function NewListingPage() {
 
             {step === 3 && (
               <div className="space-y-6">
-                <div className="space-y-2">
-                  <Label htmlFor="event">Select Event *</Label>
-                  <Select
-                    onValueChange={(value) => {
-                      handleInputChange("eventId", value);
-                      if (errors.eventId) {
-                        setErrors((prev) => ({ ...prev, eventId: "" }));
-                      }
-                    }}
-                    value={formData.eventId}
-                  >
-                    <SelectTrigger className={errors.eventId ? "border-red-500" : ""}>
-                      <SelectValue placeholder="Select an upcoming event" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {upcomingEvents && upcomingEvents.length > 0 ? (
-                        upcomingEvents.map((event) => {
-                          const isFull = event.isFull ?? false;
-                          const available = event.available ?? 0;
-                          return (
-                            <SelectItem
-                              key={event._id}
-                              value={event._id}
-                              disabled={isFull}
-                            >
-                              {event.name} - {new Date(event.date).toLocaleDateString()}
-                              {isFull ? " (Full)" : ` (${available} spot${available !== 1 ? "s" : ""} available)`}
-                            </SelectItem>
-                          );
-                        })
-                      ) : (
-                        <SelectItem disabled value="no-events">
-                          No upcoming events available
-                        </SelectItem>
-                      )}
-                    </SelectContent>
-                  </Select>
-                  {errors.eventId && (
-                    <p className="text-red-600 text-sm">{errors.eventId}</p>
-                  )}
-                  {formData.eventId && upcomingEvents && (
-                    (() => {
-                      const selectedEvent = upcomingEvents.find(
-                        (e) => e._id === formData.eventId
-                      );
-                      if (selectedEvent?.isFull) {
-                        return (
-                          <p className="text-red-600 text-sm">
-                            This event is full. Please select a different event.
-                          </p>
-                        );
-                      }
-                      if (selectedEvent && selectedEvent.available !== undefined) {
-                        return (
-                          <p className="text-gray-600 text-sm">
-                            {selectedEvent.available} spot{selectedEvent.available !== 1 ? "s" : ""} available
-                            {selectedEvent.vendorPrice > 0 && (
-                              <span className="ml-2">
-                                • Registration fee: ${(selectedEvent.vendorPrice / 100).toFixed(2)}
-                              </span>
-                            )}
-                          </p>
-                        );
-                      }
-                      return null;
-                    })()
-                  )}
-                  {upcomingEvents && upcomingEvents.length === 0 && (
-                    <p className="text-gray-500 text-sm">
-                      Please contact an administrator to create an upcoming
-                      event before listing your vehicle.
-                    </p>
-                  )}
-                </div>
-
-                <div className="py-8 text-center">
-                  <Car className="mx-auto mb-4 h-16 w-16 text-primary" />
-                  <h3 className="mb-2 font-semibold text-gray-900 text-xl">
-                    Ready to Submit?
+                <div className="text-center py-8">
+                  <div className="mb-6 text-left">
+                    <VehiclePhotoCarousel photos={media.map(photo => photo.url)} thumbnailPhotos={media.map(photo => photo.thumbnailUrl)} captions={media.map(photo => photo.caption)} title={formData.title} vehicleLabel={`${formData.year} ${formData.make} ${formData.model}`} />
+                    <h3 className="mt-6 text-2xl font-semibold">{formData.title}</h3>
+                    <p className="mt-2 text-lg">${Number(formData.price).toLocaleString()} {formData.negotiable && "· Negotiable"}</p>
+                    <p className="mt-2 text-muted-foreground">{formData.location}, {formData.locationState}</p>
+                    <dl className="mt-4 grid gap-4 sm:grid-cols-3">{[["Mileage", `${formData.mileage} ${formData.mileageUnit}`], ["Engine", formData.engine], ["Transmission", formData.transmission], ["Drivetrain", formData.drivetrain], ["Title", formData.titleStatus], ["Condition", formData.condition]].map(([label, value]) => <div key={label}><dt className="text-sm text-muted-foreground">{label}</dt><dd>{value}</dd></div>)}</dl>
+                    <p className="mt-4 whitespace-pre-wrap">{formData.description}</p>
+                    <details className="mt-4 rounded-lg border p-4"><summary className="cursor-pointer font-medium">Review seller disclosures</summary><dl className="mt-4 space-y-3">{[["VIN", formData.vin], ["Mechanical issues", formData.mechanicalIssues], ["Accidents", formData.accidentDisclosure], ["Damage", formData.damageDisclosure], ["Modifications", formData.modifications], ["Service records", formData.serviceRecords], ["Owners", formData.numberOfOwners || "Unknown"], ["Mileage declaration", formData.odometerStatus], ["Seller state", formData.sellerState], ["Features", formData.features || "None provided"]].map(([label, value]) => <div key={label}><dt className="text-sm text-muted-foreground">{label}</dt><dd className="whitespace-pre-wrap">{value}</dd></div>)}</dl></details>
+                  </div>
+                  <h3 className="text-xl font-semibold text-gray-900 mb-2">
+                    Preview your listing
                   </h3>
-                  <p className="mb-6 text-gray-600">
+                  <p className="text-gray-600 mb-6">
                     Your vehicle listing will be reviewed by our team before
-                    being published. Your vehicle will be associated with the
-                    selected event.
+                    being published. Once approved, you can register for
+                    upcoming events.
                   </p>
 
-                  <div className="mb-6 rounded-lg bg-gray-50 p-6">
-                    <h4 className="mb-2 font-medium text-gray-900">
+                  <div className="bg-gray-50 rounded-lg p-6 mb-6">
+                    <h4 className="font-medium text-gray-900 mb-2">
                       Listing Summary
                     </h4>
-                    <div className="space-y-1 text-gray-600 text-sm">
+                    <div className="text-sm text-gray-600 space-y-1">
                       <p>
                         <strong>Title:</strong> {formData.title}
                       </p>
@@ -688,46 +665,33 @@ export default function NewListingPage() {
                         {formData.make} {formData.model}
                       </p>
                       <p>
-                        <strong>Mileage:</strong> {formData.mileage} miles
+                        <strong>Mileage:</strong> {formData.mileage} {formData.mileageUnit}
                       </p>
                       <p>
                         <strong>Price:</strong> ${formData.price}
                       </p>
                       <p>
-                        <strong>Photos:</strong> {formData.photos.length}{" "}
+                        <strong>Photos:</strong> {formData.photos.length + media.length}{" "}
                         uploaded
                       </p>
-                      {formData.eventId && upcomingEvents && (
-                        <p>
-                          <strong>Event:</strong>{" "}
-                          {
-                            upcomingEvents.find(
-                              (e) => e._id === formData.eventId
-                            )?.name
-                          }
-                        </p>
-                      )}
                     </div>
                   </div>
 
+                  {Boolean(specificationError) && <p role="alert" className="mb-4 text-sm text-red-700">{specificationError}. Complete the required information before submitting.</p>}
+                  {duplicate?.duplicate && <p role="alert" className="mb-4 text-sm text-red-700">A current listing already uses this VIN. Resolve the duplicate before submitting.</p>}
+                  {(!media.length || formData.photos.length > 0 || mediaBusy) && <p role="alert" className="mb-4 text-sm text-red-700">Upload at least one permanent photo, replace all legacy photos, and finish or remove failed uploads before submitting.</p>}
                   <div className="flex justify-between">
-                    <Button onClick={() => setStep(2)} variant="outline">
+                    <Button variant="outline" onClick={() => setStep(2)}>
                       Previous Step
                     </Button>
-                    <Button
-                      disabled={
-                        isSubmitting ||
-                        !formData.eventId ||
-                        (upcomingEvents?.find((e) => e._id === formData.eventId)?.isFull ?? false)
-                      }
-                      onClick={handleSubmit}
-                    >
-                      {isSubmitting ? "Creating Listing..." : "Create Listing"}
+                    <Button onClick={handleSubmit} disabled={isSubmitting || isDecoding || mediaBusy || Boolean(specificationError) || !media.length || formData.photos.length > 0 || duplicate?.duplicate}>
+                      {isSubmitting ? "Submitting..." : existing?.status === "rejected" ? "Resubmit for review" : "Submit for review"}
                     </Button>
                   </div>
                 </div>
               </div>
             )}
+            </fieldset>
           </CardContent>
         </Card>
       </div>

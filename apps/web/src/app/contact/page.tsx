@@ -1,15 +1,14 @@
 "use client";
 
-import { Button } from "@gearboxe-market/ui/button";
-import { Card } from "@gearboxe-market/ui/card";
-import { Input } from "@gearboxe-market/ui/input";
-import { Label } from "@gearboxe-market/ui/label";
-import { Textarea } from "@gearboxe-market/ui/textarea";
+import { Button } from "@/components/ui/button";
+import { Card } from "@/components/ui/card";
+import { Footer } from "@/components/ui/footer";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Navbar } from "@/components/ui/navbar";
+import { Textarea } from "@/components/ui/textarea";
 import { ChevronDown, ChevronUp, Clock, Mail, Phone } from "lucide-react";
 import { useState } from "react";
-import { useToast } from "@/hooks/useToast";
-import { Footer } from "../../../components/footer";
-import { Navbar } from "../../../components/navbar";
 
 interface FAQItem {
   question: string;
@@ -20,7 +19,7 @@ const faqData: FAQItem[] = [
   {
     question: "How do I list my vehicle for sale?",
     answer:
-      "To list your vehicle, sign up for an account and navigate to your My Listings page. Click 'New Listing' and fill out the vehicle information form. Once submitted, our team will review and approve your listing within 24-48 hours.",
+      "To list your vehicle, sign up for an account and navigate to your dashboard. Click 'New Listing' and fill out the vehicle information form. Once submitted, our team will review and approve your listing within 24-48 hours.",
   },
   {
     question: "What are the fees for selling a vehicle?",
@@ -45,7 +44,7 @@ const faqData: FAQItem[] = [
   {
     question: "Can I edit my vehicle listing after it's approved?",
     answer:
-      "Yes, you can edit your listing at any time through your My Listings page. Changes to price, description, or photos will be reviewed and updated within 24 hours.",
+      "Yes, you can edit your listing at any time through your dashboard. Changes to price, description, or photos will be reviewed and updated within 24 hours.",
   },
   {
     question: "What happens if my vehicle doesn't sell?",
@@ -60,7 +59,6 @@ const faqData: FAQItem[] = [
 ];
 
 export default function ContactPage() {
-  const { toast } = useToast();
   const [formData, setFormData] = useState({
     name: "",
     email: "",
@@ -71,7 +69,6 @@ export default function ContactPage() {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [submitted, setSubmitted] = useState(false);
   const [expandedFAQ, setExpandedFAQ] = useState<number | null>(null);
-  const [errors, setErrors] = useState<Record<string, string>>({});
 
   const handleInputChange = (
     e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>
@@ -83,82 +80,27 @@ export default function ContactPage() {
     }));
   };
 
-  const validateForm = (): boolean => {
-    const newErrors: Record<string, string> = {};
-
-    if (!formData.name.trim()) {
-      newErrors.name = "Name is required";
-    }
-    if (!formData.email.trim()) {
-      newErrors.email = "Email is required";
-    } else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(formData.email)) {
-      newErrors.email = "Please enter a valid email address";
-    }
-    if (formData.phone && !/^[\d\s()+-]+$/.test(formData.phone)) {
-      newErrors.phone = "Please enter a valid phone number";
-    }
-    if (!formData.subject.trim()) {
-      newErrors.subject = "Subject is required";
-    }
-    if (!formData.message.trim()) {
-      newErrors.message = "Message is required";
-    } else if (formData.message.trim().length < 10) {
-      newErrors.message = "Message must be at least 10 characters";
-    }
-
-    setErrors(newErrors);
-    return Object.keys(newErrors).length === 0;
-  };
-
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-
-    if (!validateForm()) {
-      toast({
-        title: "Validation Error",
-        description: "Please fix the errors in the form before submitting.",
-        variant: "destructive",
-      });
-      return;
-    }
-
     setIsSubmitting(true);
-    setErrors({});
 
-    try {
-      // Simulate form submission
-      await new Promise((resolve) => setTimeout(resolve, 2000));
+    // Simulate form submission
+    await new Promise((resolve) => setTimeout(resolve, 2000));
 
-      toast({
-        title: "Message Sent",
-        description: "Thank you for contacting us. We'll get back to you within 24 hours.",
+    setIsSubmitting(false);
+    setSubmitted(true);
+
+    // Reset form after 3 seconds
+    setTimeout(() => {
+      setSubmitted(false);
+      setFormData({
+        name: "",
+        email: "",
+        phone: "",
+        subject: "",
+        message: "",
       });
-
-      setIsSubmitting(false);
-      setSubmitted(true);
-
-      // Reset form after 3 seconds
-      setTimeout(() => {
-        setSubmitted(false);
-        setFormData({
-          name: "",
-          email: "",
-          phone: "",
-          subject: "",
-          message: "",
-        });
-      }, 3000);
-    } catch (error: any) {
-      console.error("Error submitting contact form:", error);
-      const errorMessage =
-        error?.message || "Failed to send message. Please try again.";
-      toast({
-        title: "Error Sending Message",
-        description: errorMessage,
-        variant: "destructive",
-      });
-      setIsSubmitting(false);
-    }
+    }, 3000);
   };
 
   const toggleFAQ = (index: number) => {
@@ -166,53 +108,53 @@ export default function ContactPage() {
   };
 
   return (
-    <div className="flex min-h-screen flex-col bg-white">
+    <div className="market-page min-h-screen flex flex-col">
       <Navbar />
 
       {/* Main Content */}
       <div className="flex-1">
         {/* Hero Section */}
-        <section className="bg-gradient-to-br from-primary/10 to-primary/5 py-16">
-          <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
+        <section className="py-16 bg-gradient-to-br from-primary/10 to-primary/5">
+          <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
             <div className="text-center">
-              <h1 className="mb-6 font-bold text-4xl text-gray-900 md:text-5xl">
+              <h1 className="text-4xl md:text-5xl font-bold text-gray-900 mb-6">
                 Contact Us
               </h1>
-              <p className="mx-auto max-w-2xl text-gray-600 text-xl">
-                Have questions about our Gearboxe Market events or need help with
-                your listing? We're here to help you every step of the way.
+              <p className="text-xl text-gray-600 max-w-2xl mx-auto">
+                Have questions about our car market events or need help with
+                your listing? We&apos;re here to help you every step of the way.
               </p>
             </div>
           </div>
         </section>
 
         {/* Contact Information */}
-        <section className="bg-white py-16">
-          <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
-            <div className="mb-16 grid grid-cols-1 gap-8 md:grid-cols-3">
+        <section className="py-16 bg-white">
+          <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-8 mb-16">
               <div className="text-center">
-                <div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-primary/10">
+                <div className="w-16 h-16 bg-primary/10 rounded-full flex items-center justify-center mx-auto mb-4">
                   <Mail className="h-8 w-8 text-primary" />
                 </div>
-                <h3 className="mb-2 font-semibold text-gray-900 text-lg">
+                <h3 className="text-lg font-semibold text-gray-900 mb-2">
                   Email Us
                 </h3>
                 <p className="text-gray-600">support@gearboxemarket.com</p>
               </div>
               <div className="text-center">
-                <div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-primary/10">
+                <div className="w-16 h-16 bg-primary/10 rounded-full flex items-center justify-center mx-auto mb-4">
                   <Phone className="h-8 w-8 text-primary" />
                 </div>
-                <h3 className="mb-2 font-semibold text-gray-900 text-lg">
+                <h3 className="text-lg font-semibold text-gray-900 mb-2">
                   Call Us
                 </h3>
                 <p className="text-gray-600">(555) 123-4567</p>
               </div>
               <div className="text-center">
-                <div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-primary/10">
+                <div className="w-16 h-16 bg-primary/10 rounded-full flex items-center justify-center mx-auto mb-4">
                   <Clock className="h-8 w-8 text-primary" />
                 </div>
-                <h3 className="mb-2 font-semibold text-gray-900 text-lg">
+                <h3 className="text-lg font-semibold text-gray-900 mb-2">
                   Business Hours
                 </h3>
                 <p className="text-gray-600">Mon-Fri: 9AM-6PM</p>
@@ -222,182 +164,127 @@ export default function ContactPage() {
         </section>
 
         {/* Contact Form and FAQ */}
-        <section className="bg-white py-16">
-          <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
-            <div className="grid grid-cols-1 gap-12 lg:grid-cols-2">
+        <section className="py-16 bg-gray-50">
+          <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-12">
               {/* Contact Form */}
               <div>
-                <h2 className="mb-6 font-bold text-3xl text-gray-900">
+                <h2 className="text-3xl font-bold text-gray-900 mb-6">
                   Send us a message
                 </h2>
-                <Card className="border-gray-200 bg-white p-8">
+                <Card className="p-8 bg-white border-gray-200">
                   {submitted ? (
-                    <div className="py-8 text-center">
-                      <div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-green-100">
+                    <div className="text-center py-8">
+                      <div className="w-16 h-16 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-4">
                         <Mail className="h-8 w-8 text-green-600" />
                       </div>
-                      <h3 className="mb-2 font-semibold text-gray-900 text-xl">
+                      <h3 className="text-xl font-semibold text-gray-900 mb-2">
                         Message Sent!
                       </h3>
                       <p className="text-gray-600">
-                        Thank you for contacting us. We'll get back to you
+                        Thank you for contacting us. We&apos;ll get back to you
                         within 24 hours.
                       </p>
                     </div>
                   ) : (
-                    <form className="space-y-6" onSubmit={handleSubmit}>
-                      <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+                    <form onSubmit={handleSubmit} className="space-y-6">
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                         <div className="space-y-2">
                           <Label
-                            className="font-medium text-gray-700 text-sm"
                             htmlFor="name"
+                            className="text-sm font-medium text-gray-700"
                           >
                             Full Name *
                           </Label>
                           <Input
-                            className={`border-gray-300 bg-white text-gray-900 placeholder:text-gray-500 focus:border-primary focus:ring-primary ${
-                              errors.name ? "border-red-500" : ""
-                            }`}
                             id="name"
                             name="name"
-                            onChange={(e) => {
-                              handleInputChange(e);
-                              if (errors.name) {
-                                setErrors((prev) => ({ ...prev, name: "" }));
-                              }
-                            }}
+                            value={formData.name}
+                            onChange={handleInputChange}
+                            className="border-gray-300 focus:border-primary focus:ring-primary bg-white text-gray-900 placeholder:text-gray-500"
                             placeholder="Enter your full name"
                             required
-                            value={formData.name}
                           />
-                          {errors.name && (
-                            <p className="text-red-600 text-sm">{errors.name}</p>
-                          )}
                         </div>
                         <div className="space-y-2">
                           <Label
-                            className="font-medium text-gray-700 text-sm"
                             htmlFor="email"
+                            className="text-sm font-medium text-gray-700"
                           >
                             Email Address *
                           </Label>
                           <Input
-                            className={`border-gray-300 bg-white text-gray-900 placeholder:text-gray-500 focus:border-primary focus:ring-primary ${
-                              errors.email ? "border-red-500" : ""
-                            }`}
                             id="email"
                             name="email"
-                            onChange={(e) => {
-                              handleInputChange(e);
-                              if (errors.email) {
-                                setErrors((prev) => ({ ...prev, email: "" }));
-                              }
-                            }}
-                            placeholder="Enter your email"
-                            required
                             type="email"
                             value={formData.email}
+                            onChange={handleInputChange}
+                            className="border-gray-300 focus:border-primary focus:ring-primary bg-white text-gray-900 placeholder:text-gray-500"
+                            placeholder="Enter your email"
+                            required
                           />
-                          {errors.email && (
-                            <p className="text-red-600 text-sm">{errors.email}</p>
-                          )}
                         </div>
                       </div>
 
-                      <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                         <div className="space-y-2">
                           <Label
-                            className="font-medium text-gray-700 text-sm"
                             htmlFor="phone"
+                            className="text-sm font-medium text-gray-700"
                           >
                             Phone Number
                           </Label>
                           <Input
-                            className={`border-gray-300 bg-white text-gray-900 placeholder:text-gray-500 focus:border-primary focus:ring-primary ${
-                              errors.phone ? "border-red-500" : ""
-                            }`}
                             id="phone"
                             name="phone"
-                            onChange={(e) => {
-                              handleInputChange(e);
-                              if (errors.phone) {
-                                setErrors((prev) => ({ ...prev, phone: "" }));
-                              }
-                            }}
-                            placeholder="Enter your phone number"
                             type="tel"
                             value={formData.phone}
+                            onChange={handleInputChange}
+                            className="border-gray-300 focus:border-primary focus:ring-primary bg-white text-gray-900 placeholder:text-gray-500"
+                            placeholder="Enter your phone number"
                           />
-                          {errors.phone && (
-                            <p className="text-red-600 text-sm">{errors.phone}</p>
-                          )}
                         </div>
                         <div className="space-y-2">
                           <Label
-                            className="font-medium text-gray-700 text-sm"
                             htmlFor="subject"
+                            className="text-sm font-medium text-gray-700"
                           >
                             Subject *
                           </Label>
                           <Input
-                            className={`border-gray-300 bg-white text-gray-900 placeholder:text-gray-500 focus:border-primary focus:ring-primary ${
-                              errors.subject ? "border-red-500" : ""
-                            }`}
                             id="subject"
                             name="subject"
-                            onChange={(e) => {
-                              handleInputChange(e);
-                              if (errors.subject) {
-                                setErrors((prev) => ({ ...prev, subject: "" }));
-                              }
-                            }}
+                            value={formData.subject}
+                            onChange={handleInputChange}
+                            className="border-gray-300 focus:border-primary focus:ring-primary bg-white text-gray-900 placeholder:text-gray-500"
                             placeholder="What's this about?"
                             required
-                            value={formData.subject}
                           />
-                          {errors.subject && (
-                            <p className="text-red-600 text-sm">{errors.subject}</p>
-                          )}
                         </div>
                       </div>
 
                       <div className="space-y-2">
                         <Label
-                          className="font-medium text-gray-700 text-sm"
                           htmlFor="message"
+                          className="text-sm font-medium text-gray-700"
                         >
                           Message *
                         </Label>
                         <Textarea
-                          className={`min-h-[120px] border-gray-300 bg-white text-gray-900 placeholder:text-gray-500 focus:border-primary focus:ring-primary ${
-                            errors.message ? "border-red-500" : ""
-                          }`}
                           id="message"
                           name="message"
-                          onChange={(e) => {
-                            handleInputChange(e);
-                            if (errors.message) {
-                              setErrors((prev) => ({ ...prev, message: "" }));
-                            }
-                          }}
+                          value={formData.message}
+                          onChange={handleInputChange}
+                          className="border-gray-300 focus:border-primary focus:ring-primary bg-white text-gray-900 placeholder:text-gray-500 min-h-[120px]"
                           placeholder="Tell us how we can help you..."
                           required
-                          value={formData.message}
                         />
-                        {errors.message && (
-                          <p className="text-red-600 text-sm">{errors.message}</p>
-                        )}
-                        {!errors.message && formData.message && (
-                          <p className="text-gray-500 text-sm">
-                            {formData.message.length}/10 characters minimum
-                          </p>
-                        )}
                       </div>
 
                       <Button
-                        className="w-full py-3 font-medium text-base"
-                        disabled={isSubmitting}
                         type="submit"
+                        className="w-full bg-primary hover:bg-primary/90 text-white py-3 text-base font-medium"
+                        disabled={isSubmitting}
                       >
                         {isSubmitting ? "Sending..." : "Send Message"}
                       </Button>
@@ -408,23 +295,23 @@ export default function ContactPage() {
 
               {/* FAQ Section */}
               <div>
-                <h2 className="mb-6 font-bold text-3xl text-gray-900">
+                <h2 className="text-3xl font-bold text-gray-900 mb-6">
                   Frequently Asked Questions
                 </h2>
                 <div className="space-y-4">
                   {faqData.map((faq, index) => (
-                    <Card className="border-gray-200 bg-white" key={index}>
+                    <Card key={index} className="bg-white border-gray-200">
                       <button
-                        className="flex w-full items-center justify-between p-6 text-left transition-colors hover:bg-gray-50"
                         onClick={() => toggleFAQ(index)}
+                        className="w-full p-6 text-left flex justify-between items-center hover:bg-gray-50 transition-colors"
                       >
-                        <h3 className="pr-4 font-semibold text-gray-900 text-lg">
+                        <h3 className="text-lg font-semibold text-gray-900 pr-4">
                           {faq.question}
                         </h3>
                         {expandedFAQ === index ? (
-                          <ChevronUp className="h-5 w-5 flex-shrink-0 text-gray-500" />
+                          <ChevronUp className="h-5 w-5 text-gray-500 flex-shrink-0" />
                         ) : (
-                          <ChevronDown className="h-5 w-5 flex-shrink-0 text-gray-500" />
+                          <ChevronDown className="h-5 w-5 text-gray-500 flex-shrink-0" />
                         )}
                       </button>
                       {expandedFAQ === index && (

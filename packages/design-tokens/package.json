@@ -1,0 +1,78 @@
+{
+  "name": "@workspace/design-tokens",
+  "version": "0.0.1",
+  "private": true,
+  "description": "Design tokens for Gearboxe design system - single source of truth for web and mobile",
+  "license": "PROPRIETARY",
+  "type": "module",
+  "exports": {
+    ".": {
+      "types": "./src/index.ts",
+      "default": "./src/index.ts"
+    },
+    "./colors": {
+      "types": "./src/tokens/colors.ts",
+      "default": "./src/tokens/colors.ts"
+    },
+    "./entry-types": {
+      "types": "./src/tokens/entry-types.ts",
+      "default": "./src/tokens/entry-types.ts"
+    },
+    "./radius": {
+      "types": "./src/tokens/radius.ts",
+      "default": "./src/tokens/radius.ts"
+    },
+    "./shadows": {
+      "types": "./src/tokens/shadows.ts",
+      "default": "./src/tokens/shadows.ts"
+    },
+    "./typography": {
+      "types": "./src/tokens/typography.ts",
+      "default": "./src/tokens/typography.ts"
+    },
+    "./spacing": {
+      "types": "./src/tokens/spacing.ts",
+      "default": "./src/tokens/spacing.ts"
+    },
+    "./animation": {
+      "types": "./src/tokens/animation.ts",
+      "default": "./src/tokens/animation.ts"
+    },
+    "./themes": {
+      "types": "./src/themes/index.ts",
+      "default": "./src/themes/index.ts"
+    },
+    "./themes/light": {
+      "types": "./src/themes/light.ts",
+      "default": "./src/themes/light.ts"
+    },
+    "./themes/dark": {
+      "types": "./src/themes/dark.ts",
+      "default": "./src/themes/dark.ts"
+    },
+    "./css": "./src/css/variables.css",
+    "./tailwind": {
+      "types": "./src/tailwind/preset.ts",
+      "default": "./src/tailwind/preset.ts"
+    }
+  },
+  "files": [
+    "src"
+  ],
+  "scripts": {
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run"
+  },
+  "devDependencies": {
+    "typescript": "^5.9.3",
+    "vitest": "^3.2.4"
+  },
+  "peerDependencies": {
+    "tailwindcss": "^3.4.0 || ^4.0.0"
+  },
+  "peerDependenciesMeta": {
+    "tailwindcss": {
+      "optional": true
+    }
+  }
+}

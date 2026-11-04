@@ -1,0 +1,193 @@
+# Cursor Rules for Car Market Project
+
+## Project Overview
+
+This is a Next.js 15 car marketplace application with:
+
+- **Frontend**: Next.js 15, React 19, TypeScript, Tailwind CSS v4
+- **Backend**: Convex (real-time database and functions)
+- **Authentication**: Clerk
+- **Payments**: Stripe
+- **UI Components**: Radix UI primitives with custom styling
+- **Styling**: Tailwind CSS with class-variance-authority (CVA)
+
+## Code Style & Standards
+
+### TypeScript
+
+- Use strict TypeScript with proper type definitions
+- Prefer `interface` over `type` for object shapes
+- Use `const` assertions for literal types
+- Leverage TypeScript's path mapping (`@/*` for root imports)
+- Always define return types for functions (especially async functions)
+- Use proper generic constraints and utility types
+
+### React & Next.js
+
+- Use React 19 features appropriately (Server Components by default)
+- Prefer Server Components unless client-side interactivity is needed
+- Use `"use client"` directive only when necessary
+- Implement proper error boundaries and loading states
+- Use Next.js 15 App Router conventions
+- Leverage Next.js Image component for optimized images
+- Use proper metadata exports for SEO
+
+### File Organization
+
+- Marketplace components go in `/apps/web/components/ui/` for reusable UI components
+- Marketplace pages go in `/apps/web/src/app/` following App Router structure
+- Administration portal pages go in `/apps/admin/src/app/`
+- Marketplace hooks go in `/apps/web/hooks/`
+- Marketplace utilities go in `/apps/web/lib/`
+- Convex functions go in `/apps/web/convex/`
+- Use kebab-case for file names, PascalCase for component names
+
+### Component Patterns
+
+- Use Radix UI primitives as base components
+- Implement compound component patterns where appropriate
+- Use `forwardRef` for components that need ref forwarding
+- Export both the component and its variants (if using CVA)
+- Use proper prop interfaces extending HTML element props
+- Implement `displayName` for debugging
+
+### Styling with Tailwind & CVA
+
+- Use Tailwind CSS v4 with proper configuration
+- Implement component variants using `class-variance-authority`
+- Use `cn()` utility from `@/lib/utils` for conditional classes
+- Prefer Tailwind utility classes over custom CSS
+- Use CSS variables for theming (primary, secondary, etc.)
+- Follow mobile-first responsive design principles
+
+### Convex Integration
+
+- Use Convex schema validation with `v` validators
+- Implement proper indexes for query performance
+- Use mutations for data modifications, queries for reads
+- Handle loading and error states properly
+- Use Convex's real-time subscriptions when needed
+- Follow Convex naming conventions (camelCase for functions)
+
+### Authentication with Clerk
+
+- Use Clerk's React hooks for user state management
+- Implement proper route protection
+- Use Clerk's built-in components for auth flows
+- Handle user roles properly (user, admin, superAdmin)
+- Store Clerk user ID in Convex as `externalId`
+
+### State Management
+
+- Use React's built-in state management (useState, useReducer)
+- Use Convex queries for server state
+- Implement proper loading and error states
+- Use custom hooks for complex state logic
+- Avoid prop drilling with proper component composition
+
+### Error Handling
+
+- Implement proper error boundaries
+- Use try-catch blocks for async operations
+- Provide meaningful error messages to users
+- Log errors appropriately for debugging
+- Handle network failures gracefully
+
+### Performance
+
+- Use React.memo for expensive components
+- Implement proper key props for lists
+- Use Next.js Image optimization
+- Lazy load components when appropriate
+- Optimize Convex queries with proper indexes
+- Use React's concurrent features appropriately
+
+### Security
+
+- Validate all user inputs on both client and server
+- Use Convex's built-in security rules
+- Implement proper authorization checks
+- Sanitize data before displaying
+- Use HTTPS in production
+- Handle sensitive data appropriately
+
+### Testing
+
+- Write unit tests for utility functions
+- Test component behavior, not implementation details
+- Use proper mocking for external dependencies
+- Test error scenarios and edge cases
+- Implement integration tests for critical user flows
+
+### Accessibility
+
+- Use semantic HTML elements
+- Implement proper ARIA attributes
+- Ensure keyboard navigation works
+- Provide proper focus management
+- Use sufficient color contrast
+- Include alt text for images
+
+### Code Quality
+
+- Use ESLint configuration provided in the project
+- Follow consistent naming conventions
+- Write self-documenting code with clear variable names
+- Use proper JSDoc comments for complex functions
+- Keep functions small and focused
+- Avoid deep nesting and complex conditionals
+
+### Git & Version Control
+
+- Use conventional commit messages
+- Keep commits atomic and focused
+- Use meaningful branch names
+- Write clear PR descriptions
+- Review code thoroughly before merging
+
+## Specific Patterns for This Project
+
+### Vehicle Listings
+
+- Use proper validation for vehicle data
+- Implement image upload with proper handling
+- Use status enum for listing states (pending, approved, rejected)
+- Implement proper search and filtering
+
+### Event Management
+
+- Use proper date handling for events
+- Implement QR code generation for check-ins
+- Handle payment status properly
+- Use proper indexing for event queries
+
+### Messaging System
+
+- Implement real-time messaging with Convex
+- Use proper conversation threading
+- Handle message read status
+- Implement proper user notifications
+
+### Payment Integration
+
+- Use Stripe's latest API patterns
+- Implement proper webhook handling
+- Handle payment failures gracefully
+- Use proper error handling for payment flows
+
+## Environment & Configuration
+
+- Use environment variables for sensitive configuration
+- Follow Next.js environment variable conventions
+- Use proper TypeScript configuration
+- Configure Tailwind CSS properly for the project structure
+- Use ESLint with Next.js and TypeScript rules
+
+## Documentation
+
+- Write clear README files for complex features
+- Document API endpoints and data structures
+- Use proper JSDoc for complex functions
+- Keep documentation up to date with code changes
+
+Remember: Always prioritize code readability, maintainability, and user experience. Write code that your future self and teammates will thank you for.

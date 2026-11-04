@@ -1,4 +1,4 @@
-import { api } from "@gearboxe-market/convex/_generated/api";
+import { api } from "@/convex/_generated/api";
 import { auth } from "@clerk/nextjs/server";
 import { ConvexHttpClient } from "convex/browser";
 
