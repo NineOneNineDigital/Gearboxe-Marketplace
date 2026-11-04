@@ -1,0 +1,15 @@
+@import "../../../web/src/app/global.css";
+@source "./";
+@source "../account-menu.tsx";
+@source "../../../web/components/ui/brand-lockup.tsx";
+@source "../../../web/components/ui/auth-shell.tsx";
+@source "../../../web/components/ui/google-icon.tsx";
+@source "../../../web/components/ui/event-operations-workspace.tsx";
+@source "../../../web/components/ui/qr-scanner.tsx";
+@source "../../../web/components/ui/button.tsx";
+@source "../../../web/components/ui/card.tsx";
+@source "../../../web/components/ui/input.tsx";
+@source "../../../web/components/ui/label.tsx";
+@source "../market-pages";
+@source "../portal-shell.tsx";
+@source "../auth-form.tsx";

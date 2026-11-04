@@ -1,8 +1,10 @@
 "use client";
 
-import { api } from "@gearboxe-market/convex/_generated/api";
-import { Button } from "@gearboxe-market/ui/button";
-import { Card, CardContent } from "@gearboxe-market/ui/card";
+import { Button } from "@/components/ui/button";
+import { Card, CardContent } from "@/components/ui/card";
+import { Footer } from "@/components/ui/footer";
+import { Navbar } from "@/components/ui/navbar";
+import { api } from "@/convex/_generated/api";
 import { useUser } from "@clerk/nextjs";
 import { useConvexAuth, useQuery } from "convex/react";
 import {
@@ -16,8 +18,6 @@ import {
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { useState } from "react";
-import { Footer } from "../../../../components/footer";
-import { Navbar } from "../../../../components/navbar";
 
 export default function MessagesPage() {
   const { isAuthenticated, isLoading } = useConvexAuth();
@@ -29,26 +29,26 @@ export default function MessagesPage() {
 
   // Always call hooks to maintain hook order
   const currentUser = useQuery(
-    api.users.getUser,
-    user?.id ? { clerkId: user.id } : "skip"
+    api.users.current,
+    user?.id ? {} : "skip"
   );
   const conversations = useQuery(
-    api.messages.getConversations,
-    currentUser?._id ? { userId: currentUser._id } : "skip"
+    api.conversations.getConversationsByUser,
+    isAuthenticated && currentUser?._id ? {} : "skip"
   );
 
   if (isLoading) {
     return (
-      <div className="flex min-h-screen items-center justify-center bg-white">
+      <div className="min-h-screen bg-white flex items-center justify-center">
         <div className="text-center">
-          <div className="mx-auto h-32 w-32 animate-spin rounded-full border-primary border-b-2" />
+          <div className="animate-spin rounded-full h-32 w-32 border-b-2 border-primary mx-auto"></div>
           <p className="mt-4 text-gray-600">Loading...</p>
         </div>
       </div>
     );
   }
 
-  if (!(isAuthenticated && user)) {
+  if (!isAuthenticated || !user) {
     redirect("/sign-in");
   }
 
@@ -59,15 +59,13 @@ export default function MessagesPage() {
 
     if (diffInHours < 1) {
       return "Just now";
-    }
-    if (diffInHours < 24) {
+    } else if (diffInHours < 24) {
       return date.toLocaleTimeString("en-US", {
         hour: "numeric",
         minute: "2-digit",
         hour12: true,
       });
-    }
-    if (diffInHours < 168) {
+    } else if (diffInHours < 168) {
       // 7 days
       return date.toLocaleDateString("en-US", {
         weekday: "short",
@@ -75,11 +73,12 @@ export default function MessagesPage() {
         minute: "2-digit",
         hour12: true,
       });
+    } else {
+      return date.toLocaleDateString("en-US", {
+        month: "short",
+        day: "numeric",
+      });
     }
-    return date.toLocaleDateString("en-US", {
-      month: "short",
-      day: "numeric",
-    });
   };
 
   const getStatusColor = (timestamp: number) => {
@@ -88,7 +87,7 @@ export default function MessagesPage() {
     const diffInHours = (now.getTime() - date.getTime()) / (1000 * 60 * 60);
 
     if (diffInHours < 1) return "bg-green-500";
-    if (diffInHours < 24) return "bg-primary";
+    if (diffInHours < 24) return "bg-blue-500";
     return "bg-gray-400";
   };
 
@@ -104,10 +103,9 @@ export default function MessagesPage() {
 
       if (filterStatus === "unread") {
         return matchesSearch && conversation.unreadCount > 0;
-      }
-      if (filterStatus === "recent") {
+      } else if (filterStatus === "recent") {
         const diffInHours =
-          (Date.now() - conversation.lastMessage.createdAt) / (1000 * 60 * 60);
+          (Date.now() - (conversation.lastMessage?.createdAt ?? conversation.lastMessageAt)) / (1000 * 60 * 60);
         return matchesSearch && diffInHours < 24;
       }
 
@@ -115,15 +113,15 @@ export default function MessagesPage() {
     }) || [];
 
   return (
-    <div className="flex min-h-screen flex-col bg-white">
+    <div className="market-page min-h-screen flex flex-col">
       <Navbar />
 
-      <div className="mx-auto w-full max-w-7xl flex-1 px-4 py-8 sm:px-6 lg:px-8">
+      <div className="flex-1 w-full max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
         {/* Enhanced Header */}
         <div className="mb-8">
-          <div className="mb-4 flex items-center justify-between">
+          <div className="flex items-center justify-between mb-4">
             <div>
-              <h1 className="mb-2 font-bold text-4xl text-gray-900">
+              <h1 className="text-4xl font-bold text-gray-900 mb-2">
                 Messages
               </h1>
               <p className="text-gray-600 text-lg">
@@ -132,43 +130,43 @@ export default function MessagesPage() {
             </div>
             <div className="flex items-center space-x-3">
               <div className="relative">
-                <Search className="-translate-y-1/2 absolute top-1/2 left-3 h-4 w-4 transform text-gray-400" />
+                <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400" />
                 <input
-                  className="w-64 rounded-lg border border-gray-300 py-2 pr-4 pl-10 focus:border-transparent focus:ring-2 focus:ring-primary"
-                  onChange={(e) => setSearchQuery(e.target.value)}
-                  placeholder="Search conversations..."
                   type="text"
+                  placeholder="Search conversations..."
                   value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  className="pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent w-64"
                 />
               </div>
-              <div className="flex rounded-lg bg-gray-100 p-1">
+              <div className="flex bg-gray-100 rounded-lg p-1">
                 <button
-                  className={`rounded-md px-3 py-1 font-medium text-sm transition-colors ${
+                  onClick={() => setFilterStatus("all")}
+                  className={`px-3 py-1 rounded-md text-sm font-medium transition-colors ${
                     filterStatus === "all"
                       ? "bg-white text-gray-900 shadow-sm"
                       : "text-gray-600 hover:text-gray-900"
                   }`}
-                  onClick={() => setFilterStatus("all")}
                 >
                   All
                 </button>
                 <button
-                  className={`rounded-md px-3 py-1 font-medium text-sm transition-colors ${
+                  onClick={() => setFilterStatus("unread")}
+                  className={`px-3 py-1 rounded-md text-sm font-medium transition-colors ${
                     filterStatus === "unread"
                       ? "bg-white text-gray-900 shadow-sm"
                       : "text-gray-600 hover:text-gray-900"
                   }`}
-                  onClick={() => setFilterStatus("unread")}
                 >
                   Unread
                 </button>
                 <button
-                  className={`rounded-md px-3 py-1 font-medium text-sm transition-colors ${
+                  onClick={() => setFilterStatus("recent")}
+                  className={`px-3 py-1 rounded-md text-sm font-medium transition-colors ${
                     filterStatus === "recent"
                       ? "bg-white text-gray-900 shadow-sm"
                       : "text-gray-600 hover:text-gray-900"
                   }`}
-                  onClick={() => setFilterStatus("recent")}
                 >
                   Recent
                 </button>
@@ -178,13 +176,13 @@ export default function MessagesPage() {
 
           {/* Stats */}
           {conversations && conversations.length > 0 && (
-            <div className="flex items-center space-x-6 text-gray-600 text-sm">
+            <div className="flex items-center space-x-6 text-sm text-gray-600">
               <div className="flex items-center space-x-2">
                 <MessageCircle className="h-4 w-4" />
                 <span>{conversations.length} conversations</span>
               </div>
               <div className="flex items-center space-x-2">
-                <div className="h-2 w-2 rounded-full bg-primary" />
+                <div className="w-2 h-2 bg-primary rounded-full"></div>
                 <span>
                   {conversations.filter((c) => c.unreadCount > 0).length} unread
                 </span>
@@ -198,52 +196,52 @@ export default function MessagesPage() {
           <div className="space-y-4">
             {filteredConversations.map((conversation) => (
               <Card
-                className="group cursor-pointer overflow-hidden border-0 shadow-md transition-all duration-300 hover:scale-[1.02] hover:shadow-xl"
                 key={`${conversation.vehicleId}-${conversation.otherUserId}`}
+                className="overflow-hidden hover:shadow-xl transition-all duration-300 cursor-pointer border-0 shadow-md hover:scale-[1.02] group"
               >
                 <Link
-                  className="block"
                   href={`/myAccount/messages/${conversation.vehicleId}/${conversation.otherUserId}`}
+                  className="block"
                 >
                   <CardContent className="p-6">
                     <div className="flex items-center space-x-4">
                       {/* Avatar with status indicator */}
                       <div className="relative flex-shrink-0">
-                        <div className="flex h-14 w-14 items-center justify-center rounded-full bg-gradient-to-br from-primary/20 to-primary/10">
+                        <div className="w-14 h-14 bg-gradient-to-br from-primary/20 to-primary/10 rounded-full flex items-center justify-center">
                           <Car className="h-7 w-7 text-primary" />
                         </div>
                         <div
-                          className={`-bottom-1 -right-1 absolute h-4 w-4 rounded-full border-2 border-white ${getStatusColor(conversation.lastMessage.createdAt)}`}
-                        />
+                          className={`absolute -bottom-1 -right-1 w-4 h-4 rounded-full border-2 border-white ${getStatusColor((conversation.lastMessage?.createdAt ?? conversation.lastMessageAt))}`}
+                        ></div>
                       </div>
 
                       {/* Conversation details */}
-                      <div className="min-w-0 flex-1">
-                        <div className="mb-2 flex items-center justify-between">
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center justify-between mb-2">
                           <div className="flex items-center space-x-3">
-                            <h3 className="truncate font-semibold text-gray-900 text-lg">
+                            <h3 className="text-lg font-semibold text-gray-900 truncate">
                               {conversation.vehicleTitle ||
                                 "Vehicle Conversation"}
                             </h3>
                             {conversation.unreadCount > 0 && (
-                              <span className="inline-flex animate-pulse items-center rounded-full bg-primary px-2.5 py-0.5 font-medium text-white text-xs">
+                              <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-primary text-white animate-pulse">
                                 {conversation.unreadCount}
                               </span>
                             )}
                           </div>
                           <div className="flex items-center space-x-2">
-                            <div className="flex items-center space-x-1 text-gray-500 text-xs">
+                            <div className="flex items-center space-x-1 text-xs text-gray-500">
                               <Clock className="h-3 w-3" />
                               <span>
-                                {formatTime(conversation.lastMessage.createdAt)}
+                                {formatTime((conversation.lastMessage?.createdAt ?? conversation.lastMessageAt))}
                               </span>
                             </div>
-                            <ChevronRight className="h-4 w-4 text-gray-400 transition-colors group-hover:text-primary" />
+                            <ChevronRight className="h-4 w-4 text-gray-400 group-hover:text-primary transition-colors" />
                           </div>
                         </div>
 
                         <div className="flex items-center justify-between">
-                          <div className="flex items-center space-x-2 text-gray-600 text-sm">
+                          <div className="flex items-center space-x-2 text-sm text-gray-600">
                             <User className="h-4 w-4" />
                             <span className="truncate">
                               {conversation.otherUserName || "Unknown User"}
@@ -251,8 +249,8 @@ export default function MessagesPage() {
                           </div>
                         </div>
 
-                        <p className="mt-2 truncate text-gray-600 text-sm leading-relaxed">
-                          {conversation.lastMessage.content}
+                        <p className="text-sm text-gray-600 truncate mt-2 leading-relaxed">
+                          {conversation.lastMessage?.content ?? "No messages yet"}
                         </p>
                       </div>
                     </div>
@@ -263,20 +261,20 @@ export default function MessagesPage() {
           </div>
         ) : conversations && conversations.length > 0 ? (
           <Card className="border-0 shadow-md">
-            <CardContent className="py-16 text-center">
-              <Search className="mx-auto mb-4 h-16 w-16 text-gray-400" />
-              <h3 className="mb-2 font-semibold text-gray-900 text-xl">
+            <CardContent className="text-center py-16">
+              <Search className="h-16 w-16 text-gray-400 mx-auto mb-4" />
+              <h3 className="text-xl font-semibold text-gray-900 mb-2">
                 No conversations match your search
               </h3>
-              <p className="mb-6 text-gray-600">
+              <p className="text-gray-600 mb-6">
                 Try adjusting your search terms or filters.
               </p>
               <Button
+                variant="outline"
                 onClick={() => {
                   setSearchQuery("");
                   setFilterStatus("all");
                 }}
-                variant="outline"
               >
                 Clear Filters
               </Button>
@@ -284,22 +282,22 @@ export default function MessagesPage() {
           </Card>
         ) : (
           <Card className="border-0 shadow-md">
-            <CardContent className="py-20 text-center">
-              <div className="mx-auto mb-6 flex h-24 w-24 items-center justify-center rounded-full bg-gradient-to-br from-primary/20 to-primary/10">
+            <CardContent className="text-center py-20">
+              <div className="w-24 h-24 bg-gradient-to-br from-primary/20 to-primary/10 rounded-full flex items-center justify-center mx-auto mb-6">
                 <MessageCircle className="h-12 w-12 text-primary" />
               </div>
-              <h3 className="mb-3 font-semibold text-2xl text-gray-900">
+              <h3 className="text-2xl font-semibold text-gray-900 mb-3">
                 No conversations yet
               </h3>
-              <p className="mx-auto mb-8 max-w-md text-gray-600 leading-relaxed">
+              <p className="text-gray-600 mb-8 max-w-md mx-auto leading-relaxed">
                 Messages from potential buyers will appear here when they
                 contact you about your listings. Start by listing your vehicle
                 to begin conversations!
               </p>
               <div className="flex items-center justify-center space-x-4">
-                <Button asChild>
+                <Button asChild className="text-white">
                   <Link href="/myAccount/new-listing">
-                    <Car className="mr-2 h-4 w-4" />
+                    <Car className="h-4 w-4 mr-2" />
                     List Your Vehicle
                   </Link>
                 </Button>

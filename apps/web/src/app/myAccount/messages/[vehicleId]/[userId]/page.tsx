@@ -1,17 +1,19 @@
 "use client";
 
-import { api } from "@gearboxe-market/convex/_generated/api";
-import { Button } from "@gearboxe-market/ui/button";
-import { Card, CardContent, CardHeader, CardTitle } from "@gearboxe-market/ui/card";
+import { Button } from "@/components/ui/button";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Footer } from "@/components/ui/footer";
+import { MessageThread } from "@/components/ui/message-thread";
+import { SafetyControls } from "@/components/ui/safety-controls";
+import { Navbar } from "@/components/ui/navbar";
+import { api } from "@/convex/_generated/api";
+import type { Id } from "@/convex/_generated/dataModel";
 import { useUser } from "@clerk/nextjs";
 import { useConvexAuth, useQuery } from "convex/react";
 import { ArrowLeft, Car, User } from "lucide-react";
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { use } from "react";
-import { Footer } from "../../../../../../components/footer";
-import { MessageThread } from "../../../../../../components/message-thread";
-import { Navbar } from "../../../../../../components/navbar";
 
 interface ConversationPageProps {
   params: Promise<{
@@ -25,29 +27,18 @@ export default function ConversationPage({ params }: ConversationPageProps) {
   const { isAuthenticated, isLoading } = useConvexAuth();
   const { user } = useUser();
 
-  if (isLoading) {
-    return (
-      <div className="flex min-h-screen items-center justify-center bg-white">
-        <div className="text-center">
-          <div className="mx-auto h-32 w-32 animate-spin rounded-full border-primary border-b-2" />
-          <p className="mt-4 text-gray-600">Loading...</p>
-        </div>
-      </div>
-    );
-  }
-
   // Always call hooks to maintain hook order
   const currentUser = useQuery(
-    api.users.getUser,
-    user?.id ? { clerkId: user.id } : "skip"
+    api.users.current,
+    isAuthenticated && user?.id ? {} : "skip"
   );
   const vehicle = useQuery(
-    api.vehicles.getVehicleById,
-    vehicleId ? { id: vehicleId as any } : "skip"
+    api.conversations.getVehicleContext,
+    isAuthenticated && currentUser && vehicleId && userId ? { vehicleId: vehicleId as Id<"vehicles">, otherUserId: userId as Id<"users"> } : "skip"
   );
   const otherUser = useQuery(
     api.users.getUserById,
-    userId ? { id: userId as any } : "skip"
+    userId ? { id: userId as Id<"users"> } : "skip"
   );
 
   // Get conversation by participants
@@ -55,38 +46,51 @@ export default function ConversationPage({ params }: ConversationPageProps) {
     api.conversations.getConversationByParticipants,
     currentUser?._id && vehicleId && userId
       ? {
-          vehicleId: vehicleId as any,
-          participant1Id: currentUser._id as any,
-          participant2Id: userId as any,
+          vehicleId: vehicleId as Id<"vehicles">,
+          otherUserId: userId as Id<"users">,
         }
       : "skip"
   );
 
-  if (!(isAuthenticated && user)) {
+
+  if (isLoading) {
+    return (
+      <div className="min-h-screen bg-white flex items-center justify-center">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-32 w-32 border-b-2 border-primary mx-auto"></div>
+          <p className="mt-4 text-gray-600">Loading...</p>
+        </div>
+      </div>
+    );
+  }
+
+
+  if (!isAuthenticated || !user) {
     redirect("/sign-in");
   }
 
-  const formatPrice = (price: number) =>
-    new Intl.NumberFormat("en-US", {
+  const formatPrice = (price: number) => {
+    return new Intl.NumberFormat("en-US", {
       style: "currency",
       currency: "USD",
       minimumFractionDigits: 0,
       maximumFractionDigits: 0,
     }).format(price);
+  };
 
   return (
-    <div className="flex min-h-screen flex-col bg-white">
+    <div className="market-page min-h-screen flex flex-col">
       <Navbar />
 
-      <div className="mx-auto w-full max-w-7xl flex-1 px-4 py-12 sm:px-6 lg:px-8">
+      <div className="flex-1 w-full max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12">
         {/* Header */}
         <div className="mb-8">
-          <div className="mb-4 flex items-center space-x-2 text-gray-600 text-sm">
+          <div className="flex items-center space-x-2 text-sm text-gray-600 mb-4">
             <Link
-              className="flex items-center transition-colors hover:text-primary"
               href="/myAccount/messages"
+              className="hover:text-primary transition-colors flex items-center"
             >
-              <ArrowLeft className="mr-1 h-4 w-4" />
+              <ArrowLeft className="h-4 w-4 mr-1" />
               Messages
             </Link>
             <span>/</span>
@@ -94,14 +98,14 @@ export default function ConversationPage({ params }: ConversationPageProps) {
           </div>
           <div className="flex items-center justify-between">
             <div>
-              <h1 className="font-bold text-3xl text-gray-900">
+              <h1 className="text-3xl font-bold text-gray-900">
                 Conversation {otherUser && `with ${otherUser.name}`}
               </h1>
             </div>
-            {vehicle && (
+            {vehicle && ["active", "approved"].includes(vehicle.status) && (
               <Button asChild variant="outline">
                 <Link href={`/vehicles/${vehicle._id}`}>
-                  <Car className="mr-2 h-4 w-4" />
+                  <Car className="h-4 w-4 mr-2" />
                   View Vehicle
                 </Link>
               </Button>
@@ -109,34 +113,35 @@ export default function ConversationPage({ params }: ConversationPageProps) {
           </div>
         </div>
 
-        <div className="grid grid-cols-1 gap-8 lg:grid-cols-4">
+        <div className="grid grid-cols-1 lg:grid-cols-4 gap-8">
           {/* Vehicle Info Sidebar */}
           {vehicle && (
             <div className="lg:col-span-1">
-              <Card className="mb-6 shadow-sm transition-shadow duration-200 hover:shadow-md">
+              <Card className="mb-6 shadow-sm hover:shadow-md transition-shadow duration-200">
                 <CardHeader className="pb-4">
-                  <CardTitle className="font-semibold text-gray-900 text-lg">
+                  <CardTitle className="text-lg font-semibold text-gray-900">
                     Vehicle Details
                   </CardTitle>
                 </CardHeader>
                 <CardContent className="pt-0">
                   <div className="space-y-6">
+                    <p className="rounded-md bg-muted p-3 text-sm">Listing status: <span className="capitalize font-medium">{vehicle.status === "approved" ? "active" : vehicle.status}</span>. Your conversation remains available.</p>
                     <div className="text-center">
-                      <h3 className="mb-2 font-bold text-gray-900 text-xl">
+                      <h3 className="font-bold text-xl text-gray-900 mb-2">
                         {vehicle.year} {vehicle.make} {vehicle.model}
                       </h3>
-                      <div className="space-y-3 rounded-lg bg-gray-50 p-4">
-                        <div className="flex items-center justify-between">
-                          <span className="font-medium text-gray-600 text-sm">
+                      <div className="bg-gray-50 rounded-lg p-4 space-y-3">
+                        <div className="flex justify-between items-center">
+                          <span className="text-sm font-medium text-gray-600">
                             Mileage
                           </span>
-                          <span className="font-semibold text-gray-900 text-sm">
-                            {vehicle.mileage.toLocaleString()} miles
+                          <span className="text-sm font-semibold text-gray-900">
+                            {vehicle.mileage.toLocaleString()} {vehicle.mileageUnit ?? "mi"}
                           </span>
                         </div>
-                        <div className="border-gray-200 border-t pt-3">
-                          <div className="flex items-center justify-between">
-                            <span className="font-medium text-gray-600 text-sm">
+                        <div className="border-t border-gray-200 pt-3">
+                          <div className="flex justify-between items-center">
+                            <span className="text-sm font-medium text-gray-600">
                               Price
                             </span>
                             <span className="font-bold text-primary text-xl">
@@ -152,23 +157,23 @@ export default function ConversationPage({ params }: ConversationPageProps) {
 
               {/* Vehicle Owner Sidebar */}
               {otherUser && (
-                <Card className="shadow-sm transition-shadow duration-200 hover:shadow-md">
+                <Card className="shadow-sm hover:shadow-md transition-shadow duration-200">
                   <CardHeader className="pb-4">
-                    <CardTitle className="font-semibold text-gray-900 text-lg">
+                    <CardTitle className="text-lg font-semibold text-gray-900">
                       Vehicle Owner
                     </CardTitle>
                   </CardHeader>
                   <CardContent className="pt-0">
                     <div className="space-y-6">
                       <div className="text-center">
-                        <div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-gradient-to-br from-primary/20 to-primary/10 shadow-sm">
+                        <div className="w-16 h-16 bg-gradient-to-br from-primary/20 to-primary/10 rounded-full flex items-center justify-center mx-auto mb-4 shadow-sm">
                           <User className="h-8 w-8 text-primary" />
                         </div>
-                        <h3 className="mb-3 font-bold text-gray-900 text-lg">
+                        <h3 className="font-bold text-lg text-gray-900 mb-3">
                           {otherUser.name}
                         </h3>
-                        <div className="rounded-lg bg-gray-50 p-4">
-                          <div className="flex items-center justify-center space-x-2 text-gray-600 text-sm">
+                        <div className="bg-gray-50 rounded-lg p-4">
+                          <div className="flex items-center justify-center space-x-2 text-sm text-gray-600">
                             <span className="font-medium">Member since</span>
                             <span className="font-semibold text-gray-900">
                               {new Date(otherUser.createdAt).toLocaleDateString(
@@ -192,11 +197,12 @@ export default function ConversationPage({ params }: ConversationPageProps) {
           {/* Message Thread */}
           <div className="lg:col-span-3">
             <MessageThread
-              conversationId={conversation?._id}
-              recipientId={userId as any}
+              vehicleId={vehicleId as Id<"vehicles">}
+              recipientId={userId as Id<"users">}
               recipientName={otherUser?.name || "User"}
-              vehicleId={vehicleId as any}
+              conversationId={conversation?._id}
             />
+            <SafetyControls vehicleId={vehicleId as Id<"vehicles">} targetUserId={userId as Id<"users">} />
           </div>
         </div>
       </div>

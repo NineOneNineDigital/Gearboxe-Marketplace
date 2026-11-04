@@ -1,84 +1,28 @@
-import { api } from "@gearboxe-market/convex/_generated/api";
+import { api } from "@/convex/_generated/api";
+import type { Id } from "@/convex/_generated/dataModel";
+import { readRequestBody } from "@/lib/request-body";
 import { auth } from "@clerk/nextjs/server";
 import { ConvexHttpClient } from "convex/browser";
-import { type NextRequest, NextResponse } from "next/server";
-import { stripe } from "@/lib/stripe";
-
-const convex = new ConvexHttpClient(process.env.NEXT_PUBLIC_CONVEX_URL!);
+import { ConvexError } from "convex/values";
+import { NextRequest, NextResponse } from "next/server";
 
 export async function POST(request: NextRequest) {
+  const { userId, getToken } = await auth();
+  if (!userId) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   try {
-    const { userId } = await auth();
-
-    if (!userId) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-    }
-
-    const { eventId, vehicleId, amount } = await request.json();
-
-    if (!(eventId && vehicleId && amount)) {
-      return NextResponse.json(
-        { error: "Missing required fields" },
-        { status: 400 }
-      );
-    }
-
-    // Get user details
-    const user = await convex.query(api.users.getUser, { clerkId: userId });
-    if (!user) {
-      return NextResponse.json({ error: "User not found" }, { status: 404 });
-    }
-
-    // Get event details
-    const event = await convex.query(api.events.getEventById, { id: eventId });
-    if (!event) {
-      return NextResponse.json({ error: "Event not found" }, { status: 404 });
-    }
-
-    // Get vehicle details
-    const vehicle = await convex.query(api.vehicles.getVehicleById, {
-      id: vehicleId,
-    });
-    if (!vehicle) {
-      return NextResponse.json({ error: "Vehicle not found" }, { status: 404 });
-    }
-
-    const session = await stripe.checkout.sessions.create({
-      payment_method_types: ["card"],
-      line_items: [
-        {
-          price_data: {
-            currency: "usd",
-            product_data: {
-              name: `Vendor Registration - ${event.name}`,
-              description: `Registration for ${vehicle.year} ${vehicle.make} ${vehicle.model}`,
-            },
-            unit_amount: formatAmountForStripe(amount),
-          },
-          quantity: 1,
-        },
-      ],
-      mode: "payment",
-      success_url: `${process.env.NEXT_PUBLIC_APP_URL}/myAccount/my-listings?payment=success`,
-      cancel_url: `${process.env.NEXT_PUBLIC_APP_URL}/myAccount/new-listing`,
-      metadata: {
-        userId: user._id,
-        eventId,
-        vehicleId,
-      },
-      customer_email: user.email,
-    });
-
-    return NextResponse.json({ sessionId: session.id });
+    const raw = await readRequestBody(request, 2048);
+    if (raw === null) return NextResponse.json({ error: "Request too large" }, { status: 413 });
+    const body: unknown = JSON.parse(raw);
+    if (!body || typeof body !== "object") return NextResponse.json({ error: "Invalid request" }, { status: 400 });
+    const { eventId, vehicleId, acceptRules } = body as Record<string, unknown>;
+    if (typeof eventId !== "string" || typeof vehicleId !== "string" || eventId.length > 128 || vehicleId.length > 128) return NextResponse.json({ error: "Missing required fields" }, { status: 400 });
+    const token = await getToken({ template: "convex" });
+    if (!token) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    const convex = new ConvexHttpClient(process.env.NEXT_PUBLIC_CONVEX_URL!);
+    convex.setAuth(token);
+    const checkout = await convex.action(api.registrationPayments.createCheckout, { eventId: eventId as Id<"events">, vehicleId: vehicleId as Id<"vehicles">, acceptRules: acceptRules === true });
+    return NextResponse.json(checkout);
   } catch (error) {
-    console.error("Error creating checkout session:", error);
-    return NextResponse.json(
-      { error: "Internal server error" },
-      { status: 500 }
-    );
+    return NextResponse.json({ error: error instanceof ConvexError && typeof error.data === "string" ? error.data : "Unable to start checkout. Refresh your registrations and try again." }, { status: 400 });
   }
 }
-function formatAmountForStripe(amount: number): number {
-  return Math.round(amount * 100);
-}
-
