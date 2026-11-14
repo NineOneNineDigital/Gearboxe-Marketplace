@@ -10,7 +10,7 @@ export default function TermsPage() {
       <p><strong>Policy operator:</strong> legal entity name and mailing address to be confirmed before these Terms become effective.</p>
     </PolicySection>
     <PolicySection title="Accounts and eligibility">
-      <p>You must be at least 18 to create an account. Public listings can be browsed without an account. Sellers must verify an email address and phone number before submitting a listing. Buyers must verify an email address before saving a listing, messaging, or making an offer where that feature is available. Keep your account information accurate and protect your sign-in credentials.</p>
+      <p>Public listings can be browsed without an account. Sellers must verify an email address and phone number before submitting a listing. Buyers must verify an email address before saving a listing, messaging, or making an offer where that feature is available. Keep your account information accurate and protect your sign-in credentials.</p>
     </PolicySection>
     <PolicySection title="Private-party listings">
       <p>Eligible private sellers in the 50 U.S. states and Washington, DC may submit a vehicle without an invitation. The seller must be the titled owner or have documented authority from the owner to sell. Dealers, undisclosed dealer activity, title jumping, parts-only vehicles, and vehicles without a supportable ownership path are not allowed. Each listing is reviewed before it appears publicly; submission does not guarantee approval.</p>

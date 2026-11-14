@@ -304,8 +304,9 @@ approval, rejection and seller status changes against a staging Convex deploymen
 Sellers select car, truck, SUV, or street-legal specialty. Specialty includes
 classic and unusual road vehicles; a selection does not establish legality or
 transferability. Motorcycles, RVs, parts-only inventory, and dealer vehicles are
-outside launch scope. Moderators must manually review specialty registration and
-transfer eligibility, including modified or kit vehicles, and escalate ambiguous
+outside launch scope. Specialty submissions require a recorded, independent
+enhanced-review decision about road registration and transfer eligibility before
+approval. Moderators review modified or kit vehicles and escalate ambiguous
 cases to the safety lead rather than assuming eligibility. Pre-1981 manufacturer
 serials may be used under existing validation; confirm ownership and registration
 through appropriate evidence. Unclear road registration requires enhanced review.

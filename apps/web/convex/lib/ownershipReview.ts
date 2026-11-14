@@ -13,6 +13,7 @@ export function reviewTriggers(vehicle: Doc<"vehicles">, previous?: Doc<"ownersh
   if (vehicle.ownershipRole === "authorized") triggers.add("authorized_seller");
   if (vehicle.lienStatus === "outstanding" || vehicle.lienStatus === "uncertain") triggers.add("lien");
   if (vehicle.titleStatus && vehicle.titleStatus !== "clean") triggers.add("title");
+  if (vehicle.vehicleCategory === "specialty") triggers.add("specialty_eligibility");
   return [...triggers];
 }
 

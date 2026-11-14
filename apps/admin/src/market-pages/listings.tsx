@@ -322,7 +322,7 @@ export default function AdminListingsPage() {
             <section className="mt-7 rounded-xl border border-black/10 p-4 text-sm" aria-labelledby="category-heading">
               <h3 id="category-heading" className="font-semibold">Vehicle category</h3>
               <p className="mt-2 capitalize">{selected.vehicleCategory ?? "Unknown (legacy listing)"}</p>
-              {selected.vehicleCategory === "specialty" && <p className="mt-2 text-xs leading-5 text-muted-foreground">Before approval, manually verify road registration and lawful transfer eligibility. Review unusual serial numbers, modified or kit construction, and title evidence; the seller’s category choice is only a claim.</p>}
+              {selected.vehicleCategory === "specialty" && <p className="mt-2 text-xs leading-5 text-muted-foreground">Before approval, record an independent enhanced-review decision on road registration and lawful transfer eligibility. Review unusual serial numbers, modified or kit construction, and title evidence; the seller’s category choice is only a claim.</p>}
               {!selected.vehicleCategory && <p className="mt-2 text-xs leading-5 text-muted-foreground">Set and verify a category before approving a re-reviewed legacy listing.</p>}
             </section>
             <section className="mt-7 rounded-xl border border-black/10 bg-[hsl(var(--bone))] p-4 text-sm" aria-labelledby="enhanced-review-heading">

@@ -410,7 +410,7 @@ export default function VehicleDetailClient({ id }: VehiclePageProps) {
                 <p className="market-metric mt-2 text-4xl font-semibold tracking-[-0.05em] text-[hsl(var(--midnight))]">
                   {formatPrice(vehicle.price)}
                 </p>
-                {vehicle.status === "reserved" && <p className="mt-3 rounded-lg border border-amber-200 bg-amber-50 p-3 text-sm leading-6 text-amber-950">This vehicle is reserved and is not available for a new offer. It may become available again. You can ask the seller about availability.</p>}
+                {vehicle.status === "reserved" && <p className="mt-3 rounded-lg border border-amber-200 bg-amber-50 p-3 text-sm leading-6 text-amber-950">This vehicle is Reserved under a nonbinding agreement in principle and is not available for a new offer. It may become available again. You can ask the seller about availability.</p>}
                 <div className="my-5 border-t border-black/10" />
                 {convexUser?.emailVerified ? (
                   <Button asChild size="lg" className="w-full">
@@ -429,7 +429,11 @@ export default function VehicleDetailClient({ id }: VehiclePageProps) {
                     <Link href={`/sign-in?next=${encodeURIComponent(`/myAccount/messages/${vehicle._id}/${vehicle.userId}`)}`}>Sign in to contact seller</Link>
                   </Button>
                 )}
-                {process.env.NEXT_PUBLIC_OFFERS_ENABLED === "true" && convexUser?.emailVerified && convexUser._id !== vehicle.userId && vehicle.status !== "reserved" && <OfferSubmit vehicleId={vehicle._id} sellerId={vehicle.userId} />}
+                {process.env.NEXT_PUBLIC_OFFERS_ENABLED === "true" && vehicle.status !== "reserved" && convexUser?._id !== vehicle.userId && (
+                  convexUser?.emailVerified ? <OfferSubmit vehicleId={vehicle._id} sellerId={vehicle.userId} /> :
+                    convexUser ? <Button asChild variant="outline" size="lg" className="mt-3 w-full"><Link href={`/myAccount/safety?next=${encodeURIComponent(`/vehicles/${vehicle._id}?offer=1`)}`}>Verify email to make an offer</Link></Button> :
+                      !accountPending && <Button asChild variant="outline" size="lg" className="mt-3 w-full"><Link href={`/sign-in?next=${encodeURIComponent(`/vehicles/${vehicle._id}?offer=1`)}`}>Sign in to make an offer</Link></Button>
+                )}
                 <p className="mt-4 text-center text-[11px] leading-5 text-muted-foreground">
                   Gearboxe Market connects buyers and private sellers directly.
                 </p>

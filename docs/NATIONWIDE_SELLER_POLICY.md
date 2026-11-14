@@ -5,7 +5,7 @@ Status: Founder product decisions recorded November 4–5, 2026. Operational rev
 ## Who may submit
 
 - A private seller in any of the 50 U.S. states or Washington, DC may create a listing without an invitation. Raleigh–Durham–Chapel Hill outreach provides optional help and does not grant special publishing rights.
-- The seller must be at least 18, have verified email and phone, and either be the titled owner or provide private documentation that the owner authorized the sale. An ownership attestation is required. An authorized seller is not automatically treated as a dealer, but the moderator must inspect the authority evidence before approval.
+- The seller must have verified email and phone and either be the titled owner or provide private documentation that the owner authorized the sale. An ownership attestation is required. An authorized seller is not automatically treated as a dealer, but the moderator must inspect the authority evidence before approval.
 - Every listing requires human approval before publication. Draft, pending, and rejected listings remain private. There is no fixed listing-count cap for private accounts. Repeated or high-volume activity prompts human review for undisclosed dealer activity; it is not automatic proof of a violation.
 
 ## Vehicle and title boundaries

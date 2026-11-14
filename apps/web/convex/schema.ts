@@ -56,6 +56,11 @@ export default defineSchema({
     .index("by_year", ["token", "scope", "year"])
     .index("by_recency", ["token", "scope", "listedAt"]),
   discoveryCounters: defineTable({ key: v.string(), next: v.number() }).index("by_key", ["key"]),
+  // First-party aggregate activity only: no visitor, listing, ZIP, or coordinate fields.
+  discoveryActivity: defineTable({ day: v.number(), kind: v.union(
+    v.literal("zip_entry"), v.literal("zero_results"), v.literal("radius_expand"),
+    v.literal("nationwide_view"), v.literal("listing_click")), count: v.number() })
+    .index("by_day_kind", ["day", "kind"]).index("by_day", ["day"]),
   savedSearches: defineTable({ userId: v.id("users"), name: v.string(), filters: discoveryFilters, sort: discoverySort, createdAt: v.number() }).index("by_user", ["userId"]),
   recentViews: defineTable({ userId: v.id("users"), vehicleId: v.id("vehicles"), viewedAt: v.number() })
     .index("by_user_time", ["userId", "viewedAt"]).index("by_user_vehicle", ["userId", "vehicleId"]),

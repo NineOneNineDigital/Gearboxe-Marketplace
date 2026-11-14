@@ -18,6 +18,8 @@ An acceptance transaction reads the vehicle, the private offer cycle shared by a
 
 At day seven, the seller receives a reminder and the founder/backup queue receives one pending review. The listing stays reserved. The seller has one seven-day self-extension. Subsequent extensions require an authorized support actor and a reason. Canceling the agreement leaves its public state Reserved and retention open until the seller or an authorized moderator chooses Sold or Available. Returning the unedited listing to Active starts a new 45-day availability period. Closing the cycle immediately invalidates prior proposals before the bounded history cleanup runs. A fresh offer uses a new thread.
 
+A block between the two participants stops new offer negotiation. It does not trap an accepted, nonbinding agreement: either participant may cancel it, and the seller may still choose Sold or Available for the listing. Suspended accounts remain subject to account access controls; authorized support can resolve a held reservation.
+
 Proposal expiry jobs carry the proposal version. Review jobs carry the reservation thread ID and expected due time. A one-minute recovery cron catches overdue work. A late job cannot change a replacement proposal or reservation. Server reads and response mutations apply the exact deadline even while a scheduled job is outstanding.
 
 ## Closure and retention

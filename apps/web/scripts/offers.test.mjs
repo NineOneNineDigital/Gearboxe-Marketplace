@@ -162,6 +162,29 @@ test("counter versions, single acceptance, competing proposals, review/cancel/cl
   assert.equal(/9888|9999|Ending agreement|buyer|seller/.test(email), false);
 });
 
+test("a later block stops new negotiation but does not trap cancellation or seller closeout", async t => {
+  const f = fixture(t), id = await f.submit();
+  f.as("seller");
+  await f.call(offers.respond, { threadId: id, version: 1, action: "accept" });
+  f.rows("userBlocks").push({ userId: "buyer", blockedUserId: "seller" });
+  f.as("buyer");
+  await f.call(offers.cancel, { threadId: id, version: 2, reason: "Ending the agreement" });
+  assert.equal(f.get("vehicle").status, "reserved");
+  f.as("seller");
+  await f.call(offers.finish, { threadId: id, version: 3, outcome: "available", reason: "Vehicle available again" });
+  assert.equal(f.get("vehicle").status, "active");
+  f.as("buyer");
+  await assert.rejects(f.submit("after-block"), /unavailable/);
+
+  f.rows("userBlocks").pop();
+  const next = await f.submit("next-cycle");
+  f.as("seller");
+  await f.call(offers.respond, { threadId: next, version: 1, action: "accept" });
+  f.rows("userBlocks").push({ userId: "seller", blockedUserId: "buyer" });
+  await f.call(offers.finish, { threadId: next, version: 2, outcome: "sold", reason: "Vehicle sold" });
+  assert.equal(f.get("vehicle").status, "sold");
+});
+
 test("old and competing proposals never revive, expiry is authoritative, and a fresh thread has its own retention date", async t => {
   const f = fixture(t), id = await f.submit(), expiry = f.get(id).expiresAt;
   f.at(expiry); f.as("seller");

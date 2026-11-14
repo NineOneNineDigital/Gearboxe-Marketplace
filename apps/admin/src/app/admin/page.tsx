@@ -2,6 +2,7 @@
 
 import { api } from "@/convex/_generated/api";
 import { useConvexAuth, useQuery } from "convex/react";
+import { makeFunctionReference } from "convex/server";
 import {
   ArrowRight,
   ArrowUpRight,
@@ -48,11 +49,19 @@ const workspaces = [
   { href: "/admin/safety", label: "Trust & safety", description: "Work through reports and appeals.", icon: ShieldCheck },
   { href: "/admin/payments", label: "Payment operations", description: "Review refunds and payment issues.", icon: CreditCard },
 ];
+const discoveryActivityQuery = makeFunctionReference<"query", Record<string, never>, {
+  asOf: number;
+  startDay: number;
+  totals: { zip_entry: number; zero_results: number; radius_expand: number; nationwide_view: number; listing_click: number };
+  truncated: boolean;
+  capped: boolean;
+}>("discoveryAnalytics:lastThirtyDays");
 
 export default function AdminHome() {
   const { isAuthenticated } = useConvexAuth();
   const stats = useQuery(api.admin.getAdminStats, isAuthenticated ? {} : "skip");
   const engagement = useQuery(api.engagement.weekly, isAuthenticated ? {} : "skip");
+  const discoveryActivity = useQuery(discoveryActivityQuery, isAuthenticated ? {} : "skip");
 
   return (
     <main className="min-h-full bg-[hsl(var(--bone))]">
@@ -91,6 +100,21 @@ export default function AdminHome() {
           <dl className="mt-4 grid gap-3 text-sm sm:grid-cols-3"><div><dt>Active inquiries</dt><dd className="font-semibold">{engagement.active.inquiries} ({engagement.active.messages} messages, {engagement.active.offers} offers)</dd></div><div><dt>Qualified exchanges</dt><dd className="font-semibold">{engagement.active.responses}</dd></div><div><dt>Seller response rate / average</dt><dd className="font-semibold">{engagement.active.responseRate === null ? "—" : `${Math.round(100 * engagement.active.responseRate)}% / ${Math.round((engagement.active.averageResponseMs ?? 0) / 3600000)} hours`}</dd></div><div><dt>Reserved availability inquiries / replies</dt><dd className="font-semibold">{engagement.reserved.inquiries} / {engagement.reserved.responses}</dd></div></dl>
           <p className="mt-3 text-xs text-muted-foreground">Current inventory context: {stats ? `${stats.activeVehicles} active, ${stats.reservedVehicles} reserved, ${stats.soldVehicles} sold` : "loading"}. Active excludes listings past their availability deadline.</p>
           <p className="mt-4 text-xs text-muted-foreground">One buyer–listing pair per inquiry type; responses are counted through the report time, so recent cohorts may change. Pairs are retained for six calendar months; repeat contact after deletion can count as a new pair. A message reply without an explicit target is attributed to the latest unanswered inquiry. Ten qualified exchanges in 30 days is a directional learning signal, not a launch gate.</p></> : <p role="status" className="mt-2 text-sm">Loading engagement…</p>}
+        </section>
+        <section aria-labelledby="discovery-activity-heading" className="rounded-2xl border border-black/10 bg-white p-6">
+          <h2 id="discovery-activity-heading" className="text-xl font-semibold">How buyers explore inventory</h2>
+          {discoveryActivity ? <>
+            <p className="mt-2 text-sm text-muted-foreground">First-party event totals for the last 30 UTC days, as of {new Date(discoveryActivity.asOf).toLocaleString()}. These count actions, not unique people; automated traffic may be included. They are directional and do not control launch. {(discoveryActivity.truncated || discoveryActivity.capped) && "A report or daily event cap was reached, so totals are a lower bound."} No ZIP or visitor identifier is stored.</p>
+            <dl className="mt-4 grid gap-3 text-sm sm:grid-cols-2 lg:grid-cols-5">
+              {([
+                ["ZIP searches", discoveryActivity.totals.zip_entry],
+                ["Empty local results", discoveryActivity.totals.zero_results],
+                ["Radius expansions", discoveryActivity.totals.radius_expand],
+                ["Nationwide views", discoveryActivity.totals.nationwide_view],
+                ["Listing clicks", discoveryActivity.totals.listing_click],
+              ] as const).map(([label, value]) => <div key={label}><dt>{label}</dt><dd className="mt-1 font-semibold">{value.toLocaleString()}</dd></div>)}
+            </dl>
+          </> : <p role="status" className="mt-2 text-sm">Loading discovery activity…</p>}
         </section>
         <section aria-labelledby="attention-heading" className="grid gap-6 lg:grid-cols-[0.9fr_1.1fr]">
           <div className="rounded-2xl border border-primary/25 bg-white p-6 market-card-shadow sm:p-8">

@@ -190,6 +190,7 @@ test("blank disclosure submissions and material changes follow moderation", asyn
 });
 
 test("direct submission requires an eligible category; specialty enters manual review", async () => {
+  const trust = await import("../convex/trust.ts");
   for (const category of [undefined, "motorcycle", "rv", "parts"]) {
     const f = fixture(); f.listing("draft", { vehicleCategory: category });
     await assert.rejects(f.mutate(vehicles.submitVehicle, { id: "vehicle" }), /category/i);
@@ -198,6 +199,27 @@ test("direct submission requires an eligible category; specialty enters manual r
   const specialty = fixture(); specialty.listing("draft", { vehicleCategory: "specialty" });
   await specialty.mutate(vehicles.submitVehicle, { id: "vehicle" });
   assert.equal(specialty.rows("vehicles")[0].status, "pending");
+  specialty.as("admin");
+  const review = await trust.getListingReview._handler(specialty.ctx, { vehicleId: "vehicle" });
+  assert.ok(review.triggers.includes("specialty_eligibility"));
+  await assert.rejects(specialty.mutate(vehicles.approveVehicle, { id: "vehicle" }), /enhanced review/);
+  await specialty.mutate(trust.resolveListingReview, {
+    vehicleId: "vehicle", expectedRevision: review.revision,
+    reason: "Reviewed road registration and transfer eligibility for this specialty vehicle.",
+  });
+  specialty.as("owner");
+  const beforeEdit = specialty.rows("vehicles")[0].updatedAt;
+  await specialty.mutate(vehicles.updateVehicle, { id: "vehicle", description: "Updated specialty vehicle details.", expectedUpdatedAt: beforeEdit });
+  specialty.as("admin");
+  await assert.rejects(specialty.mutate(vehicles.approveVehicle, { id: "vehicle" }), /enhanced review/);
+  const revised = await trust.getListingReview._handler(specialty.ctx, { vehicleId: "vehicle" });
+  await specialty.mutate(trust.resolveListingReview, {
+    vehicleId: "vehicle", expectedRevision: revised.revision,
+    reason: "Rechecked registration and transfer eligibility after the seller's edit.",
+  });
+  await specialty.mutate(vehicles.approveVehicle, { id: "vehicle" });
+  assert.equal(specialty.rows("vehicles")[0].status, "active");
+  assert.equal(specialty.rows("adminAuditLog").filter(row => row.action === "listing_enhanced_review_cleared").length, 2);
   const legacy = fixture(); legacy.listing("active", { vehicleCategory: undefined });
   assert.equal((await vehicles.getVehicleById._handler(legacy.ctx, { id: "vehicle" })).vehicleCategory, undefined);
   await assert.rejects(legacy.mutate(vehicles.updateVehicle, { id: "vehicle", title: "Changed title", expectedUpdatedAt: 2 }), /category/i);

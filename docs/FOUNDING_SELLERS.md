@@ -55,7 +55,7 @@ turnaround that has not been staffed and approved.
 
 ## Assisted onboarding checklist
 
-- Confirm the seller is an adult private seller in an eligible U.S. jurisdiction,
+- Confirm the seller is a private seller in an eligible U.S. jurisdiction,
   and the vehicle is an eligible car, truck, SUV, or street-legal specialty
   vehicle. Dealer, motorcycle, RV and parts-only inventory are outside the launch
   scope. Specialty, modified or unusual vehicles may require enhanced review.

@@ -14,7 +14,7 @@ import {
   type DiscoverySort,
   type DiscoveryState,
 } from "@/lib/discovery-url";
-import { REMEMBERED_ZIP_KEY, readRememberedZip, withoutGeography } from "@/lib/discovery-location";
+import { REMEMBERED_ZIP_KEY, readRememberedZip, resolvedZipUrl, withoutGeography } from "@/lib/discovery-location";
 import { lookupZip } from "@/lib/zip-location";
 import { vehicleResults } from "@/lib/vehicle-results";
 import { isAvailableNow, useAvailabilityBoundary } from "@/lib/use-availability-boundary";
@@ -22,6 +22,7 @@ import { localViewsSnapshot, subscribeLocalViews } from "@/lib/recently-viewed";
 import { vehicleFacetLabel, vehicleFacetOptions, type VehicleFacet } from "@/lib/vehicle-facets";
 import { readInventoryReturn, saveInventoryReturn, type InventoryReturn } from "@/lib/inventory-return";
 import { useMutation, usePaginatedQuery, useQuery } from "convex/react";
+import { makeFunctionReference } from "convex/server";
 import { Car, Grid, List, X } from "lucide-react";
 import { useRouter, useSearchParams } from "next/navigation";
 import {
@@ -33,6 +34,10 @@ import {
   useSyncExternalStore,
   type ReactNode,
 } from "react";
+
+type DiscoveryActivity = "zip_entry" | "zero_results" | "radius_expand" | "nationwide_view" | "listing_click";
+// Convex codegen refreshes the generated API after deployment.
+const recordDiscoveryActivity = makeFunctionReference<"mutation", { kind: DiscoveryActivity }, void>("discoveryAnalytics:record");
 
 class QueryBoundary extends Component<
   { children: ReactNode; message: string },
@@ -84,6 +89,7 @@ function Inventory({
   onNationwide: () => void;
   onExpandRadius: () => void;
 }) {
+  const recordActivity = useMutation(recordDiscoveryActivity);
   const { results, status, loadMore } = usePaginatedQuery(
     api.discovery.browse,
     state,
@@ -92,6 +98,7 @@ function Inventory({
   const [visibleCount, setVisibleCount] = useState(12);
   const [autoPages, setAutoPages] = useState(0);
   const requestedRef = useRef("");
+  const lastZeroResultKey = useRef("");
   const allVehicles = vehicleResults(results) ?? [];
   const availabilityNow = useAvailabilityBoundary(allVehicles);
   const vehicles = allVehicles.filter(vehicle => isAvailableNow(vehicle, availabilityNow)).slice(0, visibleCount);
@@ -137,6 +144,7 @@ function Inventory({
   const rememberPosition = (event: React.MouseEvent<HTMLDivElement>) => {
     const link = event.target instanceof Element ? event.target.closest("a[href^='/vehicles/']") : null;
     if (!link) return;
+    void recordActivity({ kind: "listing_click" }).catch(() => {});
     try {
       saveInventoryReturn(window.sessionStorage, { url: stateKey, count: visibleCount, scrollY: window.scrollY, layout });
     } catch { /* Browsing still works without session storage. */ }
@@ -152,6 +160,16 @@ function Inventory({
       setVisibleCount(nextCount);
     }
   };
+  const exhausted = status === "Exhausted";
+  const hasBuffered = results.length > visibleCount;
+  const canLoadMore = status === "CanLoadMore";
+  const seeking = !hasBuffered && canLoadMore && autoPages < autoLimit;
+  const finished = exhausted && !hasBuffered;
+  useEffect(() => {
+    if (!finished || vehicles.length || state.filters.latitude === undefined || lastZeroResultKey.current === stateKey) return;
+    lastZeroResultKey.current = stateKey;
+    void recordActivity({ kind: "zero_results" }).catch(() => {});
+  }, [finished, vehicles.length, state.filters.latitude, stateKey, recordActivity]);
   if (status === "LoadingFirstPage")
     return (
       <div
@@ -167,11 +185,6 @@ function Inventory({
         ))}
       </div>
     );
-  const exhausted = status === "Exhausted";
-  const hasBuffered = results.length > visibleCount;
-  const canLoadMore = status === "CanLoadMore";
-  const seeking = !hasBuffered && canLoadMore && autoPages < autoLimit;
-  const finished = exhausted && !hasBuffered;
   return (
     <>
       {vehicles.length > 0 ? (
@@ -384,14 +397,22 @@ export default function VehiclesClient() {
   const params = useSearchParams();
   const router = useRouter();
   const state = useMemo(() => readDiscoveryUrl(params), [params]);
+  const linkedZip = params.get("zip");
+  const currentSearch = params.toString();
+  const recordActivity = useMutation(recordDiscoveryActivity);
   const [layout, setLayout] = useState<"grid" | "list">("grid");
   const [zipDraft, setZipDraft] = useState("");
   const [rememberedZip, setRememberedZip] = useState<string | null>(null);
   const [locationError, setLocationError] = useState("");
   const [resolvingZip, setResolvingZip] = useState(false);
+  const [verifiedLocationSearch, setVerifiedLocationSearch] = useState<string | null>(null);
   const locationRequest = useRef(0);
+  const verifiedCoordinates = useRef<{ zip: string; latitude: number; longitude: number } | null>(null);
   const lastParams = useRef(params.toString());
   const { user } = useCurrentUser();
+  const record = (kind: "zip_entry" | "radius_expand" | "nationwide_view") => {
+    void recordActivity({ kind }).catch(() => {});
+  };
   const apply = (filters: DiscoveryFilters, sort: DiscoverySort = state.sort) => {
     locationRequest.current++;
     setResolvingZip(false);
@@ -427,7 +448,41 @@ export default function VehiclesClient() {
       setResolvingZip(false);
     }
   }, [params]);
-  useEffect(() => { setZipDraft(state.filters.zip ?? ""); }, [state.filters.zip]);
+  useEffect(() => {
+    if (linkedZip === null || verifiedLocationSearch === currentSearch) return;
+    if (!/^\d{5}$/.test(linkedZip)) {
+      setLocationError("This shared link has an invalid ZIP. Enter a five-digit ZIP or view nationwide.");
+      setResolvingZip(false);
+      return;
+    }
+    if (verifiedCoordinates.current?.zip === linkedZip &&
+      verifiedCoordinates.current.latitude === state.filters.latitude &&
+      verifiedCoordinates.current.longitude === state.filters.longitude) {
+      setLocationError("");
+      setResolvingZip(false);
+      setVerifiedLocationSearch(currentSearch);
+      return;
+    }
+    let cancelled = false;
+    const request = ++locationRequest.current;
+    setLocationError("");
+    setResolvingZip(true);
+    lookupZip(linkedZip).then(location => {
+      if (cancelled || request !== locationRequest.current) return;
+      const canonical = resolvedZipUrl(state.filters, state.sort, linkedZip, location, state.filters.radiusMiles ?? 50);
+      verifiedCoordinates.current = { zip: linkedZip, ...location };
+      const canonicalSearch = new URL(canonical, window.location.origin).search.slice(1);
+      if (canonicalSearch !== currentSearch) router.replace(canonical, { scroll: false });
+      else setVerifiedLocationSearch(currentSearch);
+    }).catch(error => {
+      if (!cancelled && request === locationRequest.current)
+        setLocationError(error instanceof Error ? error.message : "Shared ZIP could not be loaded. Enter it again or view nationwide.");
+    }).finally(() => {
+      if (!cancelled && request === locationRequest.current) setResolvingZip(false);
+    });
+    return () => { cancelled = true; };
+  }, [linkedZip, currentSearch, verifiedLocationSearch, state, router]);
+  useEffect(() => { setZipDraft(state.filters.zip ?? linkedZip ?? ""); }, [state.filters.zip, linkedZip]);
   const searchZip = async (zip: string) => {
     const request = ++locationRequest.current;
     setLocationError("");
@@ -435,7 +490,11 @@ export default function VehiclesClient() {
     try {
       const location = await lookupZip(zip.trim());
       if (request !== locationRequest.current) return;
+      verifiedCoordinates.current = { zip: zip.trim(), ...location };
       rememberZip(zip.trim());
+      const target = resolvedZipUrl(state.filters, state.sort, zip.trim(), location);
+      setVerifiedLocationSearch(new URL(target, window.location.origin).search.slice(1));
+      record("zip_entry");
       apply({ ...withoutGeography(state.filters), zip: zip.trim(), ...location, radiusMiles: 50 });
     } catch (error) {
       if (request === locationRequest.current) setLocationError(error instanceof Error ? error.message : "ZIP lookup is unavailable. Try again.");
@@ -447,6 +506,7 @@ export default function VehiclesClient() {
     locationRequest.current++;
     setResolvingZip(false);
     setLocationError("");
+    record("nationwide_view");
     apply(withoutGeography(state.filters), state.sort);
   };
   const clearLocation = () => {
@@ -491,6 +551,7 @@ export default function VehiclesClient() {
     apply(next);
   };
   const stateKey = discoveryUrl(state.filters, state.sort);
+  const locationLinkNeedsValidation = linkedZip !== null && verifiedLocationSearch !== currentSearch;
   return (
     <div className="market-page flex min-h-screen flex-col">
       <Navbar />
@@ -540,7 +601,9 @@ export default function VehiclesClient() {
               <section aria-labelledby="location-heading" className="mb-6 rounded-2xl border border-black/10 bg-white p-5 sm:p-6">
                 <h2 id="location-heading" className="text-lg font-semibold">{state.filters.latitude !== undefined ? "Your search location" : "Find vehicles near you"}</h2>
                 <p className="mt-1 text-sm text-muted-foreground">
-                  {state.filters.latitude !== undefined
+                  {locationLinkNeedsValidation
+                    ? "Checking the ZIP in this shared link before showing nearby results."
+                    : state.filters.latitude !== undefined
                     ? `Showing vehicles within ${state.filters.radiusMiles ?? 50} miles${state.filters.zip ? ` of ${state.filters.zip}` : " of your selected location"}.`
                     : state.filters.state
                       ? `Browsing listings in ${state.filters.state}. Enter a ZIP to search nearby or view listings nationwide.`
@@ -552,7 +615,7 @@ export default function VehiclesClient() {
                     <input id="discovery-zip" inputMode="numeric" autoComplete="postal-code" maxLength={5} value={zipDraft} onChange={(event) => setZipDraft(event.target.value)} aria-describedby={locationError ? "location-error" : undefined} className="h-10 w-full rounded-lg border border-input bg-white px-3 text-sm" placeholder="e.g. 27601" />
                   </div>
                   <Button type="submit" disabled={resolvingZip}>{resolvingZip ? "Finding ZIP…" : "Search nearby"}</Button>
-                  {(state.filters.latitude !== undefined || state.filters.state) && <Button type="button" variant="outline" onClick={nationwide}>View nationwide</Button>}
+                  {(linkedZip !== null || state.filters.latitude !== undefined || state.filters.state) && <Button type="button" variant="outline" onClick={nationwide}>View nationwide</Button>}
                   {state.filters.latitude === undefined && rememberedZip && <Button type="button" variant="outline" onClick={() => void searchZip(rememberedZip)}>Search near {rememberedZip}</Button>}
                   {(rememberedZip || state.filters.latitude !== undefined || state.filters.state) && <Button type="button" variant="ghost" onClick={clearLocation}>Clear location</Button>}
                 </form>
@@ -651,7 +714,7 @@ export default function VehiclesClient() {
                   </button>
                 </div>
               )}
-              <QueryBoundary
+              {locationLinkNeedsValidation ? <p role={locationError ? "alert" : "status"} className="rounded-xl bg-white p-6 text-sm">{locationError || "Checking shared ZIP location…"}</p> : <QueryBoundary
                 key={stateKey}
                 message="Inventory could not be loaded. Please try again."
               >
@@ -662,9 +725,9 @@ export default function VehiclesClient() {
                   stateKey={stateKey}
                   onRestoreLayout={setLayout}
                   onNationwide={nationwide}
-                  onExpandRadius={() => apply({ ...state.filters, radiusMiles: Math.min(500, (state.filters.radiusMiles ?? 50) * 2) })}
+                  onExpandRadius={() => { record("radius_expand"); apply({ ...state.filters, radiusMiles: Math.min(500, (state.filters.radiusMiles ?? 50) * 2) }); }}
                 />
-              </QueryBoundary>
+              </QueryBoundary>}
               <QueryBoundary
                 key={user?._id ?? "guest-history"}
                 message="Recently viewed listings are unavailable right now."

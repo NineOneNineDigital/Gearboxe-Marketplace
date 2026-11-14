@@ -7,7 +7,7 @@ import type { Id } from "@/convex/_generated/dataModel";
 import { useMutation } from "convex/react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 
 export function OfferSubmit({ vehicleId, sellerId }: { vehicleId: Id<"vehicles">; sellerId: Id<"users"> }) {
   const submit = useMutation(api.offers.submit);
@@ -17,6 +17,10 @@ export function OfferSubmit({ vehicleId, sellerId }: { vehicleId: Id<"vehicles">
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
   const requestId = useRef<string | null>(null);
+
+  useEffect(() => {
+    if (new URLSearchParams(window.location.search).get("offer") === "1") setOpen(true);
+  }, []);
 
   async function handleSubmit(event: React.FormEvent) {
     event.preventDefault();
