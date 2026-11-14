@@ -262,6 +262,8 @@ export default defineSchema({
     kind: v.union(v.literal("active"), v.literal("reserved")),
     firstAt: v.number(), respondedAt: v.optional(v.number()), purgeAt: v.number(),
     firstSource: v.union(v.literal("message"), v.literal("offer")),
+    excludedAt: v.optional(v.number()),
+    excludedBy: v.optional(v.id("users")),
   }).index("by_vehicle_buyer_kind", ["vehicleId", "buyerId", "kind"]).index("by_first_at", ["firstAt"]).index("by_purge_at", ["purgeAt"]),
   engagementTracking: defineTable({ key: v.literal("global"), startedAt: v.number() }).index("by_key", ["key"]),
 

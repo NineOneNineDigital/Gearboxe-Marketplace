@@ -85,6 +85,14 @@ an offer response. Count Reserved availability questions separately. The
 existing directional target of ten qualified exchanges in 30 days is for
 learning, not a release gate or a guaranteed outcome.
 
+The admin engagement report omits pairs an operator explicitly excludes as
+test traffic or confirmed abuse. Exclusion and restoration require an audited
+reason; the report shows the excluded-pair count alongside included aggregates.
+The bounded review list contains only opaque pair, listing, and buyer IDs plus
+inquiry type, source, time, response status, and exclusion state. Operators
+should use case references rather than message text, offer details, or contact
+information in audit reasons. Unreviewed test or spam activity may still count.
+
 Use approved, privacy-reviewed internal attribution and aggregate counts for
 landing visits → ZIP searches → approved-listing views → verified buyer signups
 → first inquiries → seller replies → qualified exchanges. Define event sources,
