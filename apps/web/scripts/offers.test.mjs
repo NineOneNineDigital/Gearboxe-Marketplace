@@ -127,6 +127,9 @@ test("counter versions, single acceptance, competing proposals, review/cancel/cl
   assert.equal(f.get(id).expiresAt, f.time() + RESPONSE_MS);
   await f.call(offers.respond, { threadId: id, version: 2, action: "accept" });
   assert.equal(f.get("vehicle").status, "reserved");
+  assert.deepEqual(f.rows("vehicleModerationLog").map(({ fromStatus, toStatus, actorId }) => ({ fromStatus, toStatus, actorId })), [
+    { fromStatus: "active", toStatus: "reserved", actorId: "buyer" },
+  ]);
   assert.equal(f.get(id).acceptedAt, f.time());
   assert.equal(f.get(id).proposalVersion, 2);
   assert.equal(JSON.stringify(publicVehicle(f.get("vehicle"))).includes("999900"), false);
@@ -155,6 +158,11 @@ test("counter versions, single acceptance, competing proposals, review/cancel/cl
   await assert.rejects(f.call(offers.finish, {threadId: id, version: 7, outcome: "sold", reason: "Ended"}), /unavailable/);
   f.as("seller"); await f.call(offers.finish, {threadId: id, version: 7, outcome: "sold", reason: "Sale completed"});
   assert.equal(f.get("vehicle").status, "sold");
+  assert.deepEqual(f.rows("vehicleModerationLog").map(({ fromStatus, toStatus, actorId }) => ({ fromStatus, toStatus, actorId })), [
+    { fromStatus: "active", toStatus: "reserved", actorId: "buyer" },
+    { fromStatus: "reserved", toStatus: "sold", actorId: "seller" },
+  ]);
+  assert.equal(f.get("vehicle").moderationHistory.length, 2);
   await f.call(offers.sweep);
   assert.equal(f.get(competitor).closedAt, start + RESPONSE_MS);
   assert.equal(f.get(id).purgeAt, purgeDeadline(f.time()));
@@ -309,19 +317,20 @@ test("late moderation preserves the earlier effective availability deadline and 
   assert.equal(f.get(id).purgeAt, purgeDeadline(end));
 });
 
-test("offer engagement counts first inquiry and seller counter/accept once without recording price or decline", async t => {
+test("offer engagement counts first inquiry and seller decline as a response once without recording price", async t => {
   const f = fixture(t), first = await f.submit("first", 8321);
+  const initialAt = f.time(), declinedAt = initialAt + 100;
+  f.at(declinedAt);
   f.as("seller"); await f.call(offers.respond, {threadId:first, version:1, action:"decline"});
   assert.equal(f.rows("engagementPairs").length, 1);
-  assert.equal(f.rows("engagementPairs")[0].respondedAt, undefined);
-  const firstAt = f.time();
-  f.at(firstAt + 100); f.as("buyer"); const second = await f.submit("second", 8399);
+  assert.equal(f.rows("engagementPairs")[0].respondedAt, declinedAt);
+  f.at(declinedAt + 100); f.as("buyer"); const second = await f.submit("second", 8399);
   f.as("seller"); const answeredAt = f.time();
   await f.call(offers.respond, {threadId:second, version:1, action:"counter", dollars:8990});
   f.at(answeredAt + 50); f.as("buyer"); await f.call(offers.respond, {threadId:second, version:2, action:"accept"});
   const [row] = f.rows("engagementPairs");
   assert.equal(f.rows("engagementPairs").length, 1);
-  assert.equal(row.firstAt, firstAt); assert.equal(row.respondedAt, answeredAt);
+  assert.equal(row.firstAt, initialAt); assert.equal(row.respondedAt, declinedAt);
   assert.equal(row.firstSource, "offer"); assert.equal(row.kind, "active");
   assert.equal("priceCents" in row || "dollars" in row || "body" in row, false);
 });

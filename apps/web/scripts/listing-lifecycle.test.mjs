@@ -302,6 +302,12 @@ test("availability reminder, confirmation, expiry and restoration are idempotent
     await f.mutate(vehicles.checkAvailability, { id: "vehicle", dueAt: renewed });
     await f.mutate(vehicles.checkAvailability, { id: "vehicle", dueAt: renewed });
     assert.equal(f.rows("vehicles")[0].status, "archived");
+    assert.deepEqual(f.rows("vehicleModerationLog").at(-1), {
+      _id: f.rows("vehicleModerationLog").at(-1)._id,
+      vehicleId: "vehicle", fromStatus: "active", toStatus: "archived",
+      reason: "Listing expired after availability was not confirmed", source: "system", createdAt: renewed,
+    });
+    assert.equal(f.rows("vehicles")[0].moderationHistory.at(-1).source, "system");
     assert.equal(f.rows("vehicles")[0].availabilityExpiredAt, renewed);
     assert.equal(f.rows("vehicles")[0].availabilityHistory.filter(event => event.kind === "expired").length, 1);
     assert.equal(f.rows("vehicles")[0].availabilityHistory.at(-1).at, renewed);

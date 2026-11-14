@@ -19,7 +19,7 @@ import { isPublicVehicle, publicVehicle, normalizeVehicleStatus } from "./lib/ve
 import { mediaReference, attachMedia, resolveVehicleMedia } from "./lib/vehicleMedia";
 import { removeMedia } from "./mediaRecords";
 import { enqueueNotification, notifySeller, notifyListingFollowers } from "./notifications";
-import { assertRevision, assertSubmitReady, availabilityClock, AVAILABILITY_REMINDER_MS, duplicateVin, listingRevision, nextRevision } from "./lib/listingLifecycle";
+import { assertRevision, assertSubmitReady, availabilityClock, AVAILABILITY_REMINDER_MS, duplicateVin, listingRevision, nextRevision, recordListingStatusHistory } from "./lib/listingLifecycle";
 import { consumeRateLimit } from "./lib/trustGuards";
 import { syncDiscovery } from "./lib/discoveryIndex";
 
@@ -348,7 +348,9 @@ async function processAvailability(ctx: MutationCtx, vehicle: Doc<"vehicles">, n
   }
   if (now >= vehicle.availabilityDueAt) {
     await onOfferListingTransition(ctx, vehicle, "archived", { effectiveAt: vehicle.availabilityDueAt });
-    await ctx.db.patch(vehicle._id, { status: "archived", availabilityExpiredAt: vehicle.availabilityDueAt, availabilityNextCheckAt: undefined, updatedAt: nextRevision(vehicle), moderationReason: "Listing expired after availability was not confirmed", availabilityHistory: availabilityHistory(vehicle, { kind: "expired", at: vehicle.availabilityDueAt }) });
+    const reason = "Listing expired after availability was not confirmed";
+    const history = await recordListingStatusHistory(ctx, vehicle, "archived", reason, vehicle.availabilityDueAt);
+    await ctx.db.patch(vehicle._id, { ...history, status: "archived", availabilityExpiredAt: vehicle.availabilityDueAt, availabilityNextCheckAt: undefined, updatedAt: nextRevision(vehicle), availabilityHistory: availabilityHistory(vehicle, { kind: "expired", at: vehicle.availabilityDueAt }) });
     await notifySeller(ctx, vehicle.userId, vehicle._id, "archived", `${vehicle.title}: Listing expired. Reopen as a draft and submit for review at no fee.`);
     await notifyListingFollowers(ctx, vehicle._id, "archived", now);
     await syncDiscovery(ctx, vehicle._id);

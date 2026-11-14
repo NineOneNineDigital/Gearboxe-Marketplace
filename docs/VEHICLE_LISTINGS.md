@@ -35,7 +35,7 @@ Listings removed by moderation require an appeal and moderator restoration.
 Seller controls include editing drafts and
 rejected listings so incomplete legacy records can be completed before review.
 
-Every status change and submitted edit appends actor, timestamp, before/after status and
+Every status change and submitted edit appends actor (or system source for automatic expiry), timestamp, before/after status and
 reason to listing history and a separate operator-only moderation log. These
 logs survive listing deletion. Public projections omit moderation notes, history
 and contact information. Inactive listings remain accessible only to their

@@ -6,6 +6,12 @@ import { validateVehicle } from "./vehicleValidation";
 
 export function listingRevision(vehicle: Doc<"vehicles">) { return vehicle.updatedAt ?? vehicle.createdAt; }
 export function nextRevision(vehicle?: Doc<"vehicles">) { return Math.max(Date.now(), vehicle ? listingRevision(vehicle) + 1 : 0); }
+export async function recordListingStatusHistory(ctx: MutationCtx, vehicle: Doc<"vehicles">, status: Doc<"vehicles">["status"], reason: string, at: number, actorId?: Id<"users">) {
+  const entry = { fromStatus: vehicle.status, toStatus: status, reason, createdAt: at,
+    ...(actorId ? { actorId } : { source: "system" as const }) };
+  await ctx.db.insert("vehicleModerationLog", { vehicleId: vehicle._id, ...entry });
+  return { moderationReason: reason, moderationHistory: [...(vehicle.moderationHistory ?? []), entry] };
+}
 export function assertRevision(vehicle: Doc<"vehicles">, expected?: number) {
   if (expected !== undefined && expected !== listingRevision(vehicle)) throw new Error("This listing changed in another session. Reload it before saving your changes.");
 }

@@ -76,7 +76,8 @@ Prefer isolated [Stripe sandboxes](https://docs.stripe.com/sandboxes) when the l
    webhooks to each frontend's `/api/webhooks/stripe`, with the endpoint's matching
    signing secret and mode. Dynamic previews need separate test endpoints before
    paid flows can be tested. Preserve credentials and reconciliation for any
-   historical in-flight event payments when disabling new registrations.
+   historical event payments when disabling new registrations, including completed
+   registrations that may still be eligible for cancellation and refund.
 9. Provision the first super-admin using the controlled procedure below. Verify a
    second approved super-admin for recovery, account MFA, and operator access.
 10. Deploy staging, perform the smoke checklist, record the exact tested commit,
@@ -109,6 +110,18 @@ the popup switch is enabled. Marketplace email delivery uses
 Convex deployment, a verified sender, the correct `APP_URL` and
 `CONVEX_SITE_URL`, and a delivery webhook. Validate delivery and suppression in
 isolated staging before claiming notifications work. See [Notifications](NOTIFICATIONS.md).
+When popup payments are disabled, existing held reservations, paid or unsettled
+payment records, completed or refund-pending registrations, and unfinished
+webhook records still require matching Stripe API and webhook credentials in
+**both** web and Convex. The release readiness action checks for this work using
+indexed reads and rejects missing credentials. Keep the webhook endpoint active
+until reconciliation and possible refunds are complete. Removing keys or disabling
+the provider endpoint before deploying bypasses that check temporarily; verify
+the current payment queue and preserve credentials before changing either
+environment. The readiness check runs **after** the backend deploy, so a failed
+check is a stop signal requiring immediate configuration repair, not a guarantee
+that no temporary recovery gap occurred. No new checkout is opened while the
+popup switch is off.
 No client Stripe publishable key is currently consumed: Checkout redirects are server-created.
 When events are later enabled, the event price must be the approved positive
 integer USD-cent amount and match between web and backend. Key prefixes do not

@@ -192,12 +192,12 @@ export const respond = mutation({
     const sender = thread.senderId === user._id;
     if (action === "withdraw" ? !sender || user._id !== thread.buyerId : sender) throw unavailable();
     if (action !== "counter" && dollars !== undefined) throw new Error("Only a counteroffer takes a price.");
+    if (user._id === thread.sellerId) {
+      await recordEngagementResponse(ctx, thread.vehicleId, thread.buyerId, thread.sellerId, now, "active");
+    }
     if (action === "withdraw" || action === "decline") {
       await closeThread(ctx, thread, action === "withdraw" ? "withdrawn" : "declined", now, user._id);
       return;
-    }
-    if (user._id === thread.sellerId) {
-      await recordEngagementResponse(ctx, thread.vehicleId, thread.buyerId, thread.sellerId, now, "active");
     }
     if (action === "counter") {
       if (dollars === undefined) throw new Error("Enter a whole-dollar price.");
@@ -213,7 +213,7 @@ export const respond = mutation({
     await note(ctx, thread, "accepted", "reserved", now, { actorId: user._id, priceCents: thread.priceCents });
     await ctx.db.patch(threadId, { acceptedAt: now, checkAt, nextCheckAt: checkAt });
     await ctx.db.patch(cycle._id, { winner: threadId });
-    await setDealStatus(ctx, vehicle, "reserved", now);
+    await setDealStatus(ctx, vehicle, "reserved", now, user._id);
     await notify(ctx, thread, "accepted", version + 1, [thread.buyerId, thread.sellerId], user._id);
     await ctx.scheduler.runAt(checkAt, internal.offers.checkReview, { threadId, checkAt });
   },
@@ -277,7 +277,7 @@ export const finish = mutation({
     const now = Date.now();
     await closeThread(ctx, thread, outcome === "sold" ? "sold" : "released", now, actor._id, text);
     await endCycle(ctx, cycle, now);
-    await setDealStatus(ctx, vehicle, outcome === "sold" ? "sold" : "active", now);
+    await setDealStatus(ctx, vehicle, outcome === "sold" ? "sold" : "active", now, actor._id);
   },
 });
 

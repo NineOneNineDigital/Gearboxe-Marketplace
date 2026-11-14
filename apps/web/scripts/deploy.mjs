@@ -8,6 +8,10 @@ const result = spawnSync("pnpm", ["exec", "convex", "deploy", "--yes", "--typech
 if (result.error) throw new Error("Unable to start deployment");
 if (result.status !== 0) process.exit(result.status ?? 1);
 const readiness = spawnSync("pnpm", ["exec", "convex", "run", ...targetArgs,
-  "admin:validateDeployment", JSON.stringify({ expectedEnvironment: mode, expectedPopupPaymentsEnabled: process.env.NEXT_PUBLIC_POPUP_PAYMENTS_ENABLED === "true" })], { stdio: "inherit" });
+  "admin:validateDeployment", JSON.stringify({
+    expectedEnvironment: mode,
+    expectedPopupPaymentsEnabled: process.env.NEXT_PUBLIC_POPUP_PAYMENTS_ENABLED === "true",
+    webPaymentRecoveryConfigured: !!process.env.STRIPE_SECRET_KEY && !!process.env.STRIPE_WEBHOOK_SECRET,
+  })], { stdio: "inherit" });
 if (readiness.error) throw new Error("Unable to run backend readiness check");
 process.exit(readiness.status ?? 1);

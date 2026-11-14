@@ -1,5 +1,6 @@
 /** The URL is the shareable source of truth for inventory discovery. */
 import { isVehicleFacetValue, type VehicleFacetFilters } from "./vehicle-facets";
+import { isUsStateCode } from "./us-states";
 
 export interface DiscoveryFilters extends VehicleFacetFilters {
   search?: string;
@@ -82,7 +83,7 @@ export function readDiscoveryUrl(
   )
     delete filters.maxYear;
   const state = params.get("state")?.trim().toUpperCase();
-  if (state && /^[A-Z]{2}$/.test(state)) filters.state = state;
+  if (state && isUsStateCode(state)) filters.state = state;
   const latitudeRaw = params.get("latitude"),
     longitudeRaw = params.get("longitude");
   const latitude = latitudeRaw?.trim() ? Number(latitudeRaw) : NaN;

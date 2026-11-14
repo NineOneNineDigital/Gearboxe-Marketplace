@@ -23,7 +23,7 @@ export const optionalSpecificationFields = {
 } as { [K in keyof typeof specificationFields]: ReturnType<typeof v.optional<(typeof specificationFields)[K]>> };
 
 export const moderationEntry = v.object({ fromStatus: v.optional(storedListingStatus), toStatus: storedListingStatus,
-  reason: v.string(), actorId: v.id("users"), createdAt: v.number() });
+  reason: v.string(), actorId: v.optional(v.id("users")), source: v.optional(v.literal("system")), createdAt: v.number() });
 export const decodedFields = { vin: v.string(), year: v.number(), make: v.string(), model: v.string(),
   trim: v.optional(v.string()), bodyStyle: v.optional(v.string()), engine: v.optional(v.string()),
   transmission: v.optional(v.string()), drivetrain: v.optional(v.string()), fuelType: v.optional(v.string()) };

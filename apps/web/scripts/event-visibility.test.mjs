@@ -70,7 +70,7 @@ test("public catalog and event-specific inventory are hidden when popups are dis
 
 test("release readiness checks the rollout value on the targeted Convex deployment", async () => {
   const { validateDeployment } = await import("../convex/admin.ts");
-  const target = { expectedEnvironment: "staging" };
+  const target = { expectedEnvironment: "staging", webPaymentRecoveryConfigured: true };
   assert.equal((await validateDeployment._handler({}, { ...target, expectedPopupPaymentsEnabled: true })).ready, true);
   await assert.rejects(validateDeployment._handler({}, { ...target, expectedPopupPaymentsEnabled: false }), /popup rollout does not match/);
   delete process.env.NEXT_PUBLIC_POPUP_PAYMENTS_ENABLED;

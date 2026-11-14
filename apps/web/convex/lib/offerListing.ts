@@ -2,7 +2,7 @@ import type { Doc, Id } from "../_generated/dataModel";
 import type { MutationCtx } from "../_generated/server";
 import { internal } from "../_generated/api";
 import { syncDiscovery } from "./discoveryIndex";
-import { availabilityClock, AVAILABILITY_REMINDER_MS, nextRevision } from "./listingLifecycle";
+import { availabilityClock, AVAILABILITY_REMINDER_MS, nextRevision, recordListingStatusHistory } from "./listingLifecycle";
 import { notifyListingFollowers } from "../notifications";
 import { consumeRateLimit } from "./trustGuards";
 import { currentCycle, closeThread } from "./offerRecords";
@@ -37,10 +37,13 @@ export async function onOfferListingTransition(ctx: MutationCtx, vehicle: Vehicl
 }
 
 // A listing transition shared with discovery and availability, with no buyer identity or terms on the public document.
-export async function setDealStatus(ctx: MutationCtx, vehicle: Vehicle, status: "reserved" | "active" | "sold", now: number) {
+export async function setDealStatus(ctx: MutationCtx, vehicle: Vehicle, status: "reserved" | "active" | "sold", now: number, actorId: Id<"users">) {
   const clock = status === "active" ? availabilityClock(now) : { availabilityDueAt: undefined, availabilityNextCheckAt: undefined };
+  const reason = status === "reserved" ? "Reserved after a structured offer was accepted"
+    : status === "sold" ? "Marked sold after offer closeout" : "Available after offer closeout";
+  const history = await recordListingStatusHistory(ctx, vehicle, status, reason, now, actorId);
   await ctx.db.patch(vehicle._id, {
-    ...clock, status, updatedAt: nextRevision(vehicle), availabilityExpiredAt: undefined,
+    ...clock, ...history, status, updatedAt: nextRevision(vehicle), availabilityExpiredAt: undefined,
   });
   if (clock.availabilityDueAt !== undefined) {
     const dueAt = clock.availabilityDueAt;
