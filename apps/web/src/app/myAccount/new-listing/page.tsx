@@ -22,6 +22,9 @@ import { redirect, useRouter, useSearchParams } from "next/navigation";
 import { Suspense, useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
 import { VehicleMediaEditor, type ListingMedia } from "@/components/ui/vehicle-media-editor";
 import type { Id } from "@/convex/_generated/dataModel";
+import { displayDisclosure } from "@/lib/disclosure";
+import { lookupZip } from "@/lib/zip-location";
+import { MIN_PHOTOS, missingPhotoViews } from "@/convex/lib/mediaPolicy";
 import { validateVehicle } from "@/convex/lib/vehicleValidation";
 import { transitionListingEditorSession, type ListingEditorSession } from "@/lib/listing-editor-session";
 import Link from "next/link";
@@ -123,6 +126,7 @@ function ListingForm({ editId, isCurrentSession, onDraftCreated }: {
 
   const [step, setStep] = useState(editId ? 1 : 0);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [isLocating, setIsLocating] = useState(false);
   const [formData, setFormData] = useState({
     title: "",
     make: "",
@@ -133,11 +137,11 @@ function ListingForm({ editId, isCurrentSession, onDraftCreated }: {
     vin: "",
     description: "",
     contactInfo: "",
-    trim: "", bodyStyle: "", engine: "", transmission: "", drivetrain: "", fuelType: "",
+    lienStatus: "" as "" | "none" | "outstanding" | "uncertain", lienPayoffPlan: "", vehicleCategory: "", trim: "", bodyStyle: "", engine: "", transmission: "", drivetrain: "", fuelType: "",
     exteriorColor: "", interiorColor: "", mileageUnit: "mi" as "mi" | "km", odometerStatus: "actual" as "actual" | "exempt" | "not_actual",
     titleStatus: "unknown" as "clean" | "rebuilt" | "salvage" | "flood" | "lemon" | "other" | "unknown", sellerState: "", condition: "good" as "excellent" | "good" | "fair" | "poor", mechanicalIssues: "",
-    accidentDisclosure: "unknown", damageDisclosure: "unknown", numberOfOwners: "",
-    serviceRecords: "unknown" as "available" | "partial" | "unavailable" | "unknown", modifications: "", sellerType: "private" as "private" | "dealer", location: "", locationState: "", latitude: "", longitude: "",
+    accidentDisclosure: "", damageDisclosure: "", numberOfOwners: "",
+    serviceRecords: "unknown" as "available" | "partial" | "unavailable" | "unknown", modifications: "", sellerType: "private" as "private" | "dealer", location: "", locationState: "", locationZip: "", latitude: "", longitude: "",
     features: "", negotiable: false,
     photos: [] as string[],
   });
@@ -154,16 +158,16 @@ function ListingForm({ editId, isCurrentSession, onDraftCreated }: {
       title: existing.title, make: existing.make, model: existing.model,
       year: existing.year ? String(existing.year) : "", mileage: String(existing.mileage), price: String(existing.price),
       vin: existing.vin ?? "", description: existing.description, contactInfo: existing.contactInfo,
-      photos: existing.legacyPhotos ?? existing.photos, trim: existing.trim ?? "", bodyStyle: existing.bodyStyle ?? "",
+      photos: existing.legacyPhotos ?? existing.photos, lienStatus: existing.lienStatus ?? ("" as const), lienPayoffPlan: existing.lienPayoffPlan ?? "", vehicleCategory: existing.vehicleCategory ?? "", trim: existing.trim ?? "", bodyStyle: existing.bodyStyle ?? "",
       engine: existing.engine ?? "", transmission: existing.transmission ?? "", drivetrain: existing.drivetrain ?? "",
       fuelType: existing.fuelType ?? "", exteriorColor: existing.exteriorColor ?? "", interiorColor: existing.interiorColor ?? "",
       mileageUnit: existing.mileageUnit ?? "mi", odometerStatus: existing.odometerStatus ?? "actual",
       titleStatus: existing.titleStatus ?? "unknown", sellerState: existing.sellerState ?? "",
       condition: existing.condition ?? "good", mechanicalIssues: existing.mechanicalIssues ?? "",
-      accidentDisclosure: existing.accidentDisclosure ?? "unknown", damageDisclosure: existing.damageDisclosure ?? "unknown",
+      accidentDisclosure: existing.accidentDisclosure ?? "", damageDisclosure: existing.damageDisclosure ?? "",
       numberOfOwners: existing.numberOfOwners ? String(existing.numberOfOwners) : "", serviceRecords: existing.serviceRecords ?? "unknown",
       modifications: existing.modifications ?? "", sellerType: existing.sellerType ?? "private",
-      location: existing.location?.city ?? "", locationState: existing.location?.state ?? "",
+      location: existing.location?.city ?? "", locationState: existing.location?.state ?? "", locationZip: existing.location?.postalCode ?? "",
       latitude: existing.location?.latitude?.toString() ?? "", longitude: existing.location?.longitude?.toString() ?? "",
       features: existing.features?.join("\n") ?? "", negotiable: existing.negotiable ?? false,
     };
@@ -190,7 +194,7 @@ function ListingForm({ editId, isCurrentSession, onDraftCreated }: {
         mileage: formData.mileage ? Number(formData.mileage) : 0,
         price: formData.price ? Number(formData.price) : 0,
         vin: formData.vin.trim().toUpperCase() || undefined,
-        trim: formData.trim, bodyStyle: formData.bodyStyle, engine: formData.engine,
+        lienStatus: formData.lienStatus || undefined, lienPayoffPlan: formData.lienPayoffPlan, vehicleCategory: formData.vehicleCategory || undefined, trim: formData.trim, bodyStyle: formData.bodyStyle, engine: formData.engine,
         transmission: formData.transmission, drivetrain: formData.drivetrain, fuelType: formData.fuelType,
         exteriorColor: formData.exteriorColor, interiorColor: formData.interiorColor,
         mileageUnit: formData.mileageUnit, odometerStatus: formData.odometerStatus, titleStatus: formData.titleStatus,
@@ -199,11 +203,11 @@ function ListingForm({ editId, isCurrentSession, onDraftCreated }: {
         damageDisclosure: formData.damageDisclosure,
         numberOfOwners: formData.numberOfOwners ? Number(formData.numberOfOwners) : undefined,
         serviceRecords: formData.serviceRecords, modifications: formData.modifications,
-        sellerType: formData.sellerType, location: { city: formData.location, state: formData.locationState, latitude: formData.latitude ? Number(formData.latitude) : undefined, longitude: formData.longitude ? Number(formData.longitude) : undefined },
+        sellerType: formData.sellerType, location: { city: formData.location, state: formData.locationState, postalCode: formData.locationZip.trim() || undefined, latitude: formData.latitude ? Number(formData.latitude) : undefined, longitude: formData.longitude ? Number(formData.longitude) : undefined },
         features: formData.features.split("\n").map((item) => item.trim()).filter(Boolean),
         negotiable: formData.negotiable,
         photos: formData.photos,
-        media: media.map(({ id, caption }) => ({ id, caption })),
+        media: media.map(({ id, caption, view }) => ({ id, caption, view })),
         description: formData.description,
         contactInfo: formData.contactInfo,
       };
@@ -318,15 +322,29 @@ function ListingForm({ editId, isCurrentSession, onDraftCreated }: {
   if (editId && existing && (!owned || terminal)) return <div className="p-8"><p role="alert">{!owned ? "Only the seller can edit this listing." : "This listing is closed for editing. Reopen an eligible listing from your listings page."}</p><Link href="/myAccount/my-listings" className="mt-4 inline-block text-primary underline">Back to my listings</Link></div>;
 
   const handleInputChange = (field: string, value: string) => {
-    setFormData((prev) => ({ ...prev, ...(field === "location" || field === "locationState" ? { latitude: "", longitude: "" } : {}), [field]: field === "sellerState" || field === "locationState" ? value.toUpperCase() : value }));
+    setFormData((prev) => ({ ...prev, ...(["location", "locationState", "locationZip"].includes(field) ? { latitude: "", longitude: "" } : {}), ...(["location", "locationState"].includes(field) ? { locationZip: "" } : {}), [field]: field === "sellerState" || field === "locationState" ? value.toUpperCase() : value }));
+  };
+  const resolveVehicleZip = async () => {
+    const zip = formData.locationZip.trim();
+    setIsLocating(true);
+    setErrorMessage("");
+    try {
+      const centroid = await lookupZip(zip);
+      if (!sessionLive()) return;
+      setFormData(previous => previous.locationZip.trim() !== zip ? previous : ({ ...previous, latitude: centroid.latitude.toFixed(2), longitude: centroid.longitude.toFixed(2) }));
+    } catch (error) {
+      if (sessionLive()) setErrorMessage(error instanceof Error ? error.message : "ZIP lookup is unavailable. Try again.");
+    } finally {
+      if (sessionLive()) setIsLocating(false);
+    }
   };
   const useApproximateLocation = () => {
     if (!navigator.geolocation) { setErrorMessage("Location is unavailable in this browser."); return; }
     const city = formData.location, state = formData.locationState;
     navigator.geolocation.getCurrentPosition(position => {
       if (!sessionLive()) return;
-      setFormData(previous => previous.location !== city || previous.locationState !== state ? previous : ({ ...previous, latitude: position.coords.latitude.toFixed(2), longitude: position.coords.longitude.toFixed(2) }));
-    }, () => { if (sessionLive()) setErrorMessage("Location could not be read. You can continue without distance-search coordinates."); }, { enableHighAccuracy: false, timeout: 10000 });
+      setFormData(previous => previous.location !== city || previous.locationState !== state ? previous : ({ ...previous, locationZip: "", latitude: position.coords.latitude.toFixed(2), longitude: position.coords.longitude.toFixed(2) }));
+    }, () => { if (sessionLive()) setErrorMessage("Location could not be read. Enter the vehicle ZIP code instead."); }, { enableHighAccuracy: false, timeout: 10000 });
   };
 
   const handleDecode = async (vinInput = formData.vin, advance = false) => {
@@ -405,7 +423,7 @@ function ListingForm({ editId, isCurrentSession, onDraftCreated }: {
           <h1 className="text-3xl font-bold text-gray-900">
             {editId ? "Edit Your Vehicle" : "List Your Vehicle"}
           </h1>
-          <p className="mt-2 text-sm text-gray-600">Before submitting, verify your seller contact details and attest vehicle ownership in <Link href="/myAccount/safety" className="underline text-primary">Trust & safety</Link>. Private ownership documents belong there.</p>
+          <p className="mt-2 text-sm text-gray-600">Before submitting, verify your seller contact details and attest vehicle ownership in <Link href={`/myAccount/safety?next=${encodeURIComponent(editId ? `/myAccount/new-listing?edit=${editId}` : "/myAccount/new-listing")}`} className="underline text-primary">Trust & safety</Link>. Private ownership documents belong there.</p>
           <p className="text-gray-600">
             {canAutosave ? "Your draft saves automatically. Preview your listing before submitting it for review." : "Preview your changes and submit them for review when you are ready."}
           </p>
@@ -546,6 +564,7 @@ function ListingForm({ editId, isCurrentSession, onDraftCreated }: {
                     <p className="text-sm text-gray-600" role="status">{vinMessage}</p>
                     {duplicate?.duplicate && <p role="alert" className="text-sm text-red-700">A current listing already uses this VIN. Resolve the duplicate before submitting.</p>}
                   </div>
+                  <div className="space-y-2 md:col-span-2"><Label htmlFor="vehicleCategory">Vehicle category *</Label><select id="vehicleCategory" className="w-full rounded-md border p-2" value={formData.vehicleCategory} onChange={event => handleInputChange("vehicleCategory", event.target.value)}><option value="">Select a category</option><option value="car">Car</option><option value="truck">Truck</option><option value="suv">SUV</option><option value="specialty">Street-legal specialty</option></select><p className="text-sm text-gray-600">Specialty includes classic or unusual road vehicles. They require manual review of registration and transfer eligibility. Motorcycles, RVs, parts-only inventory, and dealer vehicles are not eligible.</p></div>
                   <p className="text-sm text-gray-600 md:col-span-2">Complete each specification. Enter Unknown if a specification is unavailable.</p>
                   {([ ["trim", "Trim"], ["bodyStyle", "Body style"], ["engine", "Engine"], ["transmission", "Transmission"], ["drivetrain", "Drivetrain"], ["fuelType", "Fuel type"], ["exteriorColor", "Exterior color"], ["interiorColor", "Interior color"] ] as const).map(([field, label]) => (
                     <div className="space-y-2" key={field}>
@@ -582,17 +601,19 @@ function ListingForm({ editId, isCurrentSession, onDraftCreated }: {
                     <div className="space-y-2" key={field}><Label htmlFor={field}>{label}</Label><Input id={field} type={field === "numberOfOwners" ? "number" : "text"} min={field === "numberOfOwners" ? 1 : undefined} value={formData[field]} onChange={(e) => handleInputChange(field, e.target.value)} /></div>
                   ))}
                   <div className="space-y-2 md:col-span-2">
-                    <p className="text-sm font-medium">Distance-search location (optional)</p>
-                    <p className="text-xs text-muted-foreground">Use this while you are near the vehicle. Coordinates are rounded to roughly a mile and visible publicly; they do not show your street address.</p>
-                    <Button type="button" variant="outline" onClick={useApproximateLocation}>Use my approximate location</Button>
+                    <Label htmlFor="locationZip">Vehicle ZIP code or current location for nearby search *</Label>
+                    <p className="text-xs text-muted-foreground">Enter the vehicle ZIP and find its approximate location. The ZIP stays private; buyers see only city and state. You can also use your current location while near the vehicle.</p>
+                    <div className="flex flex-wrap gap-2"><Input id="locationZip" inputMode="numeric" autoComplete="postal-code" maxLength={5} value={formData.locationZip} onChange={event => handleInputChange("locationZip", event.target.value)} className="max-w-40" /><Button type="button" variant="outline" disabled={isLocating} onClick={() => void resolveVehicleZip()}>{isLocating ? "Finding ZIP…" : "Use vehicle ZIP"}</Button><Button type="button" variant="outline" onClick={useApproximateLocation}>Use my approximate location</Button></div>
                     {formData.latitude && formData.longitude && <div className="flex items-center gap-3 text-xs"><span>Approximate coordinates: {formData.latitude}, {formData.longitude}</span><Button type="button" size="sm" variant="ghost" onClick={() => setFormData(previous => ({ ...previous, latitude: "", longitude: "" }))}>Remove</Button></div>}
                   </div>
+                  <div className="space-y-2 md:col-span-2"><Label htmlFor="lienStatus">Loan or lien status *</Label><select id="lienStatus" className="w-full rounded-md border p-2" value={formData.lienStatus} onChange={event => handleInputChange("lienStatus", event.target.value)}><option value="">Select status</option><option value="none">No outstanding lien</option><option value="outstanding">Outstanding lien</option><option value="uncertain">Uncertain</option></select><p className="text-sm text-muted-foreground">Outstanding or uncertain liens require enhanced review. Describe how the loan will be paid and title transferred if a lien is outstanding. Do not enter bank account numbers or upload lender documents to public photos.</p>{formData.lienStatus !== "none" && <><Label htmlFor="lienPayoffPlan">Payoff and transfer plan {formData.lienStatus === "outstanding" ? "*" : "(if known)"}</Label><Textarea id="lienPayoffPlan" maxLength={1000} value={formData.lienPayoffPlan} onChange={event => handleInputChange("lienPayoffPlan", event.target.value)} /></>}</div>
                   <div className="space-y-2"><Label htmlFor="titleStatus">Title status</Label><select id="titleStatus" className="w-full rounded-md border p-2" value={formData.titleStatus} onChange={(e) => handleInputChange("titleStatus", e.target.value)}>{["clean", "rebuilt", "salvage", "flood", "lemon", "other", "unknown"].map((value) => <option key={value} value={value}>{value}</option>)}</select></div>
                   <div className="space-y-2"><Label htmlFor="condition">Condition</Label><select id="condition" className="w-full rounded-md border p-2" value={formData.condition} onChange={(e) => handleInputChange("condition", e.target.value)}>{["excellent", "good", "fair", "poor"].map((value) => <option key={value} value={value}>{value}</option>)}</select></div>
                   <div className="space-y-2"><Label htmlFor="sellerType">Seller type</Label><select id="sellerType" className="w-full rounded-md border p-2" value={formData.sellerType} onChange={(e) => handleInputChange("sellerType", e.target.value)}><option value="private">Private seller</option></select></div>
                   <div className="space-y-2"><Label htmlFor="serviceRecords">Service records</Label><select id="serviceRecords" className="w-full rounded-md border p-2" value={formData.serviceRecords} onChange={(e) => handleInputChange("serviceRecords", e.target.value)}><option value="unknown">Unknown</option><option value="available">Available</option><option value="partial">Partial records</option><option value="unavailable">Unavailable</option></select></div>
                 </div>
-                {([ ["mechanicalIssues", "Known mechanical issues * (write None or Unknown if applicable)"], ["accidentDisclosure", "Accident disclosure"], ["damageDisclosure", "Damage disclosure"], ["modifications", "Modifications * (write None if unmodified)"], ["features", "Features / options (one per line)"] ] as const).map(([field, label]) => (
+                <p className="text-sm text-muted-foreground">Describe all mechanical issues, accidents, and damage known to you. Leave a field blank only if you know of no issue to describe.</p>
+                {([ ["mechanicalIssues", "Known mechanical issues"], ["accidentDisclosure", "Known accidents"], ["damageDisclosure", "Known damage"], ["modifications", "Modifications * (write None if unmodified)"], ["features", "Features / options (one per line)"] ] as const).map(([field, label]) => (
                   <div className="space-y-2" key={field}><Label htmlFor={field}>{label}</Label><Textarea id={field} value={formData[field]} onChange={(e) => handleInputChange(field, e.target.value)} /></div>
                 ))}
                 <div className="space-y-2">
@@ -641,15 +662,14 @@ function ListingForm({ editId, isCurrentSession, onDraftCreated }: {
                     <p className="mt-2 text-muted-foreground">{formData.location}, {formData.locationState}</p>
                     <dl className="mt-4 grid gap-4 sm:grid-cols-3">{[["Mileage", `${formData.mileage} ${formData.mileageUnit}`], ["Engine", formData.engine], ["Transmission", formData.transmission], ["Drivetrain", formData.drivetrain], ["Title", formData.titleStatus], ["Condition", formData.condition]].map(([label, value]) => <div key={label}><dt className="text-sm text-muted-foreground">{label}</dt><dd>{value}</dd></div>)}</dl>
                     <p className="mt-4 whitespace-pre-wrap">{formData.description}</p>
-                    <details className="mt-4 rounded-lg border p-4"><summary className="cursor-pointer font-medium">Review seller disclosures</summary><dl className="mt-4 space-y-3">{[["VIN", formData.vin], ["Mechanical issues", formData.mechanicalIssues], ["Accidents", formData.accidentDisclosure], ["Damage", formData.damageDisclosure], ["Modifications", formData.modifications], ["Service records", formData.serviceRecords], ["Owners", formData.numberOfOwners || "Unknown"], ["Mileage declaration", formData.odometerStatus], ["Seller state", formData.sellerState], ["Features", formData.features || "None provided"]].map(([label, value]) => <div key={label}><dt className="text-sm text-muted-foreground">{label}</dt><dd className="whitespace-pre-wrap">{value}</dd></div>)}</dl></details>
+                    <details className="mt-4 rounded-lg border p-4"><summary className="cursor-pointer font-medium">Review seller disclosures</summary><dl className="mt-4 space-y-3">{[["Lien status", formData.lienStatus || "Not selected"], ["Category", ({ car: "Car", truck: "Truck", suv: "SUV", specialty: "Street-legal specialty" } as Record<string, string>)[formData.vehicleCategory] ?? "Not selected"], ["VIN", formData.vin], ["Mechanical issues", displayDisclosure(formData.mechanicalIssues)], ["Accidents", displayDisclosure(formData.accidentDisclosure)], ["Damage", displayDisclosure(formData.damageDisclosure)], ["Modifications", formData.modifications], ["Service records", formData.serviceRecords], ["Owners", formData.numberOfOwners || "Unknown"], ["Mileage declaration", formData.odometerStatus], ["Seller state", formData.sellerState], ["Features", formData.features || "None provided"]].map(([label, value]) => <div key={label}><dt className="text-sm text-muted-foreground">{label}</dt><dd className="whitespace-pre-wrap">{value}</dd></div>)}</dl></details>
                   </div>
                   <h3 className="text-xl font-semibold text-gray-900 mb-2">
                     Preview your listing
                   </h3>
                   <p className="text-gray-600 mb-6">
                     Your vehicle listing will be reviewed by our team before
-                    being published. Once approved, you can register for
-                    upcoming events.
+                    being published. You can track the review result in My Listings.
                   </p>
 
                   <div className="bg-gray-50 rounded-lg p-6 mb-6">
@@ -679,12 +699,12 @@ function ListingForm({ editId, isCurrentSession, onDraftCreated }: {
 
                   {Boolean(specificationError) && <p role="alert" className="mb-4 text-sm text-red-700">{specificationError}. Complete the required information before submitting.</p>}
                   {duplicate?.duplicate && <p role="alert" className="mb-4 text-sm text-red-700">A current listing already uses this VIN. Resolve the duplicate before submitting.</p>}
-                  {(!media.length || formData.photos.length > 0 || mediaBusy) && <p role="alert" className="mb-4 text-sm text-red-700">Upload at least one permanent photo, replace all legacy photos, and finish or remove failed uploads before submitting.</p>}
+                  {(media.length < MIN_PHOTOS || missingPhotoViews(media).length > 0 || formData.photos.length > 0 || mediaBusy) && <p role="alert" className="mb-4 text-sm text-red-700">At least five ready photos are required. Missing views: {missingPhotoViews(media).join(", ") || "none"}. Replace legacy photos and finish or remove failed uploads before submitting.</p>}
                   <div className="flex justify-between">
                     <Button variant="outline" onClick={() => setStep(2)}>
                       Previous Step
                     </Button>
-                    <Button onClick={handleSubmit} disabled={isSubmitting || isDecoding || mediaBusy || Boolean(specificationError) || !media.length || formData.photos.length > 0 || duplicate?.duplicate}>
+                    <Button onClick={handleSubmit} disabled={isSubmitting || isDecoding || mediaBusy || Boolean(specificationError) || media.length < MIN_PHOTOS || missingPhotoViews(media).length > 0 || formData.photos.length > 0 || duplicate?.duplicate}>
                       {isSubmitting ? "Submitting..." : existing?.status === "rejected" ? "Resubmit for review" : "Submit for review"}
                     </Button>
                   </div>

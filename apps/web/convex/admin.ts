@@ -1,4 +1,4 @@
-import { normalizeVehicleStatus } from "./lib/vehicleVisibility";
+import { isPublicVehicle, normalizeVehicleStatus } from "./lib/vehicleVisibility";
 import { v } from "convex/values";
 import { internalAction, mutation, query } from "./_generated/server";
 import { requireAdmin, requireSuperAdmin } from "./lib/authorization";
@@ -7,11 +7,12 @@ import { resolveVehicleMedia } from "./lib/vehicleMedia";
 
 // Operator-only readiness check, invoked by the protected release workflow.
 export const validateDeployment = internalAction({
-  args: { expectedEnvironment: v.string() },
-  handler: async (_ctx, { expectedEnvironment }) => {
-    const { mode } = validateEnvironment(process.env, "convex");
+  args: { expectedEnvironment: v.string(), expectedPopupPaymentsEnabled: v.optional(v.boolean()) },
+  handler: async (_ctx, { expectedEnvironment, expectedPopupPaymentsEnabled = false }) => {
+    const { mode, paymentsEnabled } = validateEnvironment(process.env, "convex");
     if (mode !== expectedEnvironment) throw new Error("Backend environment does not match the release target");
-    return { ready: true, environment: mode };
+    if (paymentsEnabled !== expectedPopupPaymentsEnabled) throw new Error("Backend popup rollout does not match the web release");
+    return { ready: true, environment: mode, paymentsEnabled };
   },
 });
 
@@ -25,12 +26,18 @@ export const getAdminStats = query({
 
     const pendingVehicles = vehicles.filter((v) => v.status === "pending");
     const approvedVehicles = vehicles.filter((v) => (v.status === "approved" || v.status === "active"));
+    const activeVehicles = approvedVehicles.filter(vehicle => isPublicVehicle(vehicle));
+    const reservedVehicles = vehicles.filter((v) => v.status === "reserved" && isPublicVehicle(v));
+    const soldVehicles = vehicles.filter((v) => v.status === "sold");
     const upcomingEvents = events.filter((e) => e.date > Date.now() && e.cancelledAt === undefined);
 
     return {
       totalVehicles: vehicles.length,
       pendingVehicles: pendingVehicles.length,
       approvedVehicles: approvedVehicles.length,
+      activeVehicles: activeVehicles.length,
+      reservedVehicles: reservedVehicles.length,
+      soldVehicles: soldVehicles.length,
       totalEvents: events.length,
       upcomingEvents: upcomingEvents.length,
       totalRegistrations: registrations.length,

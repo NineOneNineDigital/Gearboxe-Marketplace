@@ -4,8 +4,9 @@ import type { MutationCtx, QueryCtx } from "../_generated/server";
 import { removeMedia } from "../mediaRecords";
 import { MAX_PHOTOS } from "./mediaPolicy";
 
-export const mediaReference = v.object({ id: v.id("vehicleMedia"), caption: v.string() });
-type Reference = { id: Id<"vehicleMedia">; caption: string };
+export const photoView = v.union(v.literal("front"), v.literal("rear"), v.literal("left side"), v.literal("right side"), v.literal("interior"));
+export const mediaReference = v.object({ id: v.id("vehicleMedia"), caption: v.string(), view: v.optional(photoView) });
+type Reference = { id: Id<"vehicleMedia">; caption: string; view?: import("./mediaPolicy").PhotoView };
 
 // New uploads must be ready, owned by the seller and exclusive to this listing.
 // Legacy references can be retained or removed, never injected into a new record.

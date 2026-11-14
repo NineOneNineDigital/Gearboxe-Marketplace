@@ -16,11 +16,14 @@ test("inventory return state survives repeated refreshes and stays scoped to its
   const url = "/vehicles?make=Toyota";
   saveInventoryReturn(store, { url, count: 12, scrollY: 300, layout: "grid" });
   // Loading more replaces the saved position before a refresh can occur.
+  const beforeSave = Date.now();
   saveInventoryReturn(store, { url, count: 36, scrollY: 1800, layout: "list" });
+  const afterSave = Date.now();
   assert.equal(readInventoryReturn(store, "/vehicles?make=Honda"), null);
-  const expected = { url, count: 36, scrollY: 1800, layout: "list", savedAt: Date.now() };
-  assert.deepEqual(readInventoryReturn(store, url), expected);
-  assert.deepEqual(readInventoryReturn(store, url), expected);
+  const restored = readInventoryReturn(store, url);
+  assert.deepEqual({ ...restored, savedAt: undefined }, { url, count: 36, scrollY: 1800, layout: "list", savedAt: undefined });
+  assert.ok(restored.savedAt >= beforeSave && restored.savedAt <= afterSave);
+  assert.deepEqual(readInventoryReturn(store, url), restored);
 });
 
 test("inventory return state ignores expired and malformed entries", () => {

@@ -6,6 +6,7 @@ import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { GoogleIcon } from "@/components/ui/google-icon";
+import { listingReturnPath } from "@/lib/auth-return";
 import { useAuth, useSignIn } from "@clerk/nextjs";
 import { Eye, EyeOff, Lock, Mail } from "lucide-react";
 import Link from "next/link";
@@ -20,7 +21,10 @@ export default function SignInPage() {
   const [showPassword, setShowPassword] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState("");
+  const [returnTo, setReturnTo] = useState("/myAccount");
   const router = useRouter();
+
+  useEffect(() => setReturnTo(listingReturnPath(window.location.search)), []);
 
   // Redirect if user is already signed in (only once)
   useEffect(() => {
@@ -28,11 +32,11 @@ export default function SignInPage() {
       // Use setTimeout to avoid race conditions with Next.js router
       const timer = setTimeout(() => {
         try {
-          router.replace("/myAccount");
+          router.replace(listingReturnPath(window.location.search));
         } catch (error) {
           console.warn("Router navigation failed:", error);
           // Fallback to window.location if router fails
-          window.location.href = "/myAccount";
+          window.location.href = listingReturnPath(window.location.search);
         }
       }, 100);
 
@@ -46,7 +50,7 @@ export default function SignInPage() {
 
     // Check if user is already signed in
     if (isSignedIn) {
-      router.push("/myAccount");
+      router.push(listingReturnPath(window.location.search));
       return;
     }
 
@@ -62,10 +66,10 @@ export default function SignInPage() {
       if (result.status === "complete") {
         await setActive({ session: result.createdSessionId });
         try {
-          router.push("/myAccount");
+          router.push(listingReturnPath(window.location.search));
         } catch (error) {
           console.warn("Router navigation failed:", error);
-          window.location.href = "/myAccount";
+          window.location.href = listingReturnPath(window.location.search);
         }
       } else {
         setError("Sign in failed. Please check your credentials.");
@@ -82,10 +86,10 @@ export default function SignInPage() {
         errorMessage.includes("already signed in")
       ) {
         try {
-          router.push("/myAccount");
+          router.push(listingReturnPath(window.location.search));
         } catch (error) {
           console.warn("Router navigation failed:", error);
-          window.location.href = "/myAccount";
+          window.location.href = listingReturnPath(window.location.search);
         }
         return;
       }
@@ -248,7 +252,7 @@ export default function SignInPage() {
                 void signIn?.authenticateWithRedirect({
                   strategy: "oauth_google",
                   redirectUrl: "/sso-callback",
-                  redirectUrlComplete: "/myAccount",
+                  redirectUrlComplete: listingReturnPath(window.location.search),
                 }).catch((err: unknown) => {
                   setError(isClerkAPIResponseError(err) ? err.errors[0]?.message || "Google sign-in could not start" : "Google sign-in could not start");
                   setIsLoading(false);
@@ -265,7 +269,7 @@ export default function SignInPage() {
           <p className="text-sm text-gray-500">
             Don&apos;t have an account?{" "}
             <Link
-              href="/sign-up"
+              href={returnTo === "/myAccount" ? "/sign-up" : `/sign-up?next=${encodeURIComponent(returnTo)}`}
               className="font-medium text-primary hover:text-primary/80"
             >
               Sign up here

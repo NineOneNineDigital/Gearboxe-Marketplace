@@ -1,3 +1,4 @@
+import "./popup-test-environment.mjs";
 import assert from "node:assert/strict";
 import test from "node:test";
 import { registerHooks } from "node:module";
@@ -46,4 +47,37 @@ test("contacts are visible only to authorized staff, paid vendors, admins, or an
   f.tables.events[0].onSiteContactVisibility = "public"; f.as(null);
   assert.deepEqual((await eventForViewer(f.ctx, f.tables.events[0])).onSiteContact, event.onSiteContact);
   assert.equal((await eventForViewer(f.ctx, f.tables.events[0])).cancellationReason, undefined);
+});
+
+test("public catalog and event-specific inventory are hidden when popups are disabled", async () => {
+  process.env.NEXT_PUBLIC_POPUP_PAYMENTS_ENABLED = "false";
+  const f = fixture();
+  try {
+    for (const actor of [null, "other"]) {
+      f.as(actor);
+      assert.deepEqual(await events.getEvents._handler(f.ctx, {}), []);
+      assert.deepEqual(await events.getUpcomingEvents._handler(f.ctx, {}), []);
+      assert.equal(await events.getEventById._handler(f.ctx, { id: "event" }), null);
+      assert.deepEqual(await registrations.getVehiclesByEvent._handler(f.ctx, { eventId: "event" }), []);
+      assert.equal(await registrations.getRegistrationByVehicle._handler(f.ctx, { vehicleId: "car" }), null);
+    }
+    f.as("admin");
+    assert.equal((await registrations.getRegistrationById._handler(f.ctx, { id: "registration" }))._id, "registration");
+  } finally {
+    process.env.NEXT_PUBLIC_POPUP_PAYMENTS_ENABLED = "true";
+  }
+});
+
+test("release readiness checks the rollout value on the targeted Convex deployment", async () => {
+  const { validateDeployment } = await import("../convex/admin.ts");
+  const target = { expectedEnvironment: "staging" };
+  assert.equal((await validateDeployment._handler({}, { ...target, expectedPopupPaymentsEnabled: true })).ready, true);
+  await assert.rejects(validateDeployment._handler({}, { ...target, expectedPopupPaymentsEnabled: false }), /popup rollout does not match/);
+  delete process.env.NEXT_PUBLIC_POPUP_PAYMENTS_ENABLED;
+  try {
+    assert.equal((await validateDeployment._handler({}, target)).paymentsEnabled, false);
+    await assert.rejects(validateDeployment._handler({}, { ...target, expectedPopupPaymentsEnabled: true }), /popup rollout does not match/);
+  } finally {
+    process.env.NEXT_PUBLIC_POPUP_PAYMENTS_ENABLED = "true";
+  }
 });

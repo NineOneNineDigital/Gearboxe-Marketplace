@@ -1,7 +1,9 @@
 import { v } from "convex/values";
+import { isPublicVehicle } from "./lib/vehicleVisibility";
+import { recordEngagementInquiry, recordEngagementResponse } from "./lib/engagement";
 import { paginationOptsValidator } from "convex/server";
 import { enqueueNotification } from "./notifications";
-import { assertCanContact, consumeRateLimit } from "./lib/trustGuards";
+import { assertBuyerEmailVerified, assertCanContact, consumeRateLimit } from "./lib/trustGuards";
 import { mutation, query } from "./_generated/server";
 import {
   isConversationParticipant,
@@ -37,6 +39,7 @@ export const sendMessage = mutation({
     ) {
       throw new Error("The vehicle seller must be part of the conversation");
     }
+    if (vehicle.userId !== currentUser._id) assertBuyerEmailVerified(currentUser);
 
     const [participant1Id, participant2Id] =
       currentUser._id < args.recipientId
@@ -52,7 +55,7 @@ export const sendMessage = mutation({
       )
       .first();
     if (!conversation) {
-      if (vehicle.status !== "approved" && vehicle.status !== "active") throw new Error("This listing no longer accepts new conversations");
+      if (!isPublicVehicle(vehicle)) throw new Error("This listing no longer accepts new conversations");
       await consumeRateLimit(ctx, currentUser._id, "conversation");
       const conversationId = await ctx.db.insert("conversations", {
         vehicleId: args.vehicleId,
@@ -66,14 +69,21 @@ export const sendMessage = mutation({
     if (!conversation) throw new Error("Unable to create conversation");
 
     // Insert message
+    const createdAt = Date.now();
     const messageId = await ctx.db.insert("messages", {
       conversationId: conversation._id,
       senderId: currentUser._id,
       recipientId: args.recipientId,
       content,
       read: false,
-      createdAt: Date.now(),
+      createdAt,
     });
+
+    if (vehicle.userId === currentUser._id) {
+      await recordEngagementResponse(ctx, vehicle._id, args.recipientId, currentUser._id, createdAt);
+    } else if (isPublicVehicle(vehicle)) {
+      await recordEngagementInquiry(ctx, vehicle, currentUser, vehicle.status === "reserved" ? "reserved" : "active", "message", createdAt);
+    }
 
     await ctx.db.patch(conversation._id, { lastMessageAt: Date.now() });
 

@@ -1,3 +1,4 @@
+import { displayDisclosure } from "@/lib/disclosure";
 import type { Doc } from "@/convex/_generated/dataModel";
 
 function display(value: string | number | undefined): string {
@@ -7,6 +8,8 @@ function display(value: string | number | undefined): string {
 
 export function VehicleDetails({ vehicle }: { vehicle: Doc<"vehicles"> }) {
   const essentials = [
+    ["Lien", ({ none: "No lien disclosed", outstanding: "Outstanding lien disclosed", uncertain: "Lien status uncertain" } as Record<string, string>)[vehicle.lienStatus ?? ""] ?? "Not disclosed"],
+    ["Category", ({ car: "Car", truck: "Truck", suv: "SUV", specialty: "Street-legal specialty" } as Record<string, string>)[vehicle.vehicleCategory ?? ""] ?? "Unknown"],
     ["Mileage", `${vehicle.mileage.toLocaleString("en-US")} ${vehicle.mileageUnit ?? "mi"}`],
     ["Engine", vehicle.engine], ["Transmission", vehicle.transmission],
     ["Drivetrain", vehicle.drivetrain], ["Title", vehicle.titleStatus], ["Condition", vehicle.condition],
@@ -22,6 +25,11 @@ export function VehicleDetails({ vehicle }: { vehicle: Doc<"vehicles"> }) {
       <div className="mt-5 flex flex-wrap items-center justify-between gap-2 border-t border-border pt-4 text-xs">
         <p className="text-muted-foreground">VIN <span className="ml-2 break-all font-mono text-foreground">{vehicle.vin || "Not provided"}</span></p>
         <span className="text-muted-foreground">{vehicle.vinVerificationStatus === "decoded" ? "VIN decoded" : "VIN not decoded"}</span>
+      </div>
+      <div className="mt-5 border-t border-border pt-4">
+        <h3 className="text-sm font-semibold text-foreground">Seller disclosures</h3>
+        <p className="mt-1 text-xs text-muted-foreground">These statements are provided by the seller and are not a verification of the vehicle’s condition.</p>
+        <dl className="mt-3 space-y-3">{[["Mechanical issues", vehicle.mechanicalIssues], ["Accidents", vehicle.accidentDisclosure], ["Damage", vehicle.damageDisclosure]].map(([label, value]) => <div key={label}><dt className="text-xs text-muted-foreground">{label}</dt><dd className="mt-1 whitespace-pre-wrap break-words text-sm">{displayDisclosure(value)}</dd></div>)}</dl>
       </div>
       <div className="mt-5 border-t border-border pt-4">
         <h3 className="text-sm font-semibold text-foreground">Seller’s description</h3>

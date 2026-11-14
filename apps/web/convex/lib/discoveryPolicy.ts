@@ -1,5 +1,6 @@
 import { v } from "convex/values";
 import { isVehicleFacetValue, type VehicleFacetFilters } from "../../lib/vehicle-facets";
+import { isUsStateCode } from "../../lib/us-states";
 
 export const discoveryFilters = v.object({
   search: v.optional(v.string()), make: v.optional(v.string()), model: v.optional(v.string()),
@@ -24,7 +25,7 @@ export function validateFilters(input: DiscoveryFilters): DiscoveryFilters {
   }
   if (f.minPrice !== undefined && f.maxPrice !== undefined && f.minPrice > f.maxPrice) throw new Error("Minimum price must not exceed maximum price");
   if (f.minYear !== undefined && f.maxYear !== undefined && f.minYear > f.maxYear) throw new Error("Minimum year must not exceed maximum year");
-  if (f.state && !/^[A-Z]{2}$/.test(f.state)) throw new Error("Use a two-letter state code");
+  if (f.state && !isUsStateCode(f.state)) throw new Error("Choose a valid U.S. state or DC code");
   for (const field of ["bodyStyle", "fuelType", "transmission", "titleStatus"] as const) {
     if (f[field] !== undefined && !isVehicleFacetValue(field, f[field])) throw new Error(`Invalid ${field}`);
   }

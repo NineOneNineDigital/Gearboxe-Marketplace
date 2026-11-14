@@ -1,3 +1,4 @@
+import { popupPaymentsEnabled } from "@/convex/lib/environment";
 import { api } from "@/convex/_generated/api";
 import type { Id } from "@/convex/_generated/dataModel";
 import { readRequestBody } from "@/lib/request-body";
@@ -7,6 +8,7 @@ import { ConvexError } from "convex/values";
 import { NextRequest, NextResponse } from "next/server";
 
 export async function POST(request: NextRequest) {
+  if (!popupPaymentsEnabled()) return NextResponse.json({ error: "Not found" }, { status: 404 });
   const { userId, getToken } = await auth();
   if (!userId) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   try {

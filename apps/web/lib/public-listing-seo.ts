@@ -11,6 +11,7 @@ export interface PublicListingMetadata {
   model: string;
   trim?: string;
   price: number;
+  status: "active" | "reserved";
   mileage: number;
   mileageUnit?: "mi" | "km";
   location?: { city: string; state: string };

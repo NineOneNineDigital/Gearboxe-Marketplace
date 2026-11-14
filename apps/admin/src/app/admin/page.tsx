@@ -52,6 +52,7 @@ const workspaces = [
 export default function AdminHome() {
   const { isAuthenticated } = useConvexAuth();
   const stats = useQuery(api.admin.getAdminStats, isAuthenticated ? {} : "skip");
+  const engagement = useQuery(api.engagement.weekly, isAuthenticated ? {} : "skip");
 
   return (
     <main className="min-h-full bg-[hsl(var(--bone))]">
@@ -84,6 +85,13 @@ export default function AdminHome() {
           </div>
         </section>
 
+        <section aria-labelledby="engagement-heading" className="rounded-2xl border border-black/10 bg-white p-6">
+          <h2 id="engagement-heading" className="text-xl font-semibold">Buyer–seller engagement</h2>
+          {engagement ? <><p className="mt-2 text-sm text-muted-foreground">Trailing 7 days by first inquiry, as of {new Date(engagement.asOf).toLocaleString()}. {engagement.trackingStartedAt ? `Tracking began ${new Date(engagement.trackingStartedAt).toLocaleString()}; earlier activity is not included.` : "Tracking begins with the first recorded inquiry."} {engagement.truncated ? "Report limit reached; counts are a lower bound and rates cover only the first 500 records." : "Counts are prospective; test or spam activity may remain."}</p>
+          <dl className="mt-4 grid gap-3 text-sm sm:grid-cols-3"><div><dt>Active inquiries</dt><dd className="font-semibold">{engagement.active.inquiries} ({engagement.active.messages} messages, {engagement.active.offers} offers)</dd></div><div><dt>Qualified exchanges</dt><dd className="font-semibold">{engagement.active.responses}</dd></div><div><dt>Seller response rate / average</dt><dd className="font-semibold">{engagement.active.responseRate === null ? "—" : `${Math.round(100 * engagement.active.responseRate)}% / ${Math.round((engagement.active.averageResponseMs ?? 0) / 3600000)} hours`}</dd></div><div><dt>Reserved availability inquiries / replies</dt><dd className="font-semibold">{engagement.reserved.inquiries} / {engagement.reserved.responses}</dd></div></dl>
+          <p className="mt-3 text-xs text-muted-foreground">Current inventory context: {stats ? `${stats.activeVehicles} active, ${stats.reservedVehicles} reserved, ${stats.soldVehicles} sold` : "loading"}. Active excludes listings past their availability deadline.</p>
+          <p className="mt-4 text-xs text-muted-foreground">One buyer–listing pair per inquiry type; responses are counted through the report time, so recent cohorts may change. Pairs are retained for six calendar months; repeat contact after deletion can count as a new pair. A message reply without an explicit target is attributed to the latest unanswered inquiry. Ten qualified exchanges in 30 days is a directional learning signal, not a launch gate.</p></> : <p role="status" className="mt-2 text-sm">Loading engagement…</p>}
+        </section>
         <section aria-labelledby="attention-heading" className="grid gap-6 lg:grid-cols-[0.9fr_1.1fr]">
           <div className="rounded-2xl border border-primary/25 bg-white p-6 market-card-shadow sm:p-8">
             <p className="market-eyebrow">Priority queue</p>

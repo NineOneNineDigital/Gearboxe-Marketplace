@@ -1,3 +1,4 @@
+import "./popup-test-environment.mjs";
 import assert from "node:assert/strict";
 import test from "node:test";
 import { registerHooks } from "node:module";
@@ -12,7 +13,6 @@ registerHooks({ resolve(specifier, context, nextResolve) {
 const bookings = await import("../convex/eventBookings.ts");
 const waitlist = await import("../convex/eventWaitlist.ts");
 const policy = await import("../convex/lib/eventPaymentPolicy.ts");
-process.env.EVENT_REGISTRATION_PRICE_CENTS = "4900";
 function fixture(capacity = 1) {
   let actor = "seller", sequence = 0;
   const tables = { users: ["seller", "other", "admin"].map(id => ({ _id: id, externalId: id, email: `${id}@example.test`, role: id === "admin" ? "admin" : "user", notificationPreferences: { emailEnabled: false } })), vehicles: [{ _id: "car", title: "My car", userId: "seller", status: "active" }, { _id: "other-car", userId: "other", status: "approved", title: "Other car" }], events: [{ _id: "event", name: "Market", date: Date.now() + 30 * 86400000, capacity }] };
@@ -162,4 +162,37 @@ test("claimed invitations cannot expire locally even when provider creation has 
   const row = await f.get(id); await bookings.reserve._handler(f.ctx, { eventId: "event", vehicleId: "other-car" });
   await f.ctx.db.patch(row.reservationId, { expiresAt: 0 }); await f.ctx.db.patch(id, { updatedAt: 0 }); await waitlist.sweep._handler(f.ctx, {});
   assert.equal((await f.get(row.reservationId)).status, "held"); assert.equal((await f.get(id)).status, "offered"); assert.equal(f.rows("eventInventories")[0].held, 1);
+});
+
+test("disabling popups stops direct holds, waitlist entry and scheduled offer promotion", async () => {
+  const f = fixture(1);
+  await reserve(f);
+  f.as("other");
+  await join(f);
+  const inventory = f.rows("eventInventories")[0];
+  inventory.held = 0;
+  const before = structuredClone([inventory, f.rows("eventWaitlist"), f.rows("eventReservations")]);
+  delete process.env.NEXT_PUBLIC_POPUP_PAYMENTS_ENABLED;
+  try {
+    await assert.rejects(reserve(f), /unavailable/);
+    await assert.rejects(join(f), /unavailable/);
+    await assert.rejects(bookings.getOffer._handler(f.ctx, { eventId: "event" }), /unavailable/);
+    await waitlist.promote._handler(f.ctx, { eventId: "event" });
+    await waitlist.sweep._handler(f.ctx, {});
+    assert.deepEqual([inventory, f.rows("eventWaitlist"), f.rows("eventReservations")], before);
+  } finally {
+    process.env.NEXT_PUBLIC_POPUP_PAYMENTS_ENABLED = "true";
+  }
+});
+
+test("direct booking refuses a partially configured enabled backend before writing", async () => {
+  const f = fixture();
+  const webhook = process.env.STRIPE_WEBHOOK_SECRET;
+  delete process.env.STRIPE_WEBHOOK_SECRET;
+  try {
+    await assert.rejects(reserve(f), /STRIPE_WEBHOOK_SECRET/);
+    assert.equal(f.rows("eventReservations").length, 0);
+  } finally {
+    process.env.STRIPE_WEBHOOK_SECRET = webhook;
+  }
 });

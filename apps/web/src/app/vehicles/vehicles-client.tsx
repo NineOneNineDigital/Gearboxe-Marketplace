@@ -14,7 +14,10 @@ import {
   type DiscoverySort,
   type DiscoveryState,
 } from "@/lib/discovery-url";
+import { REMEMBERED_ZIP_KEY, readRememberedZip, withoutGeography } from "@/lib/discovery-location";
+import { lookupZip } from "@/lib/zip-location";
 import { vehicleResults } from "@/lib/vehicle-results";
+import { isAvailableNow, useAvailabilityBoundary } from "@/lib/use-availability-boundary";
 import { localViewsSnapshot, subscribeLocalViews } from "@/lib/recently-viewed";
 import { vehicleFacetLabel, vehicleFacetOptions, type VehicleFacet } from "@/lib/vehicle-facets";
 import { readInventoryReturn, saveInventoryReturn, type InventoryReturn } from "@/lib/inventory-return";
@@ -70,12 +73,16 @@ function Inventory({
   clear,
   stateKey,
   onRestoreLayout,
+  onNationwide,
+  onExpandRadius,
 }: {
   state: DiscoveryState;
   layout: "grid" | "list";
   clear: () => void;
   stateKey: string;
   onRestoreLayout: (layout: "grid" | "list") => void;
+  onNationwide: () => void;
+  onExpandRadius: () => void;
 }) {
   const { results, status, loadMore } = usePaginatedQuery(
     api.discovery.browse,
@@ -85,7 +92,9 @@ function Inventory({
   const [visibleCount, setVisibleCount] = useState(12);
   const [autoPages, setAutoPages] = useState(0);
   const requestedRef = useRef("");
-  const vehicles = (vehicleResults(results) ?? []).slice(0, visibleCount);
+  const allVehicles = vehicleResults(results) ?? [];
+  const availabilityNow = useAvailabilityBoundary(allVehicles);
+  const vehicles = allVehicles.filter(vehicle => isAvailableNow(vehicle, availabilityNow)).slice(0, visibleCount);
   const [restoration, setRestoration] = useState<InventoryReturn | null>(null);
   useEffect(() => {
     try {
@@ -196,11 +205,19 @@ function Inventory({
             No vehicles match that search.
           </h3>
           <p className="mx-auto mt-3 max-w-md text-sm leading-6 text-[hsl(var(--gunmetal))]">
-            Adjust the filters or clear them to see every current listing.
+            {state.filters.latitude !== undefined
+              ? `No listings match your filters within ${state.filters.radiusMiles ?? 50} miles${state.filters.zip ? ` of ${state.filters.zip}` : ""}.`
+              : "Adjust the filters or clear them to see every current listing."}
           </p>
-          <Button variant="outline" className="mt-6" onClick={clear}>
-            Clear filters
-          </Button>
+          <div className="mt-6 flex flex-wrap justify-center gap-2">
+            {state.filters.latitude !== undefined && (
+              <>
+                {(state.filters.radiusMiles ?? 50) < 500 && <Button onClick={onExpandRadius}>Expand radius to {Math.min(500, (state.filters.radiusMiles ?? 50) * 2)} miles</Button>}
+                <Button variant="outline" onClick={onNationwide}>View nationwide</Button>
+              </>
+            )}
+            <Button variant="outline" onClick={clear}>Clear filters</Button>
+          </div>
         </div>
       ) : (
         <p className="rounded-xl bg-white p-6 text-sm">
@@ -368,9 +385,75 @@ export default function VehiclesClient() {
   const router = useRouter();
   const state = useMemo(() => readDiscoveryUrl(params), [params]);
   const [layout, setLayout] = useState<"grid" | "list">("grid");
+  const [zipDraft, setZipDraft] = useState("");
+  const [rememberedZip, setRememberedZip] = useState<string | null>(null);
+  const [locationError, setLocationError] = useState("");
+  const [resolvingZip, setResolvingZip] = useState(false);
+  const locationRequest = useRef(0);
+  const lastParams = useRef(params.toString());
   const { user } = useCurrentUser();
-  const apply = (filters: DiscoveryFilters, sort: DiscoverySort = state.sort) =>
-    router.push(discoveryUrl(filters, sort), { scroll: false });
+  const apply = (filters: DiscoveryFilters, sort: DiscoverySort = state.sort) => {
+    locationRequest.current++;
+    setResolvingZip(false);
+    const url = discoveryUrl(filters, sort);
+    router.push(!url.includes("?") ? `${url}?nationwide=1` : url, { scroll: false });
+  };
+  const rememberZip = (zip: string | null) => {
+    setRememberedZip(zip);
+    try {
+      if (zip) window.localStorage.setItem(REMEMBERED_ZIP_KEY, zip);
+      else window.localStorage.removeItem(REMEMBERED_ZIP_KEY);
+    } catch { /* Location search remains available without browser storage. */ }
+  };
+  useEffect(() => {
+    let cancelled = false;
+    let saved: string | null = null;
+    try { saved = readRememberedZip(window.localStorage); } catch { /* Storage is optional. */ }
+    setRememberedZip(saved);
+    if (!saved || window.location.search) return;
+    const request = ++locationRequest.current;
+    lookupZip(saved).then((location) => {
+      if (!cancelled && request === locationRequest.current && !window.location.search) {
+        router.replace(discoveryUrl({ zip: saved!, ...location, radiusMiles: 50 }), { scroll: false });
+      }
+    }).catch(() => { if (!cancelled && request === locationRequest.current) setLocationError("Saved ZIP could not be loaded. Enter it again to retry."); });
+    return () => { cancelled = true; };
+  }, [router]);
+  useEffect(() => {
+    const current = params.toString();
+    if (current !== lastParams.current) {
+      lastParams.current = current;
+      locationRequest.current++;
+      setResolvingZip(false);
+    }
+  }, [params]);
+  useEffect(() => { setZipDraft(state.filters.zip ?? ""); }, [state.filters.zip]);
+  const searchZip = async (zip: string) => {
+    const request = ++locationRequest.current;
+    setLocationError("");
+    setResolvingZip(true);
+    try {
+      const location = await lookupZip(zip.trim());
+      if (request !== locationRequest.current) return;
+      rememberZip(zip.trim());
+      apply({ ...withoutGeography(state.filters), zip: zip.trim(), ...location, radiusMiles: 50 });
+    } catch (error) {
+      if (request === locationRequest.current) setLocationError(error instanceof Error ? error.message : "ZIP lookup is unavailable. Try again.");
+    } finally {
+      if (request === locationRequest.current) setResolvingZip(false);
+    }
+  };
+  const nationwide = () => {
+    locationRequest.current++;
+    setResolvingZip(false);
+    setLocationError("");
+    apply(withoutGeography(state.filters), state.sort);
+  };
+  const clearLocation = () => {
+    rememberZip(null);
+    setZipDraft("");
+    nationwide();
+  };
   const activeFilters = Object.entries(state.filters).filter(
     ([key]) =>
       key !== "longitude" &&
@@ -398,6 +481,8 @@ export default function VehiclesClient() {
     const next = { ...state.filters };
     delete next[key];
     if (key === "latitude" || key === "zip") {
+      rememberZip(null);
+      locationRequest.current++;
       delete next.zip;
       delete next.latitude;
       delete next.longitude;
@@ -431,7 +516,12 @@ export default function VehiclesClient() {
             <aside className="lg:self-start">
               <VehicleFilters
                 values={state.filters}
-                onFiltersChange={(filters) => apply(filters)}
+                onFiltersChange={(filters) => {
+                  locationRequest.current++;
+                  if (filters.zip) rememberZip(filters.zip);
+                  else if (state.filters.zip) rememberZip(null);
+                  apply(filters, state.sort);
+                }}
               />
               <div className="mt-5">
                 {user ? (
@@ -447,16 +537,38 @@ export default function VehiclesClient() {
               </div>
             </aside>
             <div>
+              <section aria-labelledby="location-heading" className="mb-6 rounded-2xl border border-black/10 bg-white p-5 sm:p-6">
+                <h2 id="location-heading" className="text-lg font-semibold">{state.filters.latitude !== undefined ? "Your search location" : "Find vehicles near you"}</h2>
+                <p className="mt-1 text-sm text-muted-foreground">
+                  {state.filters.latitude !== undefined
+                    ? `Showing vehicles within ${state.filters.radiusMiles ?? 50} miles${state.filters.zip ? ` of ${state.filters.zip}` : " of your selected location"}.`
+                    : state.filters.state
+                      ? `Browsing listings in ${state.filters.state}. Enter a ZIP to search nearby or view listings nationwide.`
+                      : "Browsing nationwide. Enter a ZIP to see vehicles within 50 miles, or explore listings across the U.S."}
+                </p>
+                <form onSubmit={(event) => { event.preventDefault(); void searchZip(zipDraft); }} className="mt-4 flex flex-wrap items-end gap-2">
+                  <div className="min-w-[10rem] flex-1 sm:max-w-[14rem]">
+                    <label htmlFor="discovery-zip" className="mb-1 block text-xs font-medium">ZIP code</label>
+                    <input id="discovery-zip" inputMode="numeric" autoComplete="postal-code" maxLength={5} value={zipDraft} onChange={(event) => setZipDraft(event.target.value)} aria-describedby={locationError ? "location-error" : undefined} className="h-10 w-full rounded-lg border border-input bg-white px-3 text-sm" placeholder="e.g. 27601" />
+                  </div>
+                  <Button type="submit" disabled={resolvingZip}>{resolvingZip ? "Finding ZIP…" : "Search nearby"}</Button>
+                  {(state.filters.latitude !== undefined || state.filters.state) && <Button type="button" variant="outline" onClick={nationwide}>View nationwide</Button>}
+                  {state.filters.latitude === undefined && rememberedZip && <Button type="button" variant="outline" onClick={() => void searchZip(rememberedZip)}>Search near {rememberedZip}</Button>}
+                  {(rememberedZip || state.filters.latitude !== undefined || state.filters.state) && <Button type="button" variant="ghost" onClick={clearLocation}>Clear location</Button>}
+                </form>
+                {locationError && <p id="location-error" role="alert" className="mt-2 text-sm text-destructive">{locationError}</p>}
+                <p className="mt-3 text-xs text-muted-foreground">Your ZIP is remembered on this browser. Distance is measured from the ZIP center; listings without mapped coordinates are excluded from nearby results.</p>
+              </section>
               <div className="mb-7 flex flex-col gap-4 border-b border-black/10 pb-5 sm:flex-row sm:items-end sm:justify-between">
                 <div>
                   <p className="font-mono text-[9px] uppercase tracking-[0.12em] text-[hsl(var(--gunmetal))]">
-                    Available now
+                    Marketplace listings
                   </p>
                   <h2 className="mt-1 text-xl font-semibold">
                     Find your next vehicle
                   </h2>
                   <p className="mt-1 text-xs text-muted-foreground">
-                    Explore cars from private sellers.
+                    Explore vehicles from private sellers. Reserved listings may become available again.
                   </p>
                 </div>
                 <div className="flex flex-wrap items-center gap-2">
@@ -533,7 +645,7 @@ export default function VehiclesClient() {
                   <button
                     type="button"
                     className="px-2 py-1 text-xs font-semibold text-primary underline-offset-4 hover:underline"
-                    onClick={() => apply({})}
+                    onClick={() => { rememberZip(null); apply({}); }}
                   >
                     Clear all
                   </button>
@@ -546,9 +658,11 @@ export default function VehiclesClient() {
                 <Inventory
                   state={state}
                   layout={layout}
-                  clear={() => apply({}, "newest")}
+                  clear={() => { rememberZip(null); apply({}, "newest"); }}
                   stateKey={stateKey}
                   onRestoreLayout={setLayout}
+                  onNationwide={nationwide}
+                  onExpandRadius={() => apply({ ...state.filters, radiusMiles: Math.min(500, (state.filters.radiusMiles ?? 50) * 2) })}
                 />
               </QueryBoundary>
               <QueryBoundary

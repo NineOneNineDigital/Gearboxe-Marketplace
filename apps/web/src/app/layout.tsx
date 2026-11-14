@@ -23,7 +23,7 @@ export const metadata: Metadata = {
   metadataBase: appOrigin(),
   title: "Gearboxe Market",
   description:
-    "Connect with local car sellers and buyers at monthly popup events",
+    "Discover private-party vehicles and connect directly with sellers.",
   openGraph: {
     title: "Gearboxe Market", description: "Discover vehicles and connect with local sellers on Gearboxe.",
     type: "website", siteName: "Gearboxe", url: absoluteUrl("/"),

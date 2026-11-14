@@ -18,7 +18,7 @@ The unified administration portal lives in `apps/admin`. It contains Market tool
 
 - Node.js 22 (see `.nvmrc`; use `nvm use` if installed)
 - pnpm 10.18.0 (the version is pinned in `package.json`)
-- Convex, Clerk, and Stripe accounts for the marketplace app
+- Convex and Clerk accounts for the marketplace app; Stripe is needed only for a later enabled popup release or historical event-payment operations
 
 ## Install
 
@@ -30,20 +30,21 @@ The marketplace environment file belongs at `apps/web/.env.local`. Configure:
 
 - `NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY` and `CLERK_SECRET_KEY`
 - `NEXT_PUBLIC_CONVEX_URL`, `NEXT_PUBLIC_CONVEX_SITE_URL`, and `CONVEX_DEPLOYMENT`
-- `STRIPE_SECRET_KEY` and `STRIPE_WEBHOOK_SECRET`
-- `EVENT_REGISTRATION_PRICE_CENTS` for legacy web configuration validation; configure the canonical default fee in Convex
+- `NEXT_PUBLIC_POPUP_PAYMENTS_ENABLED=false` for the marketplace-only release (set the same value in Convex)
+- Stripe keys and `EVENT_REGISTRATION_PRICE_CENTS` only when popup payments are enabled; supplied values are validated even when disabled
 - `NEXT_PUBLIC_APP_URL`
 - `MARKETPLACE_ENV` (`development`, `preview`, `staging`, or `production`)
 
-Local development can run without Stripe credentials; payment endpoints stay
-unavailable until configured. Hosted environments and Convex still require the
-payment configuration.
+Local and hosted marketplace-only environments can run without Stripe or event-price
+credentials while popup payments are disabled. Direct event registration and checkout
+must stay unavailable; historical event-payment recovery remains an operator concern.
 
-The Convex deployment also requires `CLERK_JWT_ISSUER_DOMAIN`,
-`CLERK_WEBHOOK_SECRET`, `STRIPE_SECRET_KEY`, and
-`EVENT_REGISTRATION_PRICE_CENTS`. Checkout uses the Convex server fee snapshot; the browser and Next.js never
-choose the charged amount. Configure `APP_URL` and `STRIPE_WEBHOOK_SECRET` in
-Convex as well as the web deployment. Registration, capacity holds, refunds and
+The Convex deployment also requires `CLERK_JWT_ISSUER_DOMAIN` and
+`CLERK_WEBHOOK_SECRET`; event keys and price are required there when popup
+payments are enabled. Checkout uses the Convex server fee snapshot; the browser and Next.js never
+choose the charged amount. Configure `APP_URL` in Convex; configure
+`STRIPE_WEBHOOK_SECRET` in Convex and the web deployment only when enabling popup
+payments or preserving historical event webhook processing. Registration, capacity holds, refunds and
 recovery are documented in [Event payments](docs/EVENT_PAYMENTS.md).
 
 Event rules, deadlines, waitlists, assigned staff, QR admission, attendance,
@@ -54,8 +55,9 @@ Vehicle listing fields, lifecycle rules, VIN provider selection, and permanent
 media storage are documented in [Vehicle listings](docs/VEHICLE_LISTINGS.md).
 Set `VIN_DECODER_PROVIDER` to `auto_dev` or `vpic` in Convex; Auto.dev also needs
 `AUTO_DEV_API_KEY`. Media uploads need `APP_URL` set to the exact web origin there.
-Seller drafts autosave; submission requires complete specifications and processed
-Convex photos. My Listings provides moderation feedback, status controls,
+Seller drafts autosave; submission requires complete specifications, an approximate
+vehicle location, and five distinct processed photos showing front, rear, both
+sides, and interior. My Listings provides moderation feedback, status controls,
 activity counts and in-app confirmations. Closing a listing preserves existing
 conversations and event registrations.
 Buyer discovery uses bounded cursor pages with indexed keyword, location and
@@ -75,7 +77,7 @@ Transactional email runs in Convex and requires `AUTOSEND_API_KEY`,
 
 ## Development
 
-Run all three apps:
+Run both apps:
 
 ```bash
 pnpm dev
@@ -130,6 +132,10 @@ Deploy `apps/web` and `apps/admin` as separate Next.js projects. Configure the p
 
 Use the [deployment runbook](docs/DEPLOYMENT.md) for environment isolation,
 Vercel preview/staging setup, secret ownership/rotation, first-super-admin
-provisioning, release gates, and rollback. Cloud resources still need provisioning.
+provisioning, release gates, and rollback. The linked Vercel Production attempt
+after the `dev` → `main` merge failed on missing `MARKETPLACE_ENV`; a healthy
+public deployment and the canonical `gearboxemarket.com` domain remain unverified.
+See [GBXMRKT-1](https://linear.app/mxndev/issue/GBXMRKT-1/configure-marketplace-hosted-environments-and-recover-failed-main)
+for the separate environment recovery work.
 The marketplace's Vercel build command deploys the explicitly targeted Convex
 backend and builds the frontend against its URL; production releases require review.

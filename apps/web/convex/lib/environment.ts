@@ -1,6 +1,18 @@
 type Environment = Record<string, string | undefined>;
 type Profile = "web-build" | "web-runtime" | "convex";
 
+// The public flag is inlined into the web build. Convex reads the same name
+// independently from its own deployment environment for each booking.
+export function popupPaymentsEnabled() {
+  return process.env.NEXT_PUBLIC_POPUP_PAYMENTS_ENABLED === "true";
+}
+
+export function requirePopupPayments() {
+  if (!popupPaymentsEnabled()) throw new Error("Event registration is unavailable");
+  // Convex environment changes take effect independently of deployment checks.
+  validateEnvironment(process.env, "convex");
+}
+
 // Keep this module platform-independent: Next.js, Convex, and tests share it.
 export function validateEnvironment(env: Environment, profile: Profile) {
   const errors: string[] = [];
@@ -38,6 +50,11 @@ export function validateEnvironment(env: Environment, profile: Profile) {
       errors.push(`${name} has the wrong key type for ${mode || "this environment"}`);
     }
   };
+  const rollout = env.NEXT_PUBLIC_POPUP_PAYMENTS_ENABLED;
+  if (rollout !== undefined && rollout !== "false" && rollout !== "true") {
+    errors.push("NEXT_PUBLIC_POPUP_PAYMENTS_ENABLED must be true or false");
+  }
+  const paymentsEnabled = rollout === "true";
   const stripeMode = mode === "production" ? "live" : "test";
   if (profile !== "convex") {
     const clerkModes = mode === "production" ? ["live"] : mode === "staging" ? ["test", "live"] : ["test"];
@@ -58,25 +75,23 @@ export function validateEnvironment(env: Environment, profile: Profile) {
     if (profile === "web-runtime") {
       const clerkMode = env.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY?.startsWith("pk_live_") ? "live" : "test";
       key("CLERK_SECRET_KEY", [`sk_${clerkMode}_`]);
-      if (mode !== "development" || env.STRIPE_WEBHOOK_SECRET) key("STRIPE_WEBHOOK_SECRET", ["whsec_"]);
     }
   } else {
     origin("CLERK_JWT_ISSUER_DOMAIN");
     key("CLERK_WEBHOOK_SECRET", ["whsec_"]);
-    key("STRIPE_WEBHOOK_SECRET", ["whsec_"]);
     origin("APP_URL", true);
   }
   if (profile !== "web-build") {
-    const optionalLocalPayments = mode === "development" && profile === "web-runtime";
-    if (!optionalLocalPayments || env.STRIPE_SECRET_KEY) key("STRIPE_SECRET_KEY", [`sk_${stripeMode}_`, `rk_${stripeMode}_`]);
-    const price = optionalLocalPayments ? env.EVENT_REGISTRATION_PRICE_CENTS?.trim() : required("EVENT_REGISTRATION_PRICE_CENTS");
-    if (price && (!/^\d+$/.test(price) || !Number.isSafeInteger(Number(price)) || Number(price) <= 0)) {
-      errors.push("EVENT_REGISTRATION_PRICE_CENTS must be a positive integer");
+    if (paymentsEnabled || env.STRIPE_WEBHOOK_SECRET) key("STRIPE_WEBHOOK_SECRET", ["whsec_"]);
+    if (paymentsEnabled || env.STRIPE_SECRET_KEY) key("STRIPE_SECRET_KEY", [`sk_${stripeMode}_`, `rk_${stripeMode}_`]);
+    const price = paymentsEnabled ? required("EVENT_REGISTRATION_PRICE_CENTS") : env.EVENT_REGISTRATION_PRICE_CENTS?.trim();
+    if (price && (!/^\d+$/.test(price) || !Number.isSafeInteger(Number(price)) || Number(price) < 50 || Number(price) > 99_999_999)) {
+      errors.push("EVENT_REGISTRATION_PRICE_CENTS must be an integer from 50 to 99999999");
     }
   }
   if (errors.length) {
     // Report names and rules, never supplied values or credentials.
     throw new Error(`Invalid marketplace configuration:\n${errors.join("\n")}`);
   }
-  return { mode };
+  return { mode, paymentsEnabled };
 }

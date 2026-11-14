@@ -17,8 +17,9 @@ New listings autosave as incomplete drafts. Saves use a revision check to preven
 one browser tab from overwriting another; retrying draft creation reuses the same
 draft. Sellers preview their listing before submitting it as pending. Submission
 and approval require verified seller email and phone, ownership attestation,
-the full specification and at least one owned, processed
-photo with both thumbnail and detail files present in Convex storage. Legacy URL
+the full specification and at least five distinct, owned, processed photos with
+both thumbnail and detail files present in Convex storage. Sellers label one
+photo each for front, rear, left side, right side, and interior. Legacy URL
 photos must be replaced before submission. Uploads and failed or unfinished
 processing block submission. Duplicate VINs on pending, active or reserved
 listings block submission, including older records without normalized VIN keys.
@@ -97,11 +98,14 @@ matching.
 Distance searches first choose an indexed geographic rectangle containing the
 entire radius, with latitude-strip fallbacks at poles/date-line crossings. Exact
 great-circle distance is checked on candidates in miles. Radii are 1–500 miles.
-Listings without coordinates are excluded only from distance searches. Sellers
-can explicitly add their approximate current location while near the vehicle;
-both client and server round coordinates to two decimal places for discovery.
-Public responses expose city/state only; postal codes are discarded on write.
-Changing vehicle city/state clears the editor's coordinates. Buyers enter a
+Legacy listings without coordinates are excluded only from distance searches.
+New submissions require approximate coordinates so they can appear in ZIP/radius
+results. Sellers can resolve the vehicle ZIP to a centroid or explicitly add
+their approximate current location while near the vehicle; client and server
+round coordinates to two decimal places for discovery. The vehicle ZIP is
+stored privately for seller correction and moderation, while public responses
+expose city/state only. Changing vehicle city/state or ZIP clears the editor's
+coordinates until the location is resolved again. Buyers enter a
 five-digit US ZIP code and a 1–500 mile radius; the browser looks up the ZIP
 centroid through Zippopotam.us before using the existing distance index. The
 shareable URL and saved searches retain the ZIP alongside the centroid, while
@@ -112,10 +116,10 @@ filters normalize kilometers to miles, while cards retain the declared unit.
 
 Authenticated buyers can save up to 25 named filter/sort combinations and remove
 them; saved searches do not send alerts. Account history retains the latest 50
-distinct views and displays up to 12 available listings. Guests retain up to 12
+distinct views and displays up to 12 public listings, including Reserved vehicles. Guests retain up to 12
 distinct views in browser storage, falling back to session memory when storage
 is unavailable. All history resolutions recheck public listing status and never
-reveal draft/rejected/closed records. Featured and related inventory queries are
+reveal draft/rejected/withdrawn/sold records. Featured and related inventory queries are
 bounded as well.
 
 For local pagination testing, the development-only `seedPagination:addBatch`
@@ -139,6 +143,13 @@ listing sitemap shards. Each listing receives a stable publication shard with
 Backend sitemap failures return an error rather than silently emitting an empty
 inventory sitemap.
 
+Reserved listings remain indexed and shareable, with a visible badge and
+`schema.org/Reserved` availability rather than `InStock`. Buyers can ask about
+availability through verified messaging; structured offers remain disabled while
+reserved. Search, saved filters, sitemap, favorites, and recent views include
+reserved results while rechecking the vehicle's current status against stale
+index rows.
+
 ### Discovery rollout and existing inventory
 
 Deploy the schema/functions to the confirmed, isolated Convex deployment before
@@ -151,7 +162,7 @@ remove stale entries for closed listings. New moderation transitions and sample
 data writes maintain the catalog automatically. Do not treat an empty, unfilled
 catalog as confirmation that the deployment has no vehicles.
 
-Before release, verify backfilled active/legacy-approved listings, private-state
+Before release, verify backfilled active/legacy-approved/reserved listings, private-state
 removal, radius queries with real coordinates, cursor continuation under updates,
 saved searches, guest/account history, and sitemap/social responses against the
 staging deployment. The schema retains optional legacy vehicle `eventId` and
@@ -159,6 +170,28 @@ staging deployment. The schema retains optional legacy vehicle `eventId` and
 Current booking and listing flows use registrations and `status` instead. The
 configured development backend has been synced and its discovery catalog
 backfilled; staging and production rollout still require their own verification.
+
+## Availability confirmation and expiry
+
+An approved listing's 45-day clock begins at publication (or when a reservation
+is released) and uses UTC elapsed time. Seven days before the deadline, the seller
+receives an in-app reminder and, subject to notification preferences, an email.
+Confirmation in My Listings records the seller and time and starts a fresh 45-day
+period. A scheduled check and a bounded recovery sweep archive an unconfirmed
+listing at the deadline; no grace period applies. Failed email delivery never
+confirms availability. Listings past the deadline are hidden from discovery and
+new inquiries, even if the background job is delayed. Conversations remain.
+
+Reserved listings do not expire; releasing a reservation starts a full new clock.
+Sold, withdrawn, rejected, archived, and moderation-held listings do not receive
+availability reminders. Once reapproved, a listing starts a new clock. A seller
+can reopen an expired listing as a draft and submit it for moderation for free;
+confirmation alone cannot bypass review. Expiry, reminders, confirmations and
+reopening are visible in the listing availability history (latest 100 events),
+while email delivery failures are visible in the admin notification delivery
+queue. Legacy active listings without a clock start a full 45 days when the
+availability sweep first initializes them; legacy reserved listings start on
+release. The sweep processes legacy and due records in bounded batches.
 
 ## Permanent vehicle photos
 
@@ -178,7 +211,8 @@ removed. Output is WebP: a thumbnail within 480×360 and a detail image within
 Sharp is an explicit dependency and configured as a Convex Node external package.
 
 Listings reference owned, processed storage records rather than browser URLs.
-The editor supports up to 30 photos, captions up to 200 characters, ordering,
+The editor shows the ready count and missing required views. It supports up to 30
+photos, view labels, captions up to 200 characters, ordering,
 replacement, deletion, upload progress and retry. Saves wait for uploads and
 deletions to finish; failed uploads must be retried or removed. Existing URL
 photos remain compatible and can be retained, reordered or removed; upload a new
@@ -195,6 +229,13 @@ in batches to catch interrupted writes. Files used by other features are not
 deleted. Convex storage uses public bearer URLs, suitable for marketplace photos;
 do not upload private documents. Legacy URL photos are not migrated or deleted
 from external providers automatically.
+
+Moderators must inspect the images and reject sets that are blurry, misleading,
+duplicated, irrelevant, borrowed or stock, or include private documents, even if
+the count and labels pass validation. Labels are seller assertions, not image
+recognition. Existing live approved listings remain visible without a backfill;
+a policy-governed edit or re-review must meet the new photo standard before it
+can enter or complete moderation. Drafts may be saved with fewer photos or views.
 
 Tests run real Sharp processing plus the upload, ownership, replacement and
 cleanup handlers locally. Deploy the schema/functions to an isolated staging
@@ -257,3 +298,33 @@ does not bypass moderation.
 Tests use response fixtures without paid requests. Before deployment, configure
 the chosen provider and smoke-test a valid VIN, unknown VIN, pending submission,
 approval, rejection and seller status changes against a staging Convex deployment.
+
+## Launch vehicle categories
+
+Sellers select car, truck, SUV, or street-legal specialty. Specialty includes
+classic and unusual road vehicles; a selection does not establish legality or
+transferability. Motorcycles, RVs, parts-only inventory, and dealer vehicles are
+outside launch scope. Moderators must manually review specialty registration and
+transfer eligibility, including modified or kit vehicles, and escalate ambiguous
+cases to the safety lead rather than assuming eligibility. Pre-1981 manufacturer
+serials may be used under existing validation; confirm ownership and registration
+through appropriate evidence. Unclear road registration requires enhanced review.
+
+Legacy listings without a category remain readable as unknown; no category is
+inferred from body style. The seller must select a category when a legacy listing
+is edited or resubmitted for review. Operators may request seller correction, not
+silently backfill an unverified category.
+
+## Lien disclosure
+
+Sellers disclose no outstanding lien, outstanding lien, or uncertain status.
+An outstanding lien requires a seller-stated payoff and transfer plan; do not
+enter bank account numbers. Outstanding and uncertain statuses require enhanced
+manual review and an audited decision before publication. Missing or conflicting
+information requires a specific request or rejection; use the private evidence
+workflow for documents and appeals. State-specific transfer steps require
+verified local guidance or specialist review. A material edit returns the
+listing to review. Legacy records with no lien status remain visible as not
+disclosed until re-review; sellers must select a status when submitting again.
+Public status wording is pending founder approval. The payoff plan and lender
+documents must remain private to the seller and authorized reviewers.

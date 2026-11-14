@@ -1,5 +1,6 @@
+import { popupPaymentsEnabled } from "./lib/environment";
 import { eventForViewer } from "./lib/eventVisibility";
-import { publicVehicle } from "./lib/vehicleVisibility";
+import { isPublicVehicle, publicVehicle } from "./lib/vehicleVisibility";
 import { resolveVehicleMedia } from "./lib/vehicleMedia";
 import { checkIn } from "./eventOperations";
 import { requireEventStaff, rosterRow } from "./lib/eventStaff";
@@ -22,6 +23,7 @@ export const getRegistrationsByEvent = query({
 export const getVehiclesByEvent = query({
   args: { eventId: v.id("events") },
   handler: async (ctx, args) => {
+    if (!popupPaymentsEnabled()) return [];
     const registrations = await ctx.db
       .query("registrations")
       .withIndex("by_event", (q) => q.eq("eventId", args.eventId))
@@ -32,7 +34,7 @@ export const getVehiclesByEvent = query({
         .map((registration) => ctx.db.get(registration.vehicleId))
     );
     const visible = vehicles.flatMap((vehicle) =>
-      (vehicle?.status === "approved" || vehicle?.status === "active") ? [publicVehicle(vehicle)] : []
+      vehicle && isPublicVehicle(vehicle) ? [publicVehicle(vehicle)] : []
     );
     return Promise.all(visible.map(vehicle => resolveVehicleMedia(ctx, vehicle)));
   },
@@ -73,6 +75,7 @@ export const getRegistrationById = query({
 export const getRegistrationByVehicle = query({
   args: { vehicleId: v.id("vehicles") },
   handler: async (ctx, args) => {
+    if (!popupPaymentsEnabled()) return null;
     const registration = await ctx.db
       .query("registrations")
       .withIndex("by_vehicle_status", q => q.eq("vehicleId", args.vehicleId).eq("paymentStatus", "completed"))

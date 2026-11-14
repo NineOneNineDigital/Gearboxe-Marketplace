@@ -1,5 +1,6 @@
 "use client";
 
+import { popupPaymentsEnabled } from "@/convex/lib/environment";
 import { Button } from "@/components/ui/button";
 import { EditProfileDialog } from "@/components/ui/edit-profile-dialog";
 import { Footer } from "@/components/ui/footer";
@@ -172,7 +173,7 @@ export default function DashboardPage() {
                 <Link href="/myAccount/my-listings" className="group flex items-center gap-4 rounded-xl border border-black/10 p-4 transition-colors hover:border-primary/60 hover:bg-primary/5"><CarFront className="h-6 w-6 text-primary" /><span className="flex-1"><span className="block text-sm font-semibold">My listings</span><span className="text-xs text-muted-foreground">{userVehicles?.length ?? 0} total vehicles</span></span><ArrowUpRight className="h-4 w-4" /></Link>
                 <Link href="/myAccount/messages" className="group flex items-center gap-4 rounded-xl border border-black/10 p-4 transition-colors hover:border-primary/60 hover:bg-primary/5"><MessageCircle className="h-6 w-6 text-primary" /><span className="flex-1"><span className="block text-sm font-semibold">Messages</span><span className="text-xs text-muted-foreground">{unreadCount ? `${unreadCount} unread` : "Open conversations"}</span></span><ArrowUpRight className="h-4 w-4" /></Link>
                 <Link href="/myAccount/favorites" className="group flex items-center gap-4 rounded-xl border border-black/10 p-4 transition-colors hover:border-primary/60 hover:bg-primary/5"><Heart className="h-6 w-6 text-primary" /><span className="flex-1"><span className="block text-sm font-semibold">Saved vehicles</span><span className="text-xs text-muted-foreground">Your favorites</span></span><ArrowUpRight className="h-4 w-4" /></Link>
-                <Link href="/myAccount/registrations" className="group flex items-center gap-4 rounded-xl border border-black/10 p-4 transition-colors hover:border-primary/60 hover:bg-primary/5"><CalendarDays className="h-6 w-6 text-primary" /><span className="flex-1"><span className="block text-sm font-semibold">Event registrations</span><span className="text-xs text-muted-foreground">Tickets & receipts</span></span><ArrowUpRight className="h-4 w-4" /></Link>
+                {popupPaymentsEnabled() && <Link href="/myAccount/registrations" className="group flex items-center gap-4 rounded-xl border border-black/10 p-4 transition-colors hover:border-primary/60 hover:bg-primary/5"><CalendarDays className="h-6 w-6 text-primary" /><span className="flex-1"><span className="block text-sm font-semibold">Event registrations</span><span className="text-xs text-muted-foreground">Tickets & receipts</span></span><ArrowUpRight className="h-4 w-4" /></Link>}
               </div>
             </section>
           </div>

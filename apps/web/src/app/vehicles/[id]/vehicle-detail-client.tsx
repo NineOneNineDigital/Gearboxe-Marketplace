@@ -1,6 +1,7 @@
 "use client";
 
-import { BuyerServices } from "@/components/ui/buyer-services";
+import { popupPaymentsEnabled } from "@/convex/lib/environment";
+import { OfferSubmit } from "@/components/ui/offer-submit";
 import { SafetyControls } from "@/components/ui/safety-controls";
 import { VehicleDetails } from "@/components/ui/vehicle-details";
 import { isTrustedImageUrl } from "@/lib/trusted-images";
@@ -14,6 +15,7 @@ import { useCurrentUser } from "@/hooks/useCurrentUser";
 import { useToast } from "@/hooks/useToast";
 import { recordLocalView } from "@/lib/recently-viewed";
 import { useAuth } from "@clerk/nextjs";
+import { isAvailableNow, useAvailabilityBoundary } from "@/lib/use-availability-boundary";
 import { useConvexAuth, useMutation, useQuery } from "convex/react";
 import {
   Calendar,
@@ -31,7 +33,7 @@ import {
 import Image from "next/image";
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 
 interface VehiclePageProps {
   id: string;
@@ -39,8 +41,9 @@ interface VehiclePageProps {
 
 export default function VehicleDetailClient({ id }: VehiclePageProps) {
   const { isAuthenticated, isLoading: isAuthLoading } = useConvexAuth();
-  const { isSignedIn } = useAuth();
+  const { isLoaded: clerkAuthLoaded, isSignedIn } = useAuth();
   const { user: convexUser } = useCurrentUser();
+  const accountPending = !clerkAuthLoaded || isAuthLoading || ((isSignedIn || isAuthenticated) && !convexUser);
   const [isFavorited, setIsFavorited] = useState(false);
   const [isFavoriteLoading, setIsFavoriteLoading] = useState(false);
   const [showShareMenu, setShowShareMenu] = useState(false);
@@ -65,18 +68,20 @@ export default function VehicleDetailClient({ id }: VehiclePageProps) {
       : "skip"
   );
 
-  const filteredRelatedVehicles = relatedVehicles ?? [];
+  const availabilityVehicles = useMemo(() => vehicle ? [vehicle, ...(relatedVehicles ?? [])] : relatedVehicles ?? [], [vehicle, relatedVehicles]);
+  const availabilityNow = useAvailabilityBoundary(availabilityVehicles);
+  const filteredRelatedVehicles = (relatedVehicles ?? []).filter(candidate => isAvailableNow(candidate, availabilityNow));
   const viewVehicleId = vehicle?._id;
   const viewVehicleStatus = vehicle?.status;
   useEffect(() => {
-    if (viewVehicleId && viewVehicleStatus && ["active", "approved"].includes(viewVehicleStatus)) recordLocalView(viewVehicleId);
+    if (viewVehicleId && viewVehicleStatus && ["active", "approved", "reserved"].includes(viewVehicleStatus)) recordLocalView(viewVehicleId);
   }, [viewVehicleId, viewVehicleStatus]);
   useEffect(() => {
-    if (convexUser?._id && viewVehicleId && viewVehicleStatus && ["active", "approved"].includes(viewVehicleStatus)) void recordRecent({ id: viewVehicleId }).catch(() => undefined);
+    if (convexUser?._id && viewVehicleId && viewVehicleStatus && ["active", "approved", "reserved"].includes(viewVehicleStatus)) void recordRecent({ id: viewVehicleId }).catch(() => undefined);
   }, [convexUser?._id, viewVehicleId, viewVehicleStatus, recordRecent]);
 
   useEffect(() => {
-    if (!viewVehicleId || !viewVehicleStatus || isAuthLoading || !["active", "approved"].includes(viewVehicleStatus)) return;
+    if (!viewVehicleId || !viewVehicleStatus || isAuthLoading || !["active", "approved", "reserved"].includes(viewVehicleStatus)) return;
     try {
       const key = "gearboxe-listing-view-session";
       let visitorKey = sessionStorage.getItem(key);
@@ -136,7 +141,7 @@ export default function VehicleDetailClient({ id }: VehiclePageProps) {
     );
   }
 
-  if (!vehicle) {
+  if (!vehicle || !isAvailableNow(vehicle, availabilityNow)) {
     return notFound();
   }
 
@@ -188,7 +193,7 @@ export default function VehicleDetailClient({ id }: VehiclePageProps) {
   };
 
   const handleFavoriteToggle = async () => {
-    if (!convexUser || !vehicle || isFavoriteLoading) return;
+    if (!convexUser?.emailVerified || !vehicle || isFavoriteLoading) return;
 
     setIsFavoriteLoading(true);
     try {
@@ -287,6 +292,7 @@ export default function VehicleDetailClient({ id }: VehiclePageProps) {
                     <h1 className="text-3xl font-bold text-gray-900 mb-2">
                       {vehicle.title}
                     </h1>
+                    {vehicle.status === "reserved" && <p className="mb-3 inline-flex rounded-full border border-amber-200 bg-amber-50 px-3 py-1 text-sm font-semibold text-amber-950">Reserved</p>}
                     <p className="text-xl text-gray-600 mb-4">
                       {vehicle.year} {vehicle.make} {vehicle.model}
                     </p>
@@ -353,7 +359,7 @@ export default function VehicleDetailClient({ id }: VehiclePageProps) {
                         </div>
                       )}
                     </div>
-                    {convexUser && (
+                    {convexUser?.emailVerified ? (
                       <Button
                         variant="outline"
                         size="sm"
@@ -367,6 +373,14 @@ export default function VehicleDetailClient({ id }: VehiclePageProps) {
                           } ${isFavoriteLoading ? "opacity-50" : ""}`}
                         />
                         {isFavorited ? "Saved" : "Save"}
+                      </Button>
+                    ) : accountPending ? (
+                      <Button variant="outline" size="sm" disabled><Heart className="mr-2 h-4 w-4" />Finishing account setup…</Button>
+                    ) : (
+                      <Button asChild variant="outline" size="sm">
+                        <Link href={convexUser ? `/myAccount/safety?next=${encodeURIComponent(`/vehicles/${vehicle._id}`)}` : `/sign-in?next=${encodeURIComponent(`/vehicles/${vehicle._id}`)}`}>
+                          <Heart className="mr-2 h-4 w-4" />{convexUser ? "Verify email to save" : "Sign in to save"}
+                        </Link>
                       </Button>
                     )}
                   </div>
@@ -387,9 +401,6 @@ export default function VehicleDetailClient({ id }: VehiclePageProps) {
               <div className="order-3">
                 <VehicleDetails vehicle={vehicle} />
               </div>
-              <div className="order-4">
-                <BuyerServices />
-              </div>
             </div>
 
             {/* Sidebar */}
@@ -399,18 +410,26 @@ export default function VehicleDetailClient({ id }: VehiclePageProps) {
                 <p className="market-metric mt-2 text-4xl font-semibold tracking-[-0.05em] text-[hsl(var(--midnight))]">
                   {formatPrice(vehicle.price)}
                 </p>
+                {vehicle.status === "reserved" && <p className="mt-3 rounded-lg border border-amber-200 bg-amber-50 p-3 text-sm leading-6 text-amber-950">This vehicle is reserved and is not available for a new offer. It may become available again. You can ask the seller about availability.</p>}
                 <div className="my-5 border-t border-black/10" />
-                {isAuthenticated || isSignedIn ? (
+                {convexUser?.emailVerified ? (
                   <Button asChild size="lg" className="w-full">
                     <Link href={`/myAccount/messages/${vehicle._id}/${vehicle.userId}`}>
-                      <Mail className="h-4 w-4" /> Message seller
+                      <Mail className="h-4 w-4" /> {vehicle.status === "reserved" ? "Ask about availability" : "Message seller"}
                     </Link>
                   </Button>
+                ) : convexUser ? (
+                  <Button asChild size="lg" className="w-full">
+                    <Link href={`/myAccount/safety?next=${encodeURIComponent(`/myAccount/messages/${vehicle._id}/${vehicle.userId}`)}`}>Verify email to message seller</Link>
+                  </Button>
+                ) : accountPending ? (
+                  <div role="status" className="rounded-lg border border-amber-200 bg-amber-50 p-3 text-sm text-amber-950">Your account is finishing setup. This page will update when it is ready. If it takes more than a few minutes, contact <a className="underline" href="mailto:Help@gearboxe.com">support</a>.</div>
                 ) : (
                   <Button asChild size="lg" className="w-full">
-                    <Link href="/sign-in">Sign in to contact seller</Link>
+                    <Link href={`/sign-in?next=${encodeURIComponent(`/myAccount/messages/${vehicle._id}/${vehicle.userId}`)}`}>Sign in to contact seller</Link>
                   </Button>
                 )}
+                {process.env.NEXT_PUBLIC_OFFERS_ENABLED === "true" && convexUser?.emailVerified && convexUser._id !== vehicle.userId && vehicle.status !== "reserved" && <OfferSubmit vehicleId={vehicle._id} sellerId={vehicle.userId} />}
                 <p className="mt-4 text-center text-[11px] leading-5 text-muted-foreground">
                   Gearboxe Market connects buyers and private sellers directly.
                 </p>
@@ -482,6 +501,7 @@ export default function VehicleDetailClient({ id }: VehiclePageProps) {
                             <h4 className="font-medium text-gray-900 group-hover:text-primary transition-colors truncate">
                               {relatedVehicle.title}
                             </h4>
+                            {relatedVehicle.status === "reserved" && <span className="mt-1 inline-block rounded-full bg-amber-50 px-2 py-0.5 text-xs font-semibold text-amber-950">Reserved</span>}
                             <p className="text-sm text-gray-600">
                               {relatedVehicle.year} {relatedVehicle.make}{" "}
                               {relatedVehicle.model}
@@ -500,7 +520,7 @@ export default function VehicleDetailClient({ id }: VehiclePageProps) {
                 </div>
               )}
 
-              <div className="rounded-xl border border-border bg-card p-6 shadow-sm">
+              {popupPaymentsEnabled() && <div className="rounded-xl border border-border bg-card p-6 shadow-sm">
                 <Calendar aria-hidden="true" className="mb-4 h-6 w-6 text-primary" />
                 <h3 className="font-semibold text-foreground">Meet sellers in person</h3>
                 <p className="mt-2 mb-4 text-sm leading-6 text-muted-foreground">
@@ -509,7 +529,7 @@ export default function VehicleDetailClient({ id }: VehiclePageProps) {
                 <Button asChild variant="outline" className="w-full">
                   <Link href="/events">View all events</Link>
                 </Button>
-              </div>
+              </div>}
             </div>
           </div>
         </div>

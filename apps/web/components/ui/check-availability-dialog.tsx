@@ -22,9 +22,9 @@ export function CheckAvailabilityDialog({ vehicle }: CheckAvailabilityDialogProp
   const { user, isLoading } = useCurrentUser();
   const { isAuthenticated } = useConvexAuth();
   const sendMessage = useMutation(api.messages.sendMessage);
-  const contact = useQuery(api.conversations.getContactState, user && isAuthenticated ? { otherUserId: vehicle.userId } : "skip");
+  const contact = useQuery(api.conversations.getContactState, user && isAuthenticated ? { otherUserId: vehicle.userId, vehicleId: vehicle._id } : "skip");
   const vehicleLabel = `${vehicle.year} ${vehicle.make} ${vehicle.model}`;
-  const initialMessage = `Hi, is your ${vehicleLabel} still available?`;
+  const initialMessage = vehicle.status === "reserved" ? `Hi, please let me know if your ${vehicleLabel} becomes available again.` : `Hi, is your ${vehicleLabel} still available?`;
   const [open, setOpen] = useState(false);
   const [message, setMessage] = useState(initialMessage);
   const [sending, setSending] = useState(false);
@@ -80,10 +80,10 @@ export function CheckAvailabilityDialog({ vehicle }: CheckAvailabilityDialogProp
           type="button"
           variant="outline"
           className="relative z-20 w-full hover:translate-y-0"
-          disabled={ownsVehicle || contact?.canContact === false}
+          disabled={ownsVehicle}
           title={ownsVehicle ? "This is your listing" : undefined}
         >
-          Check availability
+          {vehicle.status === "reserved" ? "Ask about availability" : "Check availability"}
         </Button>
       </Dialog.Trigger>
       <Dialog.Portal>
@@ -96,9 +96,9 @@ export function CheckAvailabilityDialog({ vehicle }: CheckAvailabilityDialogProp
           <div className="mb-6 flex items-start justify-between gap-4">
             <div>
               <p className="mb-2 font-mono text-[10px] uppercase tracking-[0.12em] text-primary">Contact the seller</p>
-              <Dialog.Title className="text-xl font-semibold tracking-tight">Check availability</Dialog.Title>
+              <Dialog.Title className="text-xl font-semibold tracking-tight">{vehicle.status === "reserved" ? "Ask about availability" : "Check availability"}</Dialog.Title>
               <Dialog.Description className="mt-2 text-sm leading-6 text-muted-foreground">
-                Ask about the {vehicleLabel}. Your message will appear in your conversation with the seller.
+                {vehicle.status === "reserved" ? `This vehicle is reserved. You can ask whether the ${vehicleLabel} may become available again. New offers are unavailable while it is reserved.` : `Ask about the ${vehicleLabel}. Your message will appear in your conversation with the seller.`}
               </Dialog.Description>
             </div>
             <Dialog.Close asChild>
@@ -121,7 +121,7 @@ export function CheckAvailabilityDialog({ vehicle }: CheckAvailabilityDialogProp
           ) : (
             <form onSubmit={handleSend} className="space-y-4">
               <div>
-                {contact?.canContact === false && <p role="status" className="text-sm">Messaging is unavailable between these accounts.</p>}
+                {contact?.canContact === false && <p role="status" className="text-sm">{"needsEmailVerification" in contact && contact.needsEmailVerification ? <>Verify your email in <Link className="underline" href={`/myAccount/safety?next=${encodeURIComponent(`/vehicles/${vehicle._id}`)}`}>account settings</Link> before messaging a seller.</> : "Messaging is unavailable between these accounts."}</p>}
                 <label htmlFor={messageId} className="mb-2 block text-sm font-semibold">Your message</label>
                 <Textarea
                   id={messageId}
@@ -149,7 +149,7 @@ export function CheckAvailabilityDialog({ vehicle }: CheckAvailabilityDialogProp
               ) : (
                 <>
                   <p className="text-sm text-muted-foreground">Sign in to send your message to the seller.</p>
-                  <Button asChild className="w-full"><Link href="/sign-in">Sign in to send</Link></Button>
+                  <Button asChild className="w-full"><Link href={`/sign-in?next=${encodeURIComponent(`/vehicles/${vehicle._id}`)}`}>Sign in to send</Link></Button>
                 </>
               )}
             </form>

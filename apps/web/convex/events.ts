@@ -1,3 +1,4 @@
+import { popupPaymentsEnabled } from "./lib/environment";
 import { v } from "convex/values";
 import { internal } from "./_generated/api";
 import { eventForViewer } from "./lib/eventVisibility";
@@ -94,6 +95,7 @@ export const getEvents = query({
     upcoming: v.optional(v.boolean()),
   },
   handler: async (ctx, args) => {
+    if (!popupPaymentsEnabled()) return [];
     const events = args.cityId
       ? await ctx.db
           .query("events")
@@ -115,6 +117,7 @@ export const getEvents = query({
 export const getEventById = query({
   args: { id: v.id("events") },
   handler: async (ctx, args) => {
+    if (!popupPaymentsEnabled()) return null;
     const event = await ctx.db.get(args.id);
     return event ? eventForViewer(ctx, event) : null;
   },
@@ -122,6 +125,7 @@ export const getEventById = query({
 
 export const getUpcomingEvents = query({
   handler: async (ctx) => {
+    if (!popupPaymentsEnabled()) return [];
     const now = Date.now();
     const events = await ctx.db.query("events").withIndex("by_date", q => q.gt("date", now)).collect();
     const viewer = await getCurrentUser(ctx);

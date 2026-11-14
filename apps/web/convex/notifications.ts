@@ -58,6 +58,9 @@ export async function enqueueNotification(ctx: MutationCtx, input: NotificationI
 }
 function subject(kind: string) {
   if (kind === "new_message") return "You have a new Gearboxe message";
+  if (kind === "offer_review_alert") return "A Gearboxe reservation needs support review";
+  if (kind.startsWith("offer_")) return "Your Gearboxe offer has an update";
+  if (kind === "availability_reminder") return "Confirm your Gearboxe listing availability";
   if (kind === "active") return "Your Gearboxe listing is approved";
   if (kind === "rejected") return "Your Gearboxe listing needs changes";
   if (kind === "event_payment") return "Your Gearboxe event payment is confirmed";
@@ -71,6 +74,9 @@ function emailMessage(kind: string) {
   // Email deliberately excludes message content, VIN, contact details, private
   // moderator reasons and event admission/QR credentials.
   if (kind === "new_message") return "You received a new message. Sign in to read it and reply.";
+  if (kind === "offer_review_alert") return "A reservation needs support follow-up. Sign in to the private review queue.";
+  if (kind.startsWith("offer_")) return "A private offer has an update. Sign in to Gearboxe to review the current terms and respond if needed.";
+  if (kind === "availability_reminder") return "Confirm your listing is still available before its 45-day deadline. Sign in to My Listings to confirm.";
   if (kind === "active") return "Your listing was approved and is now available on Gearboxe.";
   if (kind === "rejected") return "Your listing needs changes. Sign in to review the moderator feedback.";
   if (kind === "event_payment") return "Your event registration payment was confirmed. Sign in to view your registration.";

@@ -9,12 +9,18 @@ import { reasonLabel } from "@/components/ui/safety-controls";
 import { api } from "@/convex/_generated/api";
 import type { Id } from "@/convex/_generated/dataModel";
 import { useCurrentUser } from "@/hooks/useCurrentUser";
+import { listingReturnPath } from "@/lib/auth-return";
 import { useClerk, useAuth } from "@clerk/nextjs";
 import { useMutation, useQuery } from "convex/react";
 import Link from "next/link";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 
 export default function SafetyPage() {
+  const [returnTo, setReturnTo] = useState<string | null>(null);
+  useEffect(() => {
+    const path = listingReturnPath(window.location.search);
+    if (path !== "/myAccount") setReturnTo(path);
+  }, []);
   const { user, isLoading } = useCurrentUser();
   const { openUserProfile } = useClerk();
   const { getToken } = useAuth();
@@ -25,7 +31,11 @@ export default function SafetyPage() {
   const upload = useMutation(api.trust.createDocumentUpload);
   const appeal = useMutation(api.trust.submitAppeal);
   const block = useMutation(api.trust.setBlock);
-  const [vehicleId, setVehicleId] = useState("");
+  const [selectedVehicle, setVehicleId] = useState<string | null>(null);
+  const draftId = returnTo?.split("?edit=")[1];
+  const vehicleId = selectedVehicle ?? vehicles?.find(vehicle => vehicle._id === draftId)?._id ?? "";
+  const review = useQuery(api.trust.getMyListingReview, vehicleId ? { vehicleId: vehicleId as Id<"vehicles"> } : "skip");
+  const [role, setRole] = useState<"owner" | "authorized" | "">("");
   const [attested, setAttested] = useState(false);
   const [message, setMessage] = useState("");
   const [busy, setBusy] = useState(false);
@@ -52,27 +62,33 @@ export default function SafetyPage() {
   }
 
   return <div className="market-page min-h-screen flex flex-col"><Navbar /><main className="market-shell flex-1 py-10 space-y-6">
-    <Link href="/myAccount" className="text-sm underline">Back to account</Link>
+    <div className="flex gap-5 text-sm"><Link href="/myAccount" className="underline">Back to account</Link>{returnTo && <Link href={returnTo} className="underline">{returnTo.startsWith("/myAccount/messages/") ? "Return to conversation" : "Return to listing"}</Link>}</div>
     <h1 className="text-3xl font-bold">Trust & safety</h1>
     <p className="text-muted-foreground">Manage verification, ownership evidence, blocked users, and support requests.</p>
     {isLoading ? <p role="status">Loading your account…</p> : !user ? <Button asChild><Link href="/sign-in">Sign in</Link></Button> : !safety ? <p role="status">Loading safety information…</p> : <>
       {safety.user.suspendedAt && <p role="alert" className="rounded-md border border-red-300 bg-red-50 p-4">Your account is suspended. Reason: {safety.user.suspensionReason}. You can submit an appeal below.</p>}
       {feedback && <p role="status" className="rounded-md border p-4 break-words">{feedback}</p>}
       <div className="grid gap-6 lg:grid-cols-2">
-        <Card><CardHeader><CardTitle>Seller verification</CardTitle></CardHeader><CardContent className="space-y-4">
+        <Card><CardHeader><CardTitle>Contact verification</CardTitle></CardHeader><CardContent className="space-y-4">
           <p>Email: <strong>{safety.user.emailVerified ? "Verified" : "Not verified"}</strong></p>
           <p>Phone: <strong>{safety.user.phoneVerified ? "Verified" : "Not verified"}</strong></p>
-          <p className="text-sm text-muted-foreground">Add and verify your email and phone in account settings. Verification confirms access to a contact method; it does not guarantee a safe transaction.</p>
+          <p className="text-sm text-muted-foreground">Buyers need a verified email to save a listing, message a seller, or make an offer. Sellers also need a verified phone before submitting a listing. Manage both methods in account settings. Verification confirms access to a contact method; it does not guarantee a safe transaction.</p>
           <Button variant="outline" onClick={() => openUserProfile()}>Manage email & phone</Button>
           <div className="border-t pt-4 space-y-3"><h2 className="font-semibold">Optional identity review</h2><p className="text-sm">Status: {safety.identity?.status ?? "Not requested"}</p><p className="text-sm text-muted-foreground">Request a manual review. Support will coordinate evidence through this private workflow. Do not put identity documents in listing photos or messages.</p><Button disabled={busy || safety.identity?.status === "pending"} onClick={() => run(() => requestIdentity({}), "Identity review requested.")}>Request identity review</Button></div>
         </CardContent></Card>
         <Card><CardHeader><CardTitle>Ownership & private documents</CardTitle></CardHeader><CardContent className="space-y-4">
-          <label className="block text-sm font-medium">Your listing<select className="mt-1 block w-full rounded-md border p-2" value={vehicleId} onChange={(event) => { setVehicleId(event.target.value); setAttested(false); }}><option value="">Choose a listing</option>{vehicles?.map((vehicle) => <option key={vehicle._id} value={vehicle._id}>{vehicle.title}</option>)}</select></label>
-          <label className="flex items-start gap-2 text-sm"><input type="checkbox" className="mt-1" checked={attested} onChange={(event) => setAttested(event.target.checked)} />I am the owner or am authorized by the owner to sell this vehicle, and the listing is accurate.</label>
-          <Button disabled={busy || !vehicleId || !attested} onClick={() => run(() => attest({ vehicleId: vehicleId as Id<"vehicles"> }), "Ownership attestation saved.")}>Save ownership attestation</Button>
+          <label className="block text-sm font-medium">Your listing<select className="mt-1 block w-full rounded-md border p-2" value={vehicleId} onChange={(event) => { setVehicleId(event.target.value); setAttested(false); setRole(""); }}><option value="">Choose a listing</option>{vehicles?.map((vehicle) => <option key={vehicle._id} value={vehicle._id}>{vehicle.title}</option>)}</select></label>
+          <label className="block text-sm font-medium">Your relationship to the vehicle<select className="mt-1 block w-full rounded-md border p-2" value={role} onChange={event => { setRole(event.target.value as typeof role); setAttested(false); }}><option value="">Choose your role</option><option value="owner">I am the titled owner</option><option value="authorized">The titled owner authorized me to sell</option></select></label>
+          {vehicles?.some(vehicle => vehicle._id === vehicleId && ["active", "approved", "reserved"].includes(vehicle.status)) && <p className="text-sm">Changing a published listing’s ownership declaration returns it to moderation.</p>}
+          <label className="flex items-start gap-2 text-sm"><input type="checkbox" className="mt-1" checked={attested} onChange={(event) => setAttested(event.target.checked)} />I confirm that the role I selected and the information in this listing are accurate.</label>
+          <Button disabled={busy || !vehicleId || !attested || !role} onClick={() => role && run(() => attest({ vehicleId: vehicleId as Id<"vehicles">, role }), "Ownership attestation saved.")}>Save ownership attestation</Button>
           {vehicles?.find((vehicle) => vehicle._id === vehicleId)?.ownershipAttestedAt && <p className="text-sm text-green-800">Ownership attestation is recorded for this listing.</p>}
+          {(role === "authorized" || review?.requiresDocument) && <div className="rounded-md border p-3 text-sm">
+            {review?.request && <p className="mb-2"><strong>Moderator instructions</strong><br />{review.request}</p>}
+            <p>{review?.request ? "Upload the requested pages for this listing." : "Upload private evidence showing the titled owner authorized you to sell this vehicle. A moderator must review it before publication."}</p>
+          </div>}
           <div className="border-t pt-4 space-y-3"><p className="text-sm">Ownership evidence is private to you and authorized moderators. Upload only the necessary page; cover unrelated addresses, signatures and account numbers. Documents expire after 30 days.</p><label className="block text-sm font-medium">Private ownership document (PDF, JPEG or PNG, up to 10 MB)<input key={uploadKey} className="mt-2 block w-full text-sm" type="file" accept="application/pdf,image/jpeg,image/png" onChange={(event) => setFile(event.target.files?.[0] ?? null)} /></label><Button disabled={busy || !file} onClick={() => run(uploadDocument, "Private document uploaded for review.")}>Upload private document</Button></div>
-          {safety.documents.map((document) => <p key={document._id} className="text-sm">Document review: {document.status} · expires {new Date(document.expiresAt).toLocaleDateString()}</p>)}
+          {safety.documents.filter(document => !vehicleId || document.vehicleId === vehicleId).map((document) => <p key={document._id} className="text-sm">Document review: {document.status} · expires {new Date(document.expiresAt).toLocaleDateString()}{document.reason && document.status === "rejected" && <span> · {document.reason}</span>}</p>)}
         </CardContent></Card>
         <Card><CardHeader><CardTitle>Blocked users & reports</CardTitle></CardHeader><CardContent className="space-y-4">
           {safety.blocks.length === 0 && <p className="text-sm">No blocked users.</p>}

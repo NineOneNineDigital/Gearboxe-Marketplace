@@ -1,7 +1,9 @@
+import { isUsStateCode } from "../../lib/us-states";
+
 export interface VehicleValues {
   title?: string; make?: string; model?: string; year?: number; mileage?: number; price?: number;
   vin?: string; photos?: string[]; description?: string; contactInfo?: string;
-  trim?: string; bodyStyle?: string; engine?: string; transmission?: string; drivetrain?: string;
+  lienStatus?: string; lienPayoffPlan?: string; vehicleCategory?: string; trim?: string; bodyStyle?: string; engine?: string; transmission?: string; drivetrain?: string;
   fuelType?: string; exteriorColor?: string; interiorColor?: string; mileageUnit?: string;
   odometerStatus?: string; titleStatus?: string; sellerState?: string; condition?: string;
   mechanicalIssues?: string; accidentDisclosure?: string; damageDisclosure?: string;
@@ -12,8 +14,14 @@ export function validateVehicle(values: VehicleValues, complete = false) {
   for (const [key, value] of Object.entries(values)) {
     if (typeof value === "string" && value.length > 10_000) throw new Error(`${key} is too long`);
   }
+  if (values.lienStatus && !["none", "outstanding", "uncertain"].includes(values.lienStatus)) throw new Error("Choose a valid lien status");
+  if (values.lienPayoffPlan && values.lienPayoffPlan.length > 1000) throw new Error("Payoff and transfer plan must be at most 1,000 characters");
+  if (complete && !values.lienStatus) throw new Error("Lien status is required");
+  if (complete && values.lienStatus === "outstanding" && !values.lienPayoffPlan?.trim()) throw new Error("Describe the payoff and transfer plan for the outstanding lien");
+  if (values.vehicleCategory && !["car", "truck", "suv", "specialty"].includes(values.vehicleCategory)) throw new Error("Choose an eligible vehicle category");
   if (complete) {
-    for (const field of ["title", "make", "model", "vin", "trim", "bodyStyle", "engine", "transmission", "drivetrain", "fuelType", "exteriorColor", "interiorColor", "mileageUnit", "odometerStatus", "titleStatus", "sellerState", "condition", "mechanicalIssues", "accidentDisclosure", "damageDisclosure", "serviceRecords", "modifications", "sellerType", "description", "contactInfo"] as const) {
+    if (!values.vehicleCategory) throw new Error("Vehicle category is required");
+    for (const field of ["title", "make", "model", "vin", "trim", "bodyStyle", "engine", "transmission", "drivetrain", "fuelType", "exteriorColor", "interiorColor", "mileageUnit", "odometerStatus", "titleStatus", "sellerState", "condition", "serviceRecords", "modifications", "sellerType", "description", "contactInfo"] as const) {
       if (!values[field]?.trim()) throw new Error(`${field} is required; declare unknown or none where appropriate`);
     }
     if (!values.location?.city.trim() || !values.location.state.trim()) throw new Error("City and state are required");
@@ -29,11 +37,16 @@ export function validateVehicle(values: VehicleValues, complete = false) {
   if (values.price !== undefined && (!Number.isFinite(values.price) || values.price < (complete ? 0.01 : 0) || values.price > 100_000_000)) throw new Error("Price is invalid");
   if (values.vin && (values.vin.length > 30 || (complete && !(values.year && values.year < 1981 ? /^[A-Z0-9-]{3,30}$/i : /^[A-HJ-NPR-Z0-9]{17}$/i).test(values.vin)))) throw new Error("VIN must be a valid 17-character VIN (pre-1981 vehicles may use a serial number)");
   if (values.numberOfOwners !== undefined && (!Number.isInteger(values.numberOfOwners) || values.numberOfOwners < 1 || values.numberOfOwners > 100)) throw new Error("Number of owners is invalid");
-  for (const state of [values.sellerState, values.location?.state]) if (state && (state.length > 2 || (complete && !/^[A-Z]{2}$/.test(state)))) throw new Error("State must use its two-letter uppercase code");
+  for (const state of [values.sellerState, values.location?.state]) {
+    if (state && (state.length > 2 || (complete && !isUsStateCode(state)))) {
+      throw new Error("Choose a valid two-letter code for a U.S. state or Washington, DC");
+    }
+  }
   if (values.location && (values.location.city.length > 120 || (values.location.postalCode && (values.location.postalCode.length > 10 || (complete && !/^\d{5}(-\d{4})?$/.test(values.location.postalCode)))))) throw new Error("Location is invalid");
   if (values.location) {
     const { latitude, longitude } = values.location;
     if ((latitude === undefined) !== (longitude === undefined) || latitude !== undefined && (!Number.isFinite(latitude) || latitude < -90 || latitude > 90) || longitude !== undefined && (!Number.isFinite(longitude) || longitude < -180 || longitude > 180)) throw new Error("Provide a valid pair of approximate location coordinates");
+    if (complete && (latitude === undefined || longitude === undefined)) throw new Error("Add an approximate vehicle location using its ZIP code or your current location before submitting");
   }
   if (values.features && (values.features.length > 100 || values.features.some(f => !f.trim() || f.length > 120))) throw new Error("Features must contain at most 100 entries of 1–120 characters");
   if (values.photos && (values.photos.length > 30 || values.photos.some(p => p.length > 2048))) throw new Error("At most 30 valid photo references are allowed");

@@ -9,7 +9,7 @@ import { Calendar, Car, MapPin, MessageCircle } from "lucide-react";
 
 const expectations = [
   { icon: Car, title: "See the cars", text: "Walk the lineup and take in the details in person." },
-  { icon: MessageCircle, title: "Meet the owners", text: "Ask direct questions and hear the story behind the vehicle." },
+  { icon: MessageCircle, title: "Meet the sellers", text: "Ask direct questions and hear the story behind the vehicle." },
   { icon: MapPin, title: "Gather locally", text: "Weekend events built around the regional car community." },
 ];
 

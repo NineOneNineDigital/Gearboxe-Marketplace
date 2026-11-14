@@ -6,6 +6,7 @@ import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { GoogleIcon } from "@/components/ui/google-icon";
+import { listingReturnPath } from "@/lib/auth-return";
 import { useAuth, useSignUp } from "@clerk/nextjs";
 import { Eye, EyeOff, Lock, Mail, User } from "lucide-react";
 import Link from "next/link";
@@ -27,6 +28,8 @@ export default function SignUpPage() {
   const [pendingVerification, setPendingVerification] = useState(false);
   const [code, setCode] = useState("");
   const router = useRouter();
+  const [returnTo, setReturnTo] = useState("/myAccount");
+  useEffect(() => { setReturnTo(listingReturnPath(window.location.search)); }, []);
 
   // Redirect if user is already signed in (only once)
   useEffect(() => {
@@ -34,11 +37,11 @@ export default function SignUpPage() {
       // Use setTimeout to avoid race conditions with Next.js router
       const timer = setTimeout(() => {
         try {
-          router.replace("/myAccount");
+          router.replace(listingReturnPath(window.location.search));
         } catch (error) {
           console.warn("Router navigation failed:", error);
           // Fallback to window.location if router fails
-          window.location.href = "/myAccount";
+          window.location.href = listingReturnPath(window.location.search);
         }
       }, 100);
 
@@ -52,7 +55,7 @@ export default function SignUpPage() {
 
     // Check if user is already signed in
     if (isSignedIn) {
-      router.push("/myAccount");
+      router.push(listingReturnPath(window.location.search));
       return;
     }
 
@@ -86,10 +89,10 @@ export default function SignUpPage() {
         errorMessage.includes("already signed in")
       ) {
         try {
-          router.push("/myAccount");
+          router.push(listingReturnPath(window.location.search));
         } catch (error) {
           console.warn("Router navigation failed:", error);
-          window.location.href = "/myAccount";
+          window.location.href = listingReturnPath(window.location.search);
         }
         return;
       }
@@ -115,10 +118,10 @@ export default function SignUpPage() {
       if (completeSignUp.status === "complete") {
         await setActive({ session: completeSignUp.createdSessionId });
         try {
-          router.push("/myAccount");
+          router.push(listingReturnPath(window.location.search));
         } catch (error) {
           console.warn("Router navigation failed:", error);
-          window.location.href = "/myAccount";
+          window.location.href = listingReturnPath(window.location.search);
         }
       } else {
         setError("Verification failed. Please check your code.");
@@ -218,7 +221,9 @@ export default function SignUpPage() {
             Join Gearboxe Market
           </h2>
           <p className="text-gray-600">
-            Create your account and start connecting with car enthusiasts
+            {returnTo.startsWith("/myAccount/new-listing")
+              ? "Private sellers in all 50 states and Washington, DC can create a free draft. Verify your email and phone before submitting it for review."
+              : "Create your account and start connecting with car enthusiasts."}
           </p>
         </div>
 
@@ -418,7 +423,7 @@ export default function SignUpPage() {
                 void signUp?.authenticateWithRedirect({
                   strategy: "oauth_google",
                   redirectUrl: "/sso-callback",
-                  redirectUrlComplete: "/myAccount",
+                  redirectUrlComplete: listingReturnPath(window.location.search),
                 }).catch((err: unknown) => {
                   setError(isClerkAPIResponseError(err) ? err.errors[0]?.message || "Google sign-up could not start" : "Google sign-up could not start");
                   setIsLoading(false);
@@ -435,7 +440,7 @@ export default function SignUpPage() {
           <p className="text-sm text-gray-500">
             Already have an account?{" "}
             <Link
-              href="/sign-in"
+              href={returnTo === "/myAccount" ? "/sign-in" : `/sign-in?next=${encodeURIComponent(returnTo)}`}
               className="font-medium text-primary hover:text-primary/80"
             >
               Sign in here

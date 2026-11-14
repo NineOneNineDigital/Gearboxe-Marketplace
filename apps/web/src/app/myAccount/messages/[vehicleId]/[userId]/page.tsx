@@ -25,7 +25,7 @@ interface ConversationPageProps {
 export default function ConversationPage({ params }: ConversationPageProps) {
   const { vehicleId, userId } = use(params);
   const { isAuthenticated, isLoading } = useConvexAuth();
-  const { user } = useUser();
+  const { user, isLoaded: clerkLoaded } = useUser();
 
   // Always call hooks to maintain hook order
   const currentUser = useQuery(
@@ -53,7 +53,7 @@ export default function ConversationPage({ params }: ConversationPageProps) {
   );
 
 
-  if (isLoading) {
+  if (isLoading || !clerkLoaded) {
     return (
       <div className="min-h-screen bg-white flex items-center justify-center">
         <div className="text-center">
@@ -65,8 +65,11 @@ export default function ConversationPage({ params }: ConversationPageProps) {
   }
 
 
-  if (!isAuthenticated || !user) {
+  if (!user) {
     redirect("/sign-in");
+  }
+  if (!isAuthenticated) {
+    return <div className="market-page min-h-screen flex flex-col"><Navbar /><main className="market-shell flex-1 py-10"><p role="status">Your account is finishing setup. This page will update when it is ready. If it takes more than a few minutes, contact <a className="underline" href="mailto:Help@gearboxe.com">support</a>.</p></main><Footer /></div>;
   }
 
   const formatPrice = (price: number) => {
@@ -102,7 +105,7 @@ export default function ConversationPage({ params }: ConversationPageProps) {
                 Conversation {otherUser && `with ${otherUser.name}`}
               </h1>
             </div>
-            {vehicle && ["active", "approved"].includes(vehicle.status) && (
+            {vehicle && ["active", "approved", "reserved"].includes(vehicle.status) && (
               <Button asChild variant="outline">
                 <Link href={`/vehicles/${vehicle._id}`}>
                   <Car className="h-4 w-4 mr-2" />
@@ -126,7 +129,7 @@ export default function ConversationPage({ params }: ConversationPageProps) {
                 <CardContent className="pt-0">
                   <div className="space-y-6">
                     <p className="rounded-md bg-muted p-3 text-sm">Listing status: <span className="capitalize font-medium">{vehicle.status === "approved" ? "active" : vehicle.status}</span>. Your conversation remains available.</p>
-                    <div className="text-center">
+                    {vehicle.year !== undefined && vehicle.make !== undefined && vehicle.model !== undefined && vehicle.mileage !== undefined && vehicle.price !== undefined ? <div className="text-center">
                       <h3 className="font-bold text-xl text-gray-900 mb-2">
                         {vehicle.year} {vehicle.make} {vehicle.model}
                       </h3>
@@ -150,17 +153,17 @@ export default function ConversationPage({ params }: ConversationPageProps) {
                           </div>
                         </div>
                       </div>
-                    </div>
+                    </div> : <p className="text-sm text-muted-foreground">Vehicle details are unavailable while this listing is private.</p>}
                   </div>
                 </CardContent>
               </Card>
 
-              {/* Vehicle Owner Sidebar */}
+              {/* Vehicle seller sidebar */}
               {otherUser && (
                 <Card className="shadow-sm hover:shadow-md transition-shadow duration-200">
                   <CardHeader className="pb-4">
                     <CardTitle className="text-lg font-semibold text-gray-900">
-                      Vehicle Owner
+                          Vehicle seller
                     </CardTitle>
                   </CardHeader>
                   <CardContent className="pt-0">

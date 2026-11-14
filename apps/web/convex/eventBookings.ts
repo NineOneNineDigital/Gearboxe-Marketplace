@@ -1,3 +1,4 @@
+import { requirePopupPayments, popupPaymentsEnabled } from "./lib/environment";
 import { v } from "convex/values";
 import { internalMutation, internalQuery, mutation, query } from "./_generated/server";
 import type { MutationCtx, QueryCtx } from "./_generated/server";
@@ -39,11 +40,15 @@ async function registrationRows(ctx: ReadCtx, userId: Id<"users">) {
     return { ...registration, event: event ? await eventForViewer(ctx, event) : null, vehicle: await ctx.db.get(registration.vehicleId), canRefund: !!event && registration.paymentStatus === "completed" && !registration.checkedIn && canRefundEvent(event) && !!registration.paymentRecordId };
   }));
 }
+function reservationForOwner(row: Doc<"eventReservations">) {
+  return popupPaymentsEnabled() ? row : { ...row, checkoutUrl: undefined };
+}
 export const getMine = query({ args: {}, handler: async ctx => {
   const user = await getCurrentUser(ctx); if (!user) throw new Error("Authentication required");
-  return { payments: await ctx.db.query("eventPayments").withIndex("by_user", q => q.eq("userId", user._id)).order("desc").take(100), registrations: await registrationRows(ctx, user._id), reservations: await ctx.db.query("eventReservations").withIndex("by_user", q => q.eq("userId", user._id)).order("desc").take(100) };
+  return { payments: await ctx.db.query("eventPayments").withIndex("by_user", q => q.eq("userId", user._id)).order("desc").take(100), registrations: await registrationRows(ctx, user._id), reservations: (await ctx.db.query("eventReservations").withIndex("by_user", q => q.eq("userId", user._id)).order("desc").take(100)).map(reservationForOwner) };
 } });
 export const getOffer = query({ args: { eventId: v.id("events") }, handler: async (ctx, { eventId }) => {
+  requirePopupPayments();
   const user = await requireCurrentUser(ctx);
   const event = await ctx.db.get(eventId); if (!event) throw new Error("Event not found");
   const counter = await ctx.db.query("eventInventories").withIndex("by_event", q => q.eq("eventId", eventId)).unique();
@@ -58,7 +63,7 @@ export const getOffer = query({ args: { eventId: v.id("events") }, handler: asyn
 export const getOwnedReservation = query({ args: { reservationId: v.id("eventReservations") }, handler: async (ctx, args) => {
   const reservation = await owned(ctx, args.reservationId);
   const event = await ctx.db.get(reservation.eventId);
-  return { ...reservation, event: event ? await eventForViewer(ctx, event) : null, vehicle: await ctx.db.get(reservation.vehicleId), registration: reservation.registrationId ? await ctx.db.get(reservation.registrationId) : null };
+  return { ...reservationForOwner(reservation), event: event ? await eventForViewer(ctx, event) : null, vehicle: await ctx.db.get(reservation.vehicleId), registration: reservation.registrationId ? await ctx.db.get(reservation.registrationId) : null };
 } });
 export const getStatus = getOwnedReservation;
 export const getReservation = internalQuery({ args: { reservationId: v.id("eventReservations") }, handler: async (ctx, args) => {
@@ -67,6 +72,7 @@ export const getReservation = internalQuery({ args: { reservationId: v.id("event
   return { ...reservation, customerEmail: reservation.customerEmail ?? user?.email, eventName: reservation.eventName ?? event?.name, vehicleName: reservation.vehicleName ?? vehicle?.title, eventCancelledAt: event?.cancelledAt };
 } });
 export const reserve = mutation({ args: { eventId: v.id("events"), vehicleId: v.id("vehicles"), acceptRules: v.optional(v.boolean()) }, handler: async (ctx, args) => {
+  requirePopupPayments();
   const user = await requireCurrentUser(ctx); const now = Date.now();
   const event = await ctx.db.get(args.eventId); const vehicle = await ctx.db.get(args.vehicleId);
   if (!event || event.cancelledAt !== undefined || event.date <= now) throw new Error("Event is no longer accepting registrations");
@@ -314,6 +320,7 @@ export const retryLegacyMigration = mutation({ args: { registrationId: v.id("reg
 // Persist provider-create intent before making the network call; an unattached
 // session may still charge, so local cancellation must not release its inventory.
 export const markCheckoutAttempt = internalMutation({ args: { reservationId: v.id("eventReservations") }, handler: async (ctx, args) => {
+  requirePopupPayments();
   const row = await ctx.db.get(args.reservationId);
   if (!row || row.status !== "held" || row.expiresAt <= Date.now() || row.cancellationRequestedAt !== undefined) throw new Error("Reservation is no longer accepting checkout");
   if (!row.checkoutCreateAttemptAt) await ctx.db.patch(row._id, { checkoutCreateAttemptAt: Date.now() });

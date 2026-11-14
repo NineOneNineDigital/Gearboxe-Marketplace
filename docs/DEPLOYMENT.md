@@ -2,20 +2,28 @@
 
 ## Current status
 
-Repository support is implemented; cloud resources are **not yet provisioned**.
-The checkout is linked to `NineOneNineDigital/Gearboxe-Marketplace` on GitHub;
-administrator repository access is verified. Changes are not yet pushed, and
-there is no linked Vercel project or confirmed hosting/provider connection.
-Never treat a green build as proof that auth, payments, or deployment wiring works.
+The checkout is linked to `NineOneNineDigital/Gearboxe-Marketplace` on GitHub.
+The feature application was merged through `dev` into `main` at `42548b01`, and
+a Vercel project is linked. The last observed Production deployment attempt
+failed during the deployment-target check because `MARKETPLACE_ENV` was missing;
+this runbook does **not** establish a healthy public production service. Current
+Vercel/Convex/Clerk/Autosend configuration and domain routing still need
+environment-by-environment verification under [GBXMRKT-1](https://linear.app/mxndev/issue/GBXMRKT-1/configure-marketplace-hosted-environments-and-recover-failed-main).
+The observed `main` merge triggered that Production attempt; recheck the project's
+current production-branch mapping before any future merge or release.
+The marketplace's intended canonical origin is `https://gearboxemarket.com`;
+DNS and successful domain assignment have not been verified here. Later local
+changes in this checkout remain uncommitted and undeployed. Never treat a green
+build as proof that auth, notifications, or deployment wiring works.
 
 ## Environment isolation
 
-| Environment | Vercel | Convex | Clerk | Stripe |
+| Environment | Vercel | Convex | Clerk | Popup payments |
 | --- | --- | --- | --- | --- |
-| Development | Local app | Developer deployment in non-production project | Development app/test instance | Development sandbox/test keys |
-| Preview | PR/branch preview of staging project | Isolated branch preview in non-production project | Dedicated preview app/test instance | Preview sandbox/test keys |
-| Staging | Separate staging project, Production environment | Dedicated staging project's production-type deployment | Separate staging Clerk app | Staging sandbox/test keys |
-| Production | Separate production project, Production environment | Production project's production deployment | Production app/live instance | Live account/keys |
+| Development | Local app | Developer deployment in non-production project | Development app/test instance | Disabled for marketplace; sandbox keys only for later event work |
+| Preview | PR/branch preview of non-production project | Isolated branch preview in non-production project | Dedicated preview app/test instance | Disabled; test keys only when later enabled |
+| Staging | Separate staging project, Production environment | Dedicated staging project's production-type deployment | Separate staging Clerk app | Disabled; test keys only when later enabled |
+| Production | Linked production project, Production environment | Production project's production deployment | Production app/live instance | Disabled; live keys only for a separately approved event rollout |
 
 Convex's deployment **type** `prod` is distinct from the marketplace environment:
 the dedicated staging project's `prod` deployment still has `MARKETPLACE_ENV=staging`.
@@ -26,21 +34,22 @@ Clerk recommends a separate application for staging, not shared production data:
 [Clerk environments](https://clerk.com/docs/guides/development/managing-environments).
 A staging production instance with its own custom domain is supported (live Clerk keys,
 **test Stripe keys**); development and previews require test Clerk keys.
-Prefer isolated [Stripe sandboxes](https://docs.stripe.com/sandboxes) for non-production.
+Prefer isolated [Stripe sandboxes](https://docs.stripe.com/sandboxes) when the later popup release is tested.
 
 ## Provisioning checklist — owner actions still required
 
 1. Review, commit, and push changes to the linked GitHub repository. Protect `main`:
    require PR review and the `Lint, types, tests, and builds` CI check, restrict
    direct pushes and bypasses. CI must run successfully on an actual PR.
-2. Create distinct Convex development, staging, and production resources as above.
+2. Verify the existing development Convex resource and create or verify distinct
+   staging and production resources as above.
    Record project/deployment IDs, region, owner, and URLs in the private operations inventory.
    Enable appropriate backups and confirm export access. Do not run `convex deploy`
    relying on a developer's default target: it defaults to that project's production deployment.
-3. Create the Clerk applications/instances and Stripe sandboxes/live configuration.
+3. Verify the Clerk applications/instances and create missing isolated instances.
    Configure a Clerk JWT template named `convex`, matching each backend's issuer.
    Configure custom domains for production Clerk and the marketplace.
-4. Create Vercel staging and production projects rooted at `apps/web`. Use Node 22,
+4. Verify the linked Vercel production project and create an isolated staging project rooted at `apps/web`. Use Node 22,
    include workspace files outside the root directory, and retain the committed
    `vercel.json` build/install commands. Deploy the unified administration portal
    as a separate project rooted at `apps/admin`, using the same environment's
@@ -50,8 +59,9 @@ Prefer isolated [Stripe sandboxes](https://docs.stripe.com/sandboxes) for non-pr
    Market routes require an active admin role; Events routes require that role or
    an individual event assignment. The admin project does not deploy the
    marketplace backend.
-5. Keep production deployment manual until the staging release gate passes.
-   Disable automatic production Git deployment in Vercel project settings.
+5. Review the existing production Git deployment behavior and keep future production
+   deployment manual until the staging release gate passes. Disable automatic
+   production Git deployment in Vercel project settings if it is still enabled.
    Enable staging/PR deployments only for trusted contributors; require approval
    for fork/external PRs. Build-only GitHub CI deliberately has no deploy secrets.
 6. Configure environment-scoped values below. Production secrets belong only to the
@@ -62,10 +72,11 @@ Prefer isolated [Stripe sandboxes](https://docs.stripe.com/sandboxes) for non-pr
    Each fresh branch preview needs its own Clerk endpoint before user sync works;
    removing the preview also requires removing that endpoint. No automatic webhook
    provisioning is implemented. Test sign-up and synchronization before approval.
-8. Configure Stripe `checkout.session.completed` webhooks to each frontend's
-   `/api/webhooks/stripe`, with the endpoint's matching signing secret and mode.
-   Dynamic previews need separate test endpoints, or payments cannot be smoke-tested.
-   Stripe local testing can forward to the local route using the Stripe CLI.
+8. For the later popup release only, configure Stripe `checkout.session.completed`
+   webhooks to each frontend's `/api/webhooks/stripe`, with the endpoint's matching
+   signing secret and mode. Dynamic previews need separate test endpoints before
+   paid flows can be tested. Preserve credentials and reconciliation for any
+   historical in-flight event payments when disabling new registrations.
 9. Provision the first super-admin using the controlled procedure below. Verify a
    second approved super-admin for recovery, account MFA, and operator access.
 10. Deploy staging, perform the smoke checklist, record the exact tested commit,
@@ -75,19 +86,33 @@ Prefer isolated [Stripe sandboxes](https://docs.stripe.com/sandboxes) for non-pr
 ## Configuration contract
 
 Start from `apps/web/.env.example`; it contains placeholders, not working credentials.
+Offers default to disabled. Set `NEXT_PUBLIC_OFFERS_ENABLED=true` on the web build and `OFFERS_ENABLED=true` on its matching Convex deployment only after the approved Terms and Privacy Policy and six-month offer-history deletion have been verified. Leave both disabled until those launch gates are met. Configure `OFFER_REVIEWER_USER_IDS` in Convex as a comma-separated list of active administrator Convex user IDs for founder/backup day-seven escalation. Without a roster, the durable admin queue remains available but no direct reviewer notice is sent.
+
 Set `MARKETPLACE_ENV` explicitly on every hosted frontend/backend. Local `next dev`
 defaults to development; local `next start` requires an explicit mode and runtime secrets.
+Set `NEXT_PUBLIC_POPUP_PAYMENTS_ENABLED=false` on both the web and matching Convex
+deployment for the marketplace release. Omitted or literal `false` disables new
+public popup flows; literal `true` is reserved for an approved, separately tested
+event release. Invalid values fail validation. A mismatch between web and Convex
+must fail readiness rather than expose a web-only gate.
 
 Web build: `NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY`, `NEXT_PUBLIC_CONVEX_URL`,
 `NEXT_PUBLIC_CONVEX_SITE_URL`, `NEXT_PUBLIC_APP_URL`.
-Web runtime also requires `CLERK_SECRET_KEY`, `STRIPE_SECRET_KEY`,
-`STRIPE_WEBHOOK_SECRET`, `EVENT_REGISTRATION_PRICE_CENTS`.
-Convex requires `CLERK_JWT_ISSUER_DOMAIN`, `CLERK_WEBHOOK_SECRET`,
-`STRIPE_SECRET_KEY`, `STRIPE_WEBHOOK_SECRET`, `EVENT_REGISTRATION_PRICE_CENTS`,
-`APP_URL`, and `MARKETPLACE_ENV`.
+Web runtime also requires `CLERK_SECRET_KEY`. When popup payments are enabled,
+`STRIPE_SECRET_KEY`, `STRIPE_WEBHOOK_SECRET`, and
+`EVENT_REGISTRATION_PRICE_CENTS` are required; supplied values are validated
+even while disabled.
+Convex requires `CLERK_JWT_ISSUER_DOMAIN`, `CLERK_WEBHOOK_SECRET`, `APP_URL`, and
+`MARKETPLACE_ENV`; the same popup-payment values are required there only when
+the popup switch is enabled. Marketplace email delivery uses
+`AUTOSEND_API_KEY`, `AUTOSEND_FROM_EMAIL`, and `AUTOSEND_WEBHOOK_SECRET` in the
+Convex deployment, a verified sender, the correct `APP_URL` and
+`CONVEX_SITE_URL`, and a delivery webhook. Validate delivery and suppression in
+isolated staging before claiming notifications work. See [Notifications](NOTIFICATIONS.md).
 No client Stripe publishable key is currently consumed: Checkout redirects are server-created.
-The event price must be the approved positive integer USD-cent amount and match
-between web and backend. Key prefixes do not prove a key is valid or belongs to
+When events are later enabled, the event price must be the approved positive
+integer USD-cent amount and match between web and backend. Key prefixes do not
+prove a key is valid or belongs to
 the intended account; verify account IDs and modes during provisioning and smoke tests.
 
 Vercel deploy credentials: `CONVEX_DEPLOY_KEY` and, for staging/production,
@@ -141,14 +166,17 @@ exposed to the browser. Do not seed fake accounts or manually create a user row.
 - CI: lint with zero warnings, workspace types, configuration/provisioning tests,
   shared-token tests, and builds on every PR.
 - Staging: verify deployed commit SHA, backend/frontend environment and account IDs,
-  matching fee; signup/login/logout and user webhook sync; public approved listings
-  and VIN; pending/private listing authorization; seller creation; buyer messaging;
-  favorites; admin moderation; event test Checkout, successful/retried webhook,
-  registration/QR and check-in. Verify anonymous/non-admin denial.
-- Production: record approver, SHA, prior Vercel deployment ID, prior Convex code
+  matching disabled popup switch; signup/login/logout, policy version consent and
+  user webhook sync; public Active/Reserved listings, ZIP discovery and VIN;
+  pending/private listing authorization; seller creation with five required photos;
+  buyer messaging, offers and single-accept reservation; favorites; admin moderation,
+  support and notifications. Verify anonymous/non-admin denial and that direct
+  popup routes/mutations cannot start a new registration or checkout.
+- Production: record founder go/no-go, approver, SHA, prior Vercel deployment ID, prior Convex code
   SHA, backup reference, configuration revision, and rollback compatibility before
   deployment. Validate backend readiness; repeat auth/listing/admin smoke checks.
-  A real charge requires explicit owner approval; do not use test cards in live mode.
+  Marketplace launch does not require a live event charge. Test any later live
+  popup charge only under a separately approved event release plan.
 - Record deployment URLs/IDs, results, release timestamp, and operator in the
   private release log. This repository contains no completed release evidence yet.
 
@@ -158,7 +186,8 @@ exposed to the browser. Do not seed fake accounts or manually create a user row.
 | --- | --- | --- |
 | Convex deploy keys | Platform/release owner | Vercel environment secrets; approved operator vault |
 | Clerk secret/API and webhook keys | Identity/security owner | Vercel secret key; Convex webhook signing secret |
-| Stripe API and webhook keys | Payments owner | Matching Vercel/Convex API keys; Vercel endpoint signing secret |
+| Stripe API and webhook keys, if popup events are enabled | Payments owner | Matching Vercel/Convex API keys; Vercel endpoint signing secret |
+| Autosend API, sender, and webhook keys | Notifications owner | Convex environment and verified sender configuration |
 | GitHub/Vercel access and DNS | Platform owner | Provider access controls and team password manager |
 | Bootstrap allowlist | Security owner | Temporary Convex environment variable; remove after use |
 
@@ -180,8 +209,8 @@ Rollback must use current unrevoked secrets, not restore leaked credentials.
 ## Rollback procedure
 
 1. Incident owner freezes new releases and records failing SHA, errors, affected
-   flows, and last healthy frontend/backend pair. Restrict writes/payments if data
-   integrity is at risk; do not blindly replay charges or run data restoration.
+   flows, and last healthy frontend/backend pair. Restrict writes if data
+   integrity is at risk; do not blindly replay historical charges or run data restoration.
 2. For a frontend-only regression, use Vercel's dashboard rollback to the recorded
    healthy deployment **from the same environment**, or `vercel rollback URL_OR_ID`
    with a linked, approved operator CLI. Confirm the backend remains compatible.
@@ -197,13 +226,15 @@ Rollback must use current unrevoked secrets, not restore leaked credentials.
    rehearsal in isolated staging, and reconciliation of Stripe payments, Clerk users,
    messages, and writes after the backup. Blind snapshot restoration risks lost sales
    and duplicate registrations. No automatic destructive restore is provided.
-5. Verify login, webhook sync, public listings, authorization, messaging, registrations,
-   and check-in. Monitor failures and reconcile queued/retried webhook events.
+5. Verify login, Clerk webhook sync, public listings, ZIP search, authorization,
+   messaging, offers, and moderation. Confirm new popup registration and checkout
+   remain disabled. Continue monitoring and reconciling any historical event
+   payment/webhook work without making it a marketplace launch gate.
 6. Record incident timeline/results, restore release controls, and rehearse this
    procedure in staging **before** the first production launch. A documented procedure
    is not a tested recovery plan until that rehearsal is recorded.
 
-Event checkout, inventory initialization, webhook subscriptions, automatic refunds,
+For the later popup release, event checkout, inventory initialization, webhook subscriptions, automatic refunds,
 and payment recovery follow [Event payments](EVENT_PAYMENTS.md).
 Event staff assignments, historical roster/attendance migrations and on-site
 connectivity checks follow [Popup operations](POPUP_OPERATIONS.md).

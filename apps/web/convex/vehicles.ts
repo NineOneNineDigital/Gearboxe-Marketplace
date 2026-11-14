@@ -1,4 +1,5 @@
 import { v } from "convex/values";
+import { internal } from "./_generated/api";
 import { internalMutation, mutation, query } from "./_generated/server";
 import {
   getCurrentUser,
@@ -12,11 +13,13 @@ import { optionalSpecificationFields, listingStatus, storedListingStatus } from 
 import { validateVehicle, assertStatusTransition } from "./lib/vehicleValidation";
 import type { Doc } from "./_generated/dataModel";
 import type { MutationCtx } from "./_generated/server";
-import { publicVehicle, normalizeVehicleStatus } from "./lib/vehicleVisibility";
+import { onOfferListingTransition } from "./lib/offerListing";
+import { assertPublicationReview, rememberReviewTriggers } from "./lib/ownershipReview";
+import { isPublicVehicle, publicVehicle, normalizeVehicleStatus } from "./lib/vehicleVisibility";
 import { mediaReference, attachMedia, resolveVehicleMedia } from "./lib/vehicleMedia";
 import { removeMedia } from "./mediaRecords";
-import { notifySeller, notifyListingFollowers } from "./notifications";
-import { assertRevision, assertSubmitReady, duplicateVin, listingRevision, nextRevision } from "./lib/listingLifecycle";
+import { enqueueNotification, notifySeller, notifyListingFollowers } from "./notifications";
+import { assertRevision, assertSubmitReady, availabilityClock, AVAILABILITY_REMINDER_MS, duplicateVin, listingRevision, nextRevision } from "./lib/listingLifecycle";
 import { consumeRateLimit } from "./lib/trustGuards";
 import { syncDiscovery } from "./lib/discoveryIndex";
 
@@ -29,14 +32,30 @@ const listingFields = {
 function approximateLocation(location: Doc<"vehicles">["location"]) {
   if (!location) return undefined;
   validateVehicle({ location }, false);
-  return { city: location.city, state: location.state, latitude: location.latitude === undefined ? undefined : Math.round(location.latitude * 100) / 100, longitude: location.longitude === undefined ? undefined : Math.round(location.longitude * 100) / 100 };
+  return { city: location.city, state: location.state, postalCode: location.postalCode, latitude: location.latitude === undefined ? undefined : Math.round(location.latitude * 100) / 100, longitude: location.longitude === undefined ? undefined : Math.round(location.longitude * 100) / 100 };
 }
 
+function availabilityHistory(vehicle: Doc<"vehicles">, entry: { kind: string; at: number; actorId?: Doc<"users">["_id"] }) {
+  return [...(vehicle.availabilityHistory ?? []).slice(-99), entry];
+}
+async function scheduleAvailability(ctx: MutationCtx, id: Doc<"vehicles">["_id"], dueAt: number) {
+  await ctx.scheduler.runAt(dueAt - AVAILABILITY_REMINDER_MS, internal.vehicles.checkAvailability, { id, dueAt });
+  await ctx.scheduler.runAt(dueAt, internal.vehicles.checkAvailability, { id, dueAt });
+}
 async function recordStatus(ctx: MutationCtx, vehicle: Doc<"vehicles">, actor: Doc<"users">, status: Doc<"vehicles">["status"], reason: string) {
+  if (vehicle.status === "pending" && status === "active" && vehicle.userId === actor._id) {
+    throw new Error("Another moderator must approve your listing");
+  }
+  if (vehicle.status === "pending" && status === "active") await assertPublicationReview(ctx, vehicle);
+  const moderatorTakedown = (status === "archived" || status === "rejected") && isAdmin(actor) && actor._id !== vehicle.userId;
+  await onOfferListingTransition(ctx, vehicle, status, { moderation: moderatorTakedown });
   const entry = { fromStatus: vehicle.status, toStatus: status, reason, actorId: actor._id, createdAt: Date.now() };
   await ctx.db.insert("vehicleModerationLog", { vehicleId: vehicle._id, ...entry });
   if (isAdmin(actor)) await ctx.db.insert("adminAuditLog", { action: "listing_status_changed", actorId: actor._id, targetUserId: vehicle.userId, vehicleId: vehicle._id, source: "admin", reason, createdAt: entry.createdAt });
-  await ctx.db.patch(vehicle._id, { status, updatedAt: nextRevision(vehicle), moderationReason: reason, moderationHistory: [...(vehicle.moderationHistory ?? []), entry] });
+  const clock = status === "active" ? availabilityClock(entry.createdAt) : { availabilityDueAt: undefined, availabilityNextCheckAt: undefined };
+  await ctx.db.patch(vehicle._id, { status, ...clock, availabilityExpiredAt: status === "active" || status === "draft" ? undefined : vehicle.availabilityExpiredAt, availabilityHistory: status === "draft" && vehicle.availabilityExpiredAt !== undefined ? availabilityHistory(vehicle, { kind: "reopened", at: entry.createdAt, actorId: actor._id }) : vehicle.availabilityHistory, updatedAt: nextRevision(vehicle), moderationReason: reason, moderationHistory: [...(vehicle.moderationHistory ?? []), entry] });
+  if (status === "pending") await rememberReviewTriggers(ctx, (await ctx.db.get(vehicle._id))!);
+  if (clock.availabilityDueAt !== undefined) await scheduleAvailability(ctx, vehicle._id, clock.availabilityDueAt);
   await notifySeller(ctx, vehicle.userId, vehicle._id, status, `${vehicle.title || "Your listing"}: ${reason}`);
   await syncDiscovery(ctx, vehicle._id);
   await notifyListingFollowers(ctx, vehicle._id, status, entry.createdAt);
@@ -96,7 +115,7 @@ export const saveDraft = mutation({
       assertRevision(vehicle, expectedUpdatedAt);
       await attachMedia(ctx, id, vehicle.userId, values.photos, values.media ?? [], vehicle);
       const updatedAt = nextRevision(vehicle);
-      await ctx.db.patch(id, { ...values, ownershipAttestedAt: values.vin === vehicle.vin ? vehicle.ownershipAttestedAt : undefined, vinKey: values.vin || undefined, updatedAt, ...await verification(ctx, values) });
+      await ctx.db.patch(id, { ...values, ownershipAttestedAt: values.vin === vehicle.vin ? vehicle.ownershipAttestedAt : undefined, ownershipRole: values.vin === vehicle.vin ? vehicle.ownershipRole : undefined, vinKey: values.vin || undefined, updatedAt, ...await verification(ctx, values) });
       return { id, updatedAt, reused: false };
     }
     await consumeRateLimit(ctx, user._id, "listing");
@@ -155,6 +174,7 @@ export const getVehicles = query({
 
     const legacy = requestedStatus === "active" ? await ctx.db.query("vehicles").withIndex("by_status", q => q.eq("status", "approved")).collect() : [];
     const filtered = [...vehicles, ...legacy].filter((vehicle) => {
+      if ((requestedStatus === "active" || requestedStatus === "approved") && !isPublicVehicle(vehicle)) return false;
       if (args.make && vehicle.make.toLowerCase() !== args.make.toLowerCase()) {
         return false;
       }
@@ -189,7 +209,7 @@ export const getVehicleById = query({
     if (!vehicle) return null;
     const user = await getCurrentUser(ctx);
     if (user && (vehicle.userId === user._id || isAdmin(user))) return resolveVehicleMedia(ctx, normalizeVehicleStatus(vehicle));
-    if (vehicle.status === "approved" || vehicle.status === "active") return resolveVehicleMedia(ctx, publicVehicle(vehicle));
+    if (isPublicVehicle(vehicle)) return resolveVehicleMedia(ctx, publicVehicle(vehicle));
     return null;
   },
 });
@@ -234,12 +254,14 @@ export const updateVehicle = mutation({
     }
     assertRevision(vehicle, expectedUpdatedAt);
     if (["sold", "withdrawn", "archived"].includes(vehicle.status)) throw new Error("This listing cannot be edited in its current status");
+    if (["active", "approved"].includes(vehicle.status) && vehicle.availabilityDueAt !== undefined && Date.now() >= vehicle.availabilityDueAt) throw new Error("This listing has expired. Reopen it as a draft for review.");
     if (updates.vin !== undefined && updates.vin !== vehicle.vin && !["draft", "rejected"].includes(vehicle.status)) throw new Error("Create a new draft for a different vehicle VIN");
     const merged = { ...vehicle, ...updates };
     const requiresReview = vehicle.status !== "draft" && vehicle.status !== "rejected";
     validateVehicle(merged, requiresReview);
+    if (requiresReview) await rememberReviewTriggers(ctx, vehicle);
     await attachMedia(ctx, id, vehicle.userId, updates.photos ?? vehicle.photos, updates.media ?? vehicle.media ?? [], vehicle);
-    await ctx.db.patch(id, { ...updates, ownershipAttestedAt: merged.vin === vehicle.vin ? vehicle.ownershipAttestedAt : undefined, vinKey: merged.vin || undefined, updatedAt: nextRevision(vehicle), ...await verification(ctx, merged) });
+    await ctx.db.patch(id, { ...updates, ownershipAttestedAt: merged.vin === vehicle.vin ? vehicle.ownershipAttestedAt : undefined, ownershipRole: merged.vin === vehicle.vin ? vehicle.ownershipRole : undefined, vinKey: merged.vin || undefined, updatedAt: nextRevision(vehicle), ...await verification(ctx, merged) });
     if (requiresReview) {
       await consumeRateLimit(ctx, user._id, "listing");
       await assertSubmitReady(ctx, (await ctx.db.get(id))!);
@@ -290,12 +312,71 @@ export const changeVehicleStatus = mutation({
     if (!vehicle) throw new Error("Vehicle not found");
     if (vehicle.userId !== user._id && !isAdmin(user)) throw new Error("You cannot manage this listing");
     if (vehicle.moderationRemovedAt !== undefined) throw new Error("This listing was removed by moderation. Contact support to appeal.");
+    if (["active", "approved"].includes(vehicle.status) && vehicle.availabilityDueAt !== undefined && Date.now() >= vehicle.availabilityDueAt) throw new Error("This listing has expired. Reopen it as a draft for review.");
     assertStatusTransition(vehicle.status, args.status, isAdmin(user), args.reason);
     if (args.status === "pending" && !isAdmin(user)) await consumeRateLimit(ctx, user._id, "listing");
     if (args.status === "pending" || args.status === "active") await assertSubmitReady(ctx, vehicle);
     await recordStatus(ctx, vehicle, user, args.status, args.reason?.trim() || `Listing marked ${args.status}`);
   },
 });
+// Only a current, active cycle may be confirmed; expectedDueAt makes retries idempotent.
+export const confirmAvailability = mutation({
+  args: { id: v.id("vehicles"), expectedDueAt: v.number() },
+  handler: async (ctx, { id, expectedDueAt }) => {
+    const user = await requireCurrentUser(ctx);
+    const vehicle = await ctx.db.get(id);
+    if (!vehicle || vehicle.userId !== user._id) throw new Error("Listing not found");
+    if (!["active", "approved"].includes(vehicle.status) || vehicle.moderationRemovedAt !== undefined) throw new Error("Only available listings can be confirmed");
+    if (vehicle.availabilityDueAt !== expectedDueAt) return false; // retry or stale client
+    const now = Date.now();
+    if (now >= expectedDueAt) throw new Error("This listing has expired. Reopen it as a draft for review.");
+    if (now < expectedDueAt - AVAILABILITY_REMINDER_MS) throw new Error("Confirmation opens seven days before the deadline");
+    const clock = availabilityClock(now);
+    await ctx.db.patch(id, { ...clock, availabilityConfirmedAt: now, availabilityHistory: availabilityHistory(vehicle, { kind: "confirmed", at: now, actorId: user._id }) });
+    await scheduleAvailability(ctx, id, clock.availabilityDueAt);
+    return true;
+  },
+});
+
+async function processAvailability(ctx: MutationCtx, vehicle: Doc<"vehicles">, now: number) {
+  if (!["active", "approved"].includes(vehicle.status) || vehicle.moderationRemovedAt !== undefined) return;
+  if (vehicle.availabilityDueAt === undefined) {
+    const clock = availabilityClock(now);
+    await ctx.db.patch(vehicle._id, clock);
+    await scheduleAvailability(ctx, vehicle._id, clock.availabilityDueAt);
+    return;
+  }
+  if (now >= vehicle.availabilityDueAt) {
+    await onOfferListingTransition(ctx, vehicle, "archived", { effectiveAt: vehicle.availabilityDueAt });
+    await ctx.db.patch(vehicle._id, { status: "archived", availabilityExpiredAt: vehicle.availabilityDueAt, availabilityNextCheckAt: undefined, updatedAt: nextRevision(vehicle), moderationReason: "Listing expired after availability was not confirmed", availabilityHistory: availabilityHistory(vehicle, { kind: "expired", at: vehicle.availabilityDueAt }) });
+    await notifySeller(ctx, vehicle.userId, vehicle._id, "archived", `${vehicle.title}: Listing expired. Reopen as a draft and submit for review at no fee.`);
+    await notifyListingFollowers(ctx, vehicle._id, "archived", now);
+    await syncDiscovery(ctx, vehicle._id);
+  } else if (now >= vehicle.availabilityDueAt - AVAILABILITY_REMINDER_MS && vehicle.availabilityNextCheckAt !== vehicle.availabilityDueAt) {
+    await enqueueNotification(ctx, { userId: vehicle.userId, vehicleId: vehicle._id, category: "listings", kind: "availability_reminder", message: `Confirm ${vehicle.title} is still available before its 45-day deadline.`, link: `/myAccount/my-listings#listing-${vehicle._id}`, dedupeKey: `availability:${vehicle._id}:${vehicle.availabilityDueAt}` });
+    await ctx.db.patch(vehicle._id, { availabilityNextCheckAt: vehicle.availabilityDueAt, availabilityHistory: availabilityHistory(vehicle, { kind: "reminder", at: now }) });
+  }
+}
+export const checkAvailability = internalMutation({
+  args: { id: v.id("vehicles"), dueAt: v.number() },
+  handler: async (ctx, { id, dueAt }) => {
+    const vehicle = await ctx.db.get(id);
+    if (vehicle?.availabilityDueAt === dueAt) await processAvailability(ctx, vehicle, Date.now());
+  },
+});
+export const sweepAvailability = internalMutation({
+  args: {},
+  handler: async ctx => {
+    const now = Date.now();
+    for (const status of ["active", "approved"] as const) {
+      const legacy = await ctx.db.query("vehicles").withIndex("by_status_availability_check", q => q.eq("status", status).eq("availabilityNextCheckAt", undefined)).take(50);
+      for (const vehicle of legacy) await processAvailability(ctx, vehicle, now);
+      const due = await ctx.db.query("vehicles").withIndex("by_status_availability_check", q => q.eq("status", status).lte("availabilityNextCheckAt", now)).take(50);
+      for (const vehicle of due) if (vehicle.availabilityNextCheckAt !== undefined) await processAvailability(ctx, vehicle, now);
+    }
+  },
+});
+
 export const approveVehicle = mutation({
   args: { id: v.id("vehicles") },
   handler: async (ctx, args) => {
@@ -323,7 +404,7 @@ export const recordView = mutation({
   handler: async (ctx, { id, visitorKey }) => {
     if (!/^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(visitorKey)) throw new Error("Invalid view session");
     const vehicle = await ctx.db.get(id);
-    if (!vehicle || (vehicle.status !== "active" && vehicle.status !== "approved")) return;
+    if (!vehicle || !isPublicVehicle(vehicle)) return;
     const user = await getCurrentUser(ctx);
     if (user && (user._id === vehicle.userId || isAdmin(user))) return;
     const day = Math.floor(Date.now() / 86_400_000);

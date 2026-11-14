@@ -6,6 +6,7 @@ import { Footer } from "@/components/ui/footer";
 import { Navbar } from "@/components/ui/navbar";
 import { api } from "@/convex/_generated/api";
 import { useCurrentUser } from "@/hooks/useCurrentUser";
+import { adminAppOrigin } from "@/lib/admin-portal";
 import { useMutation, usePaginatedQuery, useQuery } from "convex/react";
 import Link from "next/link";
 import { useState } from "react";
@@ -18,6 +19,7 @@ const categories = [
 ] as const;
 
 type Preferences = { emailEnabled: boolean; messages: boolean; listings: boolean; favorites: boolean; events: boolean; emailSuppressed?: boolean };
+const adminPortalOrigin = adminAppOrigin(process.env.NEXT_PUBLIC_ADMIN_PORTAL_URL, 3002);
 
 function EmailPreferences({ preferences }: { preferences: Preferences }) {
   const updatePreferences = useMutation(api.notifications.updatePreferences);
@@ -64,7 +66,10 @@ export default function NotificationsPage() {
           <div className="mt-3 flex flex-wrap items-center gap-3 text-xs text-muted-foreground">
             <span className="capitalize">{notification.category}</span>
             <time dateTime={new Date(notification.createdAt).toISOString()}>{new Date(notification.createdAt).toLocaleString()}</time>
-            <Link href={notification.link} className="text-primary underline">View details</Link>
+            {notification.kind === "offer_review_alert" ? adminPortalOrigin
+              ? <a href={`${adminPortalOrigin}/admin/listings`} className="text-primary underline">Open reservation queue</a>
+              : <span>Open the Listings page in the configured admin portal.</span>
+              : <Link href={notification.link} className="text-primary underline">View details</Link>}
             {!notification.readAt && <Button variant="ghost" size="sm" disabled={busyId === notification._id} onClick={async () => {
               setError(""); setBusyId(notification._id);
               try { await markRead({ id: notification._id }); }

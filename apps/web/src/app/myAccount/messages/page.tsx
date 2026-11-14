@@ -1,5 +1,6 @@
 "use client";
 
+import { OfferLink } from "@/components/ui/offer-link";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Footer } from "@/components/ui/footer";
@@ -16,12 +17,20 @@ import {
   User,
 } from "lucide-react";
 import Link from "next/link";
-import { redirect } from "next/navigation";
-import { useState } from "react";
+import { useRouter } from "next/navigation";
+import { useEffect, useState } from "react";
 
 export default function MessagesPage() {
   const { isAuthenticated, isLoading } = useConvexAuth();
   const { user } = useUser();
+  const router = useRouter();
+  useEffect(() => {
+    if (!isLoading && !isAuthenticated) router.replace(`/sign-in?next=${encodeURIComponent(window.location.pathname + window.location.search)}`);
+  }, [isLoading, isAuthenticated, router]);
+  const [offerLink, setOfferLink] = useState<string | null>(null);
+  useEffect(() => {
+    if (process.env.NEXT_PUBLIC_OFFERS_ENABLED === "true") setOfferLink(new URLSearchParams(window.location.search).get("offer"));
+  }, []);
   const [searchQuery, setSearchQuery] = useState("");
   const [filterStatus, setFilterStatus] = useState<"all" | "unread" | "recent">(
     "all"
@@ -48,9 +57,7 @@ export default function MessagesPage() {
     );
   }
 
-  if (!isAuthenticated || !user) {
-    redirect("/sign-in");
-  }
+  if (!isAuthenticated || !user) return <p role="status">Redirecting to sign in…</p>;
 
   const formatTime = (timestamp: number) => {
     const date = new Date(timestamp);
@@ -117,6 +124,7 @@ export default function MessagesPage() {
       <Navbar />
 
       <div className="flex-1 w-full max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+        {offerLink && currentUser?._id && <OfferLink threadId={offerLink} userId={currentUser._id} />}
         {/* Enhanced Header */}
         <div className="mb-8">
           <div className="flex items-center justify-between mb-4">

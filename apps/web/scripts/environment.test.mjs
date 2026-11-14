@@ -4,6 +4,7 @@ import { validateEnvironment } from "../convex/lib/environment.ts";
 
 const valid = {
   MARKETPLACE_ENV: "staging",
+  NEXT_PUBLIC_POPUP_PAYMENTS_ENABLED: "true",
   NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY: "pk_test_example",
   CLERK_SECRET_KEY: "sk_test_example",
   NEXT_PUBLIC_CONVEX_URL: "https://staging-example.convex.cloud",
@@ -53,13 +54,30 @@ test("invalid origins, mismatched Convex targets, and noninteger fees fail", () 
   ]) assert.throws(() => validateEnvironment({ ...valid, ...override }, "web-runtime"));
 });
 
-test("local marketplace can run without payments while supplied credentials remain validated", () => {
-  const local = { ...valid, MARKETPLACE_ENV: "development", STRIPE_SECRET_KEY: undefined, STRIPE_WEBHOOK_SECRET: undefined, EVENT_REGISTRATION_PRICE_CENTS: undefined };
-  validateEnvironment(local, "web-runtime");
-  assert.throws(() => validateEnvironment({ ...local, STRIPE_SECRET_KEY: "sk_live_example" }, "web-runtime"), /wrong key type/);
-  assert.throws(() => validateEnvironment(local, "convex"), /STRIPE_SECRET_KEY is required/);
+test("default and explicitly disabled hosted deployments work without payment settings", () => {
+  for (const rollout of [undefined, "false"]) {
+    const disabled = { ...valid, NEXT_PUBLIC_POPUP_PAYMENTS_ENABLED: rollout, STRIPE_SECRET_KEY: undefined, STRIPE_WEBHOOK_SECRET: undefined, EVENT_REGISTRATION_PRICE_CENTS: undefined };
+    for (const profile of ["web-runtime", "convex"]) {
+      assert.equal(validateEnvironment(disabled, profile).paymentsEnabled, false);
+      assert.throws(() => validateEnvironment({ ...disabled, NEXT_PUBLIC_POPUP_PAYMENTS_ENABLED: "yes" }, profile), /NEXT_PUBLIC_POPUP_PAYMENTS_ENABLED/);
+      assert.throws(() => validateEnvironment({ ...disabled, STRIPE_SECRET_KEY: "sk_live_fixture" }, profile), /STRIPE_SECRET_KEY has the wrong key type/);
+      assert.throws(() => validateEnvironment({ ...disabled, STRIPE_WEBHOOK_SECRET: "invalid" }, profile), /STRIPE_WEBHOOK_SECRET has the wrong key type/);
+    }
+  }
 });
 
+test("enabling payments requires valid keys, webhook and a chargeable fee, including development", () => {
+  for (const profile of ["web-runtime", "convex"]) {
+    for (const mode of ["development", "staging"]) {
+      for (const key of ["STRIPE_SECRET_KEY", "STRIPE_WEBHOOK_SECRET", "EVENT_REGISTRATION_PRICE_CENTS"]) {
+        assert.throws(() => validateEnvironment({ ...valid, MARKETPLACE_ENV: mode, [key]: undefined }, profile), new RegExp(key));
+      }
+      for (const fee of ["49", "100000000"]) {
+        assert.throws(() => validateEnvironment({ ...valid, MARKETPLACE_ENV: mode, EVENT_REGISTRATION_PRICE_CENTS: fee }, profile), /EVENT_REGISTRATION_PRICE_CENTS/);
+      }
+    }
+  }
+});
 
 test("backend checkout requires an isolated webhook secret and redirect origin", () => {
   assert.throws(() => validateEnvironment({ ...valid, STRIPE_WEBHOOK_SECRET: undefined }, "convex"), /STRIPE_WEBHOOK_SECRET is required/);

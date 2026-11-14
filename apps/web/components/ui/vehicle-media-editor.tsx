@@ -3,7 +3,7 @@
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { api } from "@/convex/_generated/api";
-import { MAX_PHOTOS, MAX_UPLOAD_BYTES, MIME_TYPES } from "@/convex/lib/mediaPolicy";
+import { MAX_PHOTOS, MAX_UPLOAD_BYTES, MIME_TYPES, MIN_PHOTOS, REQUIRED_PHOTO_VIEWS, missingPhotoViews, type PhotoView } from "@/convex/lib/mediaPolicy";
 import type { Id } from "@/convex/_generated/dataModel";
 import { isTrustedImageUrl } from "@/lib/trusted-images";
 import { useAction, useMutation } from "convex/react";
@@ -13,6 +13,7 @@ import { useEffect, useRef, useState } from "react";
 export interface ListingMedia {
   id: Id<"vehicleMedia">;
   caption: string;
+  view?: PhotoView;
   url: string;
   thumbnailUrl: string;
 }
@@ -99,7 +100,7 @@ export function VehicleMediaEditor({ value, legacyPhotos, onChange, onLegacyChan
       const result = await finalizeUpload({ mediaId, storageId });
       if (!mounted.current) return;
       const previous = entry.replaces ? valueRef.current.find(item => item.id === entry.replaces) : undefined;
-      const media = { ...result, caption: previous?.caption ?? "" };
+      const media = { ...result, caption: previous?.caption ?? "", view: previous?.view };
       const next = previous ? valueRef.current.map(item => item.id === previous.id ? media : item) : [...valueRef.current, media];
       valueRef.current = next;
       onChange(next);
@@ -146,13 +147,15 @@ export function VehicleMediaEditor({ value, legacyPhotos, onChange, onLegacyChan
     valueRef.current = next;
     onChange(next);
   };
+  const missing = missingPhotoViews(value);
   return (
     <div className="space-y-4">
       <div className="rounded-lg border-2 border-dashed border-border p-6">
         <label htmlFor="vehicle-photo-upload" className="block font-medium">Vehicle photos</label>
-        <p id="vehicle-photo-help" className="my-2 text-sm text-muted-foreground">JPEG, PNG, or WebP, up to 10 MiB each. Up to 30 photos. Photos are processed before your listing is saved.</p>
+        <p id="vehicle-photo-help" className="my-2 text-sm text-muted-foreground">Upload clear photos you own of the vehicle. Include front, rear, left side, right side, and interior views; label each below. No stock photos, misleading duplicates, or private documents. JPEG, PNG, or WebP, up to 10 MiB each and 30 photos total.</p>
         <input id="vehicle-photo-upload" type="file" accept="image/jpeg,image/png,image/webp" multiple disabled={disabled} aria-describedby="vehicle-photo-help" onChange={event => { chooseFiles(event.target.files); event.target.value = ""; }} className="block w-full text-sm file:mr-3 file:rounded-md file:border file:bg-background file:px-3 file:py-2" />
       </div>
+      <p className="text-sm" role="status">{value.length} ready photos (minimum {MIN_PHOTOS}). {missing.length ? `Missing views: ${missing.join(", ")}.` : "All required views labeled."}</p>
       {error && <p role="alert" className="text-sm text-red-700">{error}</p>}
       {entries.filter(entry => entry.status !== "ready").map(entry => (
         <div key={entry.key} className="space-y-2 rounded-lg border p-3" aria-busy={entry.status !== "failed"}>
@@ -164,6 +167,7 @@ export function VehicleMediaEditor({ value, legacyPhotos, onChange, onLegacyChan
       <div className="grid gap-4 sm:grid-cols-2">
         {value.map((media, index) => <div key={media.id} className="space-y-3 rounded-lg border p-3">
           {isTrustedImageUrl(media.thumbnailUrl) ? <Image src={media.thumbnailUrl} alt={media.caption || `Vehicle photo ${index + 1}`} width={400} height={300} className="h-40 w-full rounded object-cover" /> : <div className="flex h-40 items-center justify-center bg-muted text-sm">Photo unavailable</div>}
+          <label className="block text-sm">Photo view<select value={media.view ?? ""} disabled={disabled} onChange={event => { const view = event.target.value as PhotoView | ""; const next = valueRef.current.map(item => item.id === media.id ? { ...item, view: view || undefined } : item); valueRef.current = next; onChange(next); }} className="mt-1 block w-full rounded-md border bg-background p-2"><option value="">Select a view (optional for extra photos)</option>{REQUIRED_PHOTO_VIEWS.map(view => <option key={view} value={view}>{view}</option>)}</select></label>
           <label className="block text-sm">Caption<Input value={media.caption} maxLength={200} disabled={disabled} onChange={event => changeCaption(media.id, event.target.value)} placeholder="Optional photo caption" /></label>
           <div className="flex flex-wrap gap-2"><Button type="button" variant="outline" disabled={disabled || index === 0} onClick={() => move(index, -1)} aria-label={`Move photo ${index + 1} earlier`}>Earlier</Button><Button type="button" variant="outline" disabled={disabled || index === value.length - 1} onClick={() => move(index, 1)} aria-label={`Move photo ${index + 1} later`}>Later</Button><Button type="button" variant="ghost" disabled={disabled || entries.some(entry => entry.replaces === media.id && entry.status !== "ready")} onClick={() => void remove(media)}>Delete</Button></div>
           <label className="block text-sm">Replace photo<input type="file" accept="image/jpeg,image/png,image/webp" disabled={disabled || entries.some(entry => entry.replaces === media.id && entry.status !== "ready")} aria-label={`Replace photo ${index + 1}`} className="mt-1 block w-full text-xs" onChange={event => { chooseFiles(event.target.files, media.id); event.target.value = ""; }} /></label>

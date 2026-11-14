@@ -2,11 +2,13 @@ import { v } from "convex/values";
 import { internal } from "./_generated/api";
 import { mutation, query, internalMutation } from "./_generated/server";
 import type { MutationCtx, QueryCtx } from "./_generated/server";
+import { onOfferListingTransition } from "./lib/offerListing";
+import { currentEvidence, documentRequired, listingReview, rememberReviewTriggers, reviewCleared, reviewTriggers } from "./lib/ownershipReview";
 import type { Id } from "./_generated/dataModel";
 import { getCurrentUser, requireAdmin, requireCurrentUser } from "./lib/authorization";
 import { consumeRateLimit } from "./lib/trustGuards";
 import { DOCUMENT_RETENTION_MS, suspiciousIndicators, trustReason, trustText } from "./lib/trustPolicy";
-import { assertSubmitReady, nextRevision } from "./lib/listingLifecycle";
+import { assertRevision, assertSubmitReady, listingRevision, nextRevision } from "./lib/listingLifecycle";
 import { notifySeller, notifyListingFollowers } from "./notifications";
 import { syncDiscovery } from "./lib/discoveryIndex";
 async function supportUser(ctx: QueryCtx | MutationCtx) {
@@ -25,12 +27,14 @@ async function audit(ctx: MutationCtx, actorId: Id<"users">, action: string, rea
   });
 }
 async function changeListingStatus(ctx: MutationCtx, vehicle: import("./_generated/dataModel").Doc<"vehicles">, actorId: Id<"users">, status: "archived" | "pending", reason: string) {
+  await onOfferListingTransition(ctx, vehicle, status, { moderation: actorId !== vehicle.userId });
   const entry = {
     fromStatus: vehicle.status, toStatus: status, reason, actorId, createdAt: Date.now()
   };
   await ctx.db.patch(vehicle._id, {
     status, moderationRemovedAt: status === "archived" ? Date.now() : undefined, moderationReason: reason, updatedAt: nextRevision(vehicle), moderationHistory: [...(vehicle.moderationHistory ?? []), entry]
   });
+  if (status === "pending") await rememberReviewTriggers(ctx, (await ctx.db.get(vehicle._id))!);
   await ctx.db.insert("vehicleModerationLog", { vehicleId: vehicle._id, ...entry });
   await notifySeller(ctx, vehicle.userId, vehicle._id, "moderation", `Your listing was ${status === "archived" ? "taken down" : "returned for review"}. Reason: ${reason}. Visit Safety & support to appeal.`);
   await notifyListingFollowers(ctx, vehicle._id, status, entry.createdAt);
@@ -82,14 +86,96 @@ export const setBlock = mutation({
 });
 
 export const attestOwnership = mutation({
-  args: { vehicleId: v.id("vehicles") },
+  args: { vehicleId: v.id("vehicles"), role: v.union(v.literal("owner"), v.literal("authorized")) },
   handler: async (ctx, args) => {
     const user = await requireCurrentUser(ctx);
     const vehicle = await ctx.db.get(args.vehicleId);
     if (!vehicle || vehicle.userId !== user._id)
       throw new Error("Listing unavailable");
-    await ctx.db.patch(vehicle._id, { ownershipAttestedAt: Date.now() });
+    if (vehicle.ownershipRole === args.role && vehicle.ownershipAttestedAt) return;
+    const published = ["active", "approved", "reserved"].includes(vehicle.status);
+    if (!published && !["draft", "rejected", "pending", "archived"].includes(vehicle.status)) throw new Error("Reopen this listing before changing its ownership declaration");
+    await ctx.db.patch(vehicle._id, { ownershipAttestedAt: Date.now(), ownershipRole: args.role, updatedAt: nextRevision(vehicle) });
+    if (args.role === "authorized") await rememberReviewTriggers(ctx, { ...vehicle, ownershipRole: args.role });
+    if (published) await changeListingStatus(ctx, vehicle, user._id, "pending", "Seller updated the ownership declaration. Independent review is required.");
   }
+});
+
+const manualReviewTrigger = v.union(v.literal("ambiguous_ownership"), v.literal("vin_identity"),
+  v.literal("fraud_report"), v.literal("repeat_activity"), v.literal("title"), v.literal("lien"));
+
+export const getListingReview = query({
+  args: { vehicleId: v.id("vehicles") },
+  handler: async (ctx, { vehicleId }) => {
+    await requireAdmin(ctx);
+    const vehicle = await ctx.db.get(vehicleId);
+    if (!vehicle) throw new Error("Listing unavailable");
+    const row = await listingReview(ctx, vehicleId);
+    const triggers = reviewTriggers(vehicle, row);
+    const documents = await ctx.db.query("ownershipDocuments").withIndex("by_vehicle", q => q.eq("vehicleId", vehicleId)).order("desc").take(50);
+    return { revision: listingRevision(vehicle), triggers, requiresDocument: documentRequired(triggers, row),
+      cleared: await reviewCleared(ctx, vehicle, row), request: row?.request ?? null, ownershipRole: vehicle.ownershipRole ?? null,
+      documents: documents.filter(doc => doc.userId === vehicle.userId && doc.expiresAt > Date.now()).map(doc => ({ id: doc._id, status: doc.status, expiresAt: doc.expiresAt })) };
+  },
+});
+
+export const getMyListingReview = query({
+  args: { vehicleId: v.id("vehicles") },
+  handler: async (ctx, { vehicleId }) => {
+    const user = await supportUser(ctx);
+    const vehicle = await ctx.db.get(vehicleId);
+    if (!vehicle || vehicle.userId !== user._id) throw new Error("Listing unavailable");
+    const row = await listingReview(ctx, vehicleId);
+    const needsAction = ["draft", "rejected", "pending"].includes(vehicle.status) && !await reviewCleared(ctx, vehicle, row);
+    return { request: needsAction ? row?.request ?? null : null, requiresDocument: needsAction && documentRequired(reviewTriggers(vehicle, row), row) };
+  },
+});
+
+export const requestListingEvidence = mutation({
+  args: { vehicleId: v.id("vehicles"), expectedRevision: v.number(), trigger: manualReviewTrigger, reason: v.string() },
+  handler: async (ctx, args) => {
+    const admin = await requireAdmin(ctx);
+    const vehicle = await ctx.db.get(args.vehicleId);
+    if (!vehicle || vehicle.userId === admin._id) throw new Error("An independent moderator is required");
+    if (!["pending", "active", "approved", "reserved"].includes(vehicle.status)) throw new Error("Choose a submitted or published listing");
+    assertRevision(vehicle, args.expectedRevision);
+    const request = trustText(args.reason, "Seller instructions", 1000);
+    const row = await listingReview(ctx, vehicle._id);
+    const triggers = [...new Set([...reviewTriggers(vehicle, row), args.trigger])];
+    const update = { triggers, request, clearedRevision: undefined, reviewerId: undefined, reason: undefined, documentId: undefined };
+    if (row) await ctx.db.patch(row._id, update);
+    else await ctx.db.insert("ownershipReviewCases", { vehicleId: vehicle._id, triggers, request });
+    await changeListingStatus(ctx, vehicle, admin._id, "pending", "Private evidence requested. Open Trust & safety, select this listing, and review the requested next step.");
+    await audit(ctx, admin._id, "listing_evidence_requested", `${args.trigger}: ${request}`, { vehicleId: vehicle._id, targetUserId: vehicle.userId });
+  },
+});
+
+export const resolveListingReview = mutation({
+  args: { vehicleId: v.id("vehicles"), expectedRevision: v.number(), reason: v.string(), documentId: v.optional(v.id("ownershipDocuments")) },
+  handler: async (ctx, args) => {
+    const admin = await requireAdmin(ctx);
+    const vehicle = await ctx.db.get(args.vehicleId);
+    if (!vehicle || vehicle.userId === admin._id) throw new Error("An independent moderator is required");
+    if (vehicle.status !== "pending") throw new Error("Only pending listings can be cleared for publication");
+    assertRevision(vehicle, args.expectedRevision);
+    const reason = trustText(args.reason, "Enhanced review decision", 1000);
+    if (!vehicle.ownershipAttestedAt || !vehicle.ownershipRole) throw new Error("Ask the seller to declare ownership or authority");
+    if (vehicle.lienStatus === "uncertain") throw new Error("The seller must clarify the lien before review can be resolved");
+    if (vehicle.lienStatus === "outstanding" && !vehicle.lienPayoffPlan?.trim()) throw new Error("A payoff and transfer plan is required");
+    const row = await listingReview(ctx, vehicle._id);
+    const triggers = reviewTriggers(vehicle, row);
+    if (!triggers.length) throw new Error("No enhanced review is required");
+    if (args.documentId || documentRequired(triggers, row)) {
+      const document = args.documentId ? await ctx.db.get(args.documentId) : null;
+      if (!currentEvidence(vehicle, document)) throw new Error("Select verified, unexpired private evidence for this vehicle");
+    }
+    const decision = { triggers, clearedRevision: listingRevision(vehicle), reviewerId: admin._id, reason, documentId: args.documentId };
+    if (row) await ctx.db.patch(row._id, decision);
+    else await ctx.db.insert("ownershipReviewCases", { vehicleId: vehicle._id, ...decision });
+    await audit(ctx, admin._id, "listing_enhanced_review_cleared",
+      `Revision ${decision.clearedRevision}; ${triggers.join(", ")}; evidence ${args.documentId ?? "not required"}: ${reason}`,
+      { vehicleId: vehicle._id, targetUserId: vehicle.userId });
+  },
 });
 
 export const getMySafety = query({
@@ -296,13 +382,27 @@ export const reviewDocument = mutation({
   handler: async (ctx, args) => {
     const admin = await requireAdmin(ctx);
     const document = await ctx.db.get(args.documentId);
-    if (!document || document.expiresAt < Date.now())
+    if (!document || document.userId === admin._id || document.expiresAt <= Date.now())
       throw new Error("Document unavailable");
     const reason = trustText(args.reason, "Review reason");
+    const vehicle = document.vehicleId ? await ctx.db.get(document.vehicleId) : null;
+    if (args.verified && document.vehicleId && (!vehicle?.vin || vehicle.userId !== document.userId || (document.vehicleVin && document.vehicleVin !== vehicle.vin))) {
+      throw new Error("Review fresh evidence for the current vehicle VIN");
+    }
     await ctx.db.patch(document._id, {
+      vehicleVin: document.vehicleVin ?? (args.verified ? vehicle?.vin : undefined),
       status: args.verified ? "verified" : "rejected", reviewerId: admin._id, reason, reviewedAt: Date.now()
     });
-    await audit(ctx, admin._id, "ownership_document_reviewed", args.verified ? "verified" : "rejected", { targetUserId: document.userId, vehicleId: document.vehicleId });
+    if (!args.verified && vehicle) {
+      const row = await listingReview(ctx, vehicle._id);
+      if (row?.documentId === document._id) {
+        await ctx.db.patch(row._id, { request: `Provide replacement evidence. ${reason}`, documentId: undefined, clearedRevision: undefined, reason: undefined, reviewerId: undefined });
+        if (["active", "approved", "reserved", "pending"].includes(vehicle.status)) {
+          await changeListingStatus(ctx, vehicle, admin._id, "pending", "Previously accepted evidence needs replacement. Select this listing in Trust & safety.");
+        }
+      }
+    }
+    await audit(ctx, admin._id, "ownership_document_reviewed", `${args.verified ? "Verified" : "Rejected"} document ${document._id}: ${reason}`, { targetUserId: document.userId, vehicleId: document.vehicleId });
   }
 });
 

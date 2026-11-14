@@ -26,12 +26,16 @@ export async function assertCanContact(ctx: QueryCtx | MutationCtx, senderId: Id
     if (pairs.some(Boolean))
         throw new Error("Messaging is unavailable between these accounts");
 }
+export function assertBuyerEmailVerified(user: Pick<Doc<"users">, "emailVerified">) {
+    if (!user.emailVerified)
+        throw new Error("Verify your email in account settings before contacting a seller or saving a listing");
+}
 export async function assertSellerTrust(ctx: QueryCtx | MutationCtx, vehicle: Doc<"vehicles">) {
     const seller = await ctx.db.get(vehicle.userId);
     if (!seller || seller.suspendedAt !== undefined)
         throw new Error("This seller account is suspended");
     if (!seller.emailVerified || !seller.phoneVerified)
         throw new Error("Verify your email and phone in account settings before submitting a listing");
-    if (!vehicle.ownershipAttestedAt)
+    if (!vehicle.ownershipAttestedAt || !vehicle.ownershipRole)
         throw new Error("Confirm that you own this vehicle or have permission to sell it before submitting");
 }

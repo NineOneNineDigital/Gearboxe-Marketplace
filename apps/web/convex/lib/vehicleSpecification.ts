@@ -4,7 +4,8 @@ export const listingStatus = v.union(v.literal("draft"), v.literal("pending"), v
 // Transitional read support; new writes never use approved.
 export const storedListingStatus = v.union(listingStatus, v.literal("approved"));
 export const specificationFields = {
-  trim: v.string(), bodyStyle: v.string(), engine: v.string(), transmission: v.string(),
+  lienStatus: v.union(v.literal("none"), v.literal("outstanding"), v.literal("uncertain")), lienPayoffPlan: v.string(),
+  vehicleCategory: v.string(), trim: v.string(), bodyStyle: v.string(), engine: v.string(), transmission: v.string(),
   drivetrain: v.string(), fuelType: v.string(), exteriorColor: v.string(), interiorColor: v.string(),
   mileageUnit: v.union(v.literal("mi"), v.literal("km")),
   odometerStatus: v.union(v.literal("actual"), v.literal("exempt"), v.literal("not_actual")),

@@ -7,6 +7,7 @@ import { MarketplaceSearch } from "@/components/ui/marketplace-search";
 import { Navbar } from "@/components/ui/navbar";
 import { VehicleCard } from "@/components/ui/vehicle-card";
 import { api } from "@/convex/_generated/api";
+import { popupPaymentsEnabled } from "@/convex/lib/environment";
 import { isTrustedImageUrl } from "@/lib/trusted-images";
 import { useConvexAuth, useQuery } from "convex/react";
 import { ArrowDown, ArrowUpRight, Calendar, Car, FileCheck2 } from "lucide-react";
@@ -15,7 +16,8 @@ import Link from "next/link";
 
 export default function HomePage() {
   const { isAuthenticated } = useConvexAuth();
-  const upcomingEvents = useQuery(api.events.getUpcomingEvents);
+  const showEvents = popupPaymentsEnabled();
+  const upcomingEvents = useQuery(api.events.getUpcomingEvents, showEvents ? {} : "skip");
   const featuredVehicles = useQuery(api.discovery.browse, { filters: {}, sort: "newest", paginationOpts: { numItems: 6, cursor: null } })?.page;
 
   const displayVehicles = featuredVehicles?.slice(0, 6) ?? [];
@@ -48,15 +50,15 @@ export default function HomePage() {
                 Cars from people who <span className="text-primary">care.</span>
               </h1>
               <p className="mt-6 max-w-xl text-base leading-8 text-[hsl(var(--chrome))]">
-                Shop owner-listed vehicles, ask questions directly, and meet
+                Shop private-party vehicles, ask questions directly, and meet
                 the car in person through the Gearboxe community.
               </p>
               <div className="mt-7 flex flex-wrap items-center gap-4 text-xs">
                 <Link href="/vehicles" className="inline-flex items-center gap-2 font-semibold text-white hover:text-primary">
-                  View all inventory <ArrowUpRight className="h-4 w-4" />
+                  Find cars near you or nationwide <ArrowUpRight className="h-4 w-4" />
                 </Link>
                 <span className="h-4 w-px bg-white/20" />
-                <Link href={isAuthenticated ? "/myAccount/new-listing" : "/sign-up"} className="font-semibold text-[hsl(var(--chrome))] hover:text-white">
+                <Link href={isAuthenticated ? "/myAccount/new-listing" : "/sign-up?next=%2FmyAccount%2Fnew-listing"} className="font-semibold text-[hsl(var(--chrome))] hover:text-white">
                   Sell your vehicle
                 </Link>
               </div>
@@ -65,7 +67,7 @@ export default function HomePage() {
             <div className="lg:pb-2">
               <div className="mb-3 flex items-center justify-between px-1">
                 <p className="font-mono text-[9px] font-semibold uppercase tracking-[0.14em] text-[hsl(var(--chrome))]">Search the marketplace</p>
-                {featuredVehicles && <span className="text-xs text-[hsl(var(--chrome))]">{featuredVehicles.length} available</span>}
+                {featuredVehicles && <span className="text-xs text-[hsl(var(--chrome))]">{featuredVehicles.length} featured listings</span>}
               </div>
               <MarketplaceSearch />
               {heroVehicle && (
@@ -100,8 +102,8 @@ export default function HomePage() {
               </div>
               <div className="lg:justify-self-end">
                 <p className="max-w-sm text-sm leading-7 text-[hsl(var(--gunmetal))]">
-                  Browse vehicles from the Gearboxe community. Every listing
-                  starts with the owner and the story behind the car.
+                  Browse vehicles from private sellers in the Gearboxe community.
+                  Ask about the car and the history behind it.
                 </p>
                 <Link href="/vehicles" className="mt-5 inline-flex items-center gap-3 text-xs font-semibold hover:text-primary">
                   View every vehicle <ArrowUpRight className="h-4 w-4" />
@@ -131,11 +133,11 @@ export default function HomePage() {
           </div>
         </section>
 
-        <section className="market-grid border-y border-border bg-background py-20 sm:py-24">
+        {showEvents && <section className="market-grid border-y border-border bg-background py-20 sm:py-24">
           <div className="market-shell grid gap-10 lg:grid-cols-[0.8fr_1.2fr] lg:items-center">
             <div>
               <p className="market-eyebrow">Meet the market</p>
-              <h2 className="market-section-title mt-6">See the cars. Meet the owners.</h2>
+              <h2 className="market-section-title mt-6">See the cars. Meet the sellers.</h2>
               <p className="mt-6 max-w-md text-sm leading-7 text-muted-foreground">
                 Gearboxe Market events bring private sellers and interested
                 buyers together around the vehicles themselves.
@@ -153,7 +155,7 @@ export default function HomePage() {
               </div>
             )}
           </div>
-        </section>
+        </section>}
 
         <section className="bg-[hsl(var(--midnight))] py-20 text-[hsl(var(--bone))] sm:py-24">
           <div className="market-shell grid gap-10 lg:grid-cols-2 lg:items-end">
@@ -170,7 +172,7 @@ export default function HomePage() {
               <div className="rounded-xl border border-white/10 bg-white/[0.04] p-6">
                 <ArrowDown className="h-5 w-5 text-primary" />
                 <h3 className="mt-5 text-base font-semibold">A direct connection</h3>
-                <p className="mt-2 text-xs leading-6 text-[hsl(var(--chrome))]">Talk to the owner, ask better questions, and meet around the car.</p>
+                <p className="mt-2 text-xs leading-6 text-[hsl(var(--chrome))]">Talk to the seller, ask better questions, and meet around the car.</p>
               </div>
             </div>
           </div>

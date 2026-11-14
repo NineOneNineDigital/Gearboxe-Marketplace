@@ -11,8 +11,8 @@ export const cleanup = internalMutation({
     const page = await ctx.db.query("vehicles").paginate({ cursor, numItems: 50 });
     for (const vehicle of page.page) {
       const closed = ["sold", "withdrawn", "archived", "rejected", "draft"].includes(vehicle.status);
-      if (closed && (vehicle.updatedAt ?? vehicle.createdAt) < Date.now() - 90 * DAY && (vehicle.vin || vehicle.contactInfo)) {
-        await ctx.db.patch(vehicle._id, { vin: undefined, vinKey: undefined, vinVerificationStatus: "unverified", vinDecodedAt: undefined, contactInfo: "" });
+      if (closed && (vehicle.updatedAt ?? vehicle.createdAt) < Date.now() - 90 * DAY && (vehicle.vin || vehicle.contactInfo || vehicle.lienPayoffPlan)) {
+        await ctx.db.patch(vehicle._id, { vin: undefined, vinKey: undefined, vinVerificationStatus: "unverified", vinDecodedAt: undefined, contactInfo: "", lienPayoffPlan: undefined });
       }
       const location = vehicle.location;
       if (location && (location.postalCode !== undefined || (location.latitude !== undefined && location.latitude !== Math.round(location.latitude * 100) / 100) || (location.longitude !== undefined && location.longitude !== Math.round(location.longitude * 100) / 100))) {

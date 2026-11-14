@@ -114,6 +114,7 @@ export function VehicleCard({
         className="absolute inset-0 z-10 rounded-xl focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-primary"
       ><span className="sr-only">{vehicle.title}</span></Link>}
       <div className="relative overflow-hidden bg-[hsl(var(--midnight))]">
+        {vehicle.status === "reserved" && <span className="pointer-events-none absolute left-3 top-3 z-20 rounded-full border border-amber-200 bg-amber-50 px-3 py-1 text-xs font-semibold text-amber-950">Reserved</span>}
         {photo && isTrustedImageUrl(photo) && failedPhoto !== photo ? (
           <Image
             src={photo}
@@ -132,7 +133,7 @@ export function VehicleCard({
           </div>
         )}
 
-        {showFavorite && convexUser && (
+        {showFavorite && convexUser && (convexUser.emailVerified ? (
           <Button
             size="icon"
             variant="ghost"
@@ -147,7 +148,11 @@ export function VehicleCard({
               } ${isLoading ? "opacity-50" : ""}`}
             />
           </Button>
-        )}
+        ) : (
+          <Button asChild size="icon" variant="ghost" className="absolute right-3 top-3 z-20 border border-white/20 bg-[hsl(var(--midnight)/0.72)] text-white backdrop-blur-md hover:bg-[hsl(var(--midnight))]" aria-label="Verify email to save this vehicle">
+            <Link href={`/myAccount/safety?next=${encodeURIComponent(`/vehicles/${vehicle._id}`)}`}><Heart className="h-4 w-4" /></Link>
+          </Button>
+        ))}
       </div>
 
       <div className="flex min-w-0 flex-col">
