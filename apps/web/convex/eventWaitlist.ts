@@ -1,3 +1,4 @@
+import { popupPaymentsEnabled, requirePopupPayments } from "./lib/environment";
 import { v } from "convex/values";
 import { internalMutation, mutation, query } from "./_generated/server";
 import type { MutationCtx } from "./_generated/server";
@@ -23,6 +24,7 @@ export const getMine = query({ args: {}, handler: async ctx => {
   return await ctx.db.query("eventWaitlist").withIndex("by_user", q => q.eq("userId", user._id)).order("desc").take(100);
 } });
 export const join = mutation({ args: { eventId: v.id("events"), vehicleId: v.id("vehicles") }, handler: async (ctx, args) => {
+  requirePopupPayments();
   const user = await requireCurrentUser(ctx); const now = Date.now();
   const [event, vehicle] = await Promise.all([ctx.db.get(args.eventId), ctx.db.get(args.vehicleId)]);
   if (!event || !acceptsNewRegistrations(event, now)) throw new Error("Event is no longer accepting registrations");
@@ -69,6 +71,8 @@ export const leave = mutation({ args: { waitlistId: v.id("eventWaitlist") }, han
 // One atomic, bounded FIFO pass. This writes the same inventory row as direct
 // booking, so concurrent promotions and payments cannot consume the same space.
 export const promote = internalMutation({ args: { eventId: v.id("events") }, handler: async (ctx, { eventId }) => {
+  if (!popupPaymentsEnabled()) return;
+  requirePopupPayments();
   const event = await ctx.db.get(eventId); if (!event) return;
   const inventory = await ensureInventory(ctx, eventId); const now = Date.now();
   const waiting = await ctx.db.query("eventWaitlist").withIndex("by_event_status", q => q.eq("eventId", eventId).eq("status", "waiting")).order("asc").take(25);
@@ -98,7 +102,7 @@ export const promote = internalMutation({ args: { eventId: v.id("events") }, han
 // event. Untouched offers expire locally; attempted checkouts require provider proof.
 export const sweep = internalMutation({ args: {}, handler: async ctx => {
   const now = Date.now(); const events = new Set<Id<"events">>();
-  const waiting = await ctx.db.query("eventWaitlist").withIndex("by_status_updated", q => q.eq("status", "waiting")).order("asc").take(50);
+  const waiting = !popupPaymentsEnabled() ? [] : await ctx.db.query("eventWaitlist").withIndex("by_status_updated", q => q.eq("status", "waiting")).order("asc").take(50);
   for (const row of waiting) { await ctx.db.patch(row._id, { updatedAt: now }); events.add(row.eventId); }
   const offered = await ctx.db.query("eventWaitlist").withIndex("by_status_updated", q => q.eq("status", "offered").lte("updatedAt", now - 60_000)).order("asc").take(50);
   for (const row of offered) {
@@ -117,5 +121,6 @@ export const sweep = internalMutation({ args: {}, handler: async ctx => {
     const status = reservation?.registrationId ? "registered" : reservation && (reservation.status === "held" || reservation.status === "refund_pending") ? "offered" : "expired";
     await ctx.db.patch(row._id, { status, updatedAt: now }); events.add(row.eventId);
   }
+  if (!popupPaymentsEnabled()) return;
   for (const eventId of events) await ctx.scheduler.runAfter(0, internal.eventWaitlist.promote, { eventId });
 } });

@@ -1,16 +1,19 @@
-import { UserJSON } from "@clerk/backend";
-import { v, Validator } from "convex/values";
+import type { UserJSON } from "@clerk/backend";
+import { v, type Validator } from "convex/values";
+import { paginationOptsValidator } from "convex/server";
 import { provisionFirstSuperAdmin } from "./lib/provisioning";
+import { PUBLISHED_POLICY_PAIR, recordPolicyAcceptance } from "./lib/policyConsent";
 import {
   internalMutation,
   mutation,
   query,
-  QueryCtx,
+  type QueryCtx,
 } from "./_generated/server";
 import {
   getCurrentUser,
   isAdmin as isActiveAdmin,
   requireCurrentUser,
+  requireAdmin,
   requireSuperAdmin,
 } from "./lib/authorization";
 
@@ -18,6 +21,44 @@ export const current = query({
   args: {},
   handler: async (ctx) => {
     return await getCurrentUser(ctx);
+  },
+});
+
+export const publishedPolicies = query({
+  args: {},
+  handler: async () => PUBLISHED_POLICY_PAIR,
+});
+
+export const acceptPolicies = mutation({
+  args: { accepted: v.literal(true), termsVersion: v.string(), privacyVersion: v.string() },
+  handler: async (ctx, acceptance) => recordPolicyAcceptance(ctx, acceptance),
+});
+
+export const policyAcceptanceHistory = query({
+  args: { paginationOpts: paginationOptsValidator },
+  handler: async (ctx, { paginationOpts }) => {
+    const user = await requireCurrentUser(ctx);
+    return await ctx.db.query("policyAcceptances")
+      .withIndex("by_user", q => q.eq("userId", user._id))
+      .order("desc").paginate({ ...paginationOpts, numItems: Math.min(50, paginationOpts.numItems) });
+  },
+});
+
+// A mutation makes each authorized support read and its audit entry atomic.
+export const inspectPolicyAcceptanceHistory = mutation({
+  args: { userId: v.id("users"), reason: v.string(), paginationOpts: paginationOptsValidator },
+  handler: async (ctx, { userId, reason, paginationOpts }) => {
+    const actor = await requireAdmin(ctx);
+    const detail = reason.trim();
+    if (detail.length < 10 || detail.length > 500) throw new Error("A support reason of 10–500 characters is required");
+    const history = await ctx.db.query("policyAcceptances")
+      .withIndex("by_user", q => q.eq("userId", userId))
+      .order("desc").paginate({ ...paginationOpts, numItems: Math.min(50, paginationOpts.numItems) });
+    await ctx.db.insert("adminAuditLog", {
+      actorId: actor._id, targetUserId: userId, action: "policy_acceptance_read",
+      source: "support", reason: detail, createdAt: Date.now(),
+    });
+    return history;
   },
 });
 

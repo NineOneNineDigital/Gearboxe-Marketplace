@@ -162,6 +162,7 @@ export default function FavoritesPage() {
                 className="overflow-hidden hover:shadow-lg transition-shadow"
               >
                 <div className="relative">
+                  {vehicle.status === "reserved" && <span className="absolute left-2 top-2 rounded-full border border-amber-200 bg-amber-50 px-3 py-1 text-xs font-semibold text-amber-950">Reserved</span>}
                   {isTrustedImageUrl(vehicle.thumbnailPhotos?.[0] ?? vehicle.photos[0] ?? "") ? (
                     <Image
                       width={800}

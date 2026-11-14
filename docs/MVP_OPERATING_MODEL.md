@@ -1,258 +1,50 @@
-# Gearboxe Market MVP Operating Model
+# Gearboxe Marketplace MVP operating model
 
-Status: Approved for MVP planning
-Scope: First production launch of the private-party vehicle marketplace and popup market platform
+Status: Founder-approved product direction for the public marketplace soft launch. Individual capabilities remain subject to their implementation, review, and release checks. The [Linear MVP Launch project](https://linear.app/mxndev/project/gearboxe-marketplace-mvp-launch-022eff393b00) tracks delivery.
 
-## 1. Product Position
+## Launch boundary
 
-Gearboxe Market is a curated private-party vehicle marketplace that helps
-buyers and sellers complete a safer, better documented sale. Gearboxe provides
-listing tools, messaging, moderation, event registration, educational guidance,
-and access to third-party services.
+Gearboxe is a public, private-party vehicle marketplace for eligible sellers in all 50 U.S. states and Washington, DC. Anyone may browse. Eligible private sellers may sign up and submit a listing for manual approval without an invitation, founding-seller allowlist, or 30-listing gate. Gearboxe will recruit and assist selected sellers mainly in Raleigh–Durham–Chapel Hill; that support does not confer exclusive publishing access. Thirty approved listings trigger an inventory and readiness review, not seller access. A public soft launch may begin with fewer approved listings once the release gates are met. Nationwide buyer promotion may begin after the founder's go decision, with honest local inventory messaging.
 
-For the MVP, Gearboxe is not the seller, buyer, dealer, broker, lender,
-insurer, title agent, escrow holder, or custodian of vehicle-purchase funds.
-Vehicle price negotiation and payment take place directly between buyer and
-seller or through an approved third-party provider.
+Standard listing, browsing, buyer–seller messaging, and structured offers are free at launch. Gearboxe does not take custody of vehicle-purchase funds or process the private vehicle sale. Buyer and seller arrange inspection, payment, title transfer, and delivery independently. Popup events, paid registration, event waitlists, partner referrals, and AI-assisted search are deferred; their existing data and operator workflows remain protected for a later release. [Popup operations](POPUP_OPERATIONS.md) and [event payments](EVENT_PAYMENTS.md) document that separate release.
 
-## 2. Initial Market
+## Participants and vehicles
 
-Recommended launch market: Raleigh–Durham–Chapel Hill, North Carolina.
+Sellers must have verified email and phone, selling as a private party. A seller is the titled owner or has documented authority from the owner. Seller self-service is open throughout the United States, but a submitted listing receives human review before publication. Repeated-listing patterns are flagged for dealer-risk review without an automatic active-listing cap. Dealer inventory, curbstoning, title jumping, parts-only inventory, and fraudulent or prohibited content remain outside the marketplace launch policy. See [nationwide seller policy](NATIONWIDE_SELLER_POLICY.md) and [trust and safety](TRUST_SAFETY.md).
 
-The first launch should operate in one metro area so Gearboxe can establish a
-repeatable moderation process, support local inspections and title services,
-and run popup markets without introducing multi-state operational complexity.
+Launch categories are passenger cars, trucks, SUVs, and street-legal specialty vehicles transferable by a private seller. The seller supplies accurate VIN or pre-1981 serial, mileage/odometer status, title status, condition, and material known damage, accident, and mechanical disclosures. Detail fields may be blank when the seller has no known issue to describe; known material issues still must be disclosed. Clean titles receive ordinary review. Disclosed branded titles and outstanding liens require enhanced human review; a lien needs a credible documented payoff and transfer path before approval. Ownership documents are requested privately when risk or an authorized-seller case warrants them. The full VIN is public on approved Active and Reserved listings, while private listing states stay private. See [vehicle listings](VEHICLE_LISTINGS.md).
 
-Expansion into another state or metro requires a launch review covering local
-title-transfer guidance, taxes, event requirements, partner availability, and
-support capacity.
+## Listings and availability
 
-## 3. User Eligibility
+A seller can save an incomplete private draft. Submission requires complete required fields, an approximate vehicle location resolved from a private ZIP or browser location, and five distinct, ready, seller-owned vehicle photos: front, rear, left side, right side, and interior. Moderators check clarity, accuracy, and coverage, and return a reason when rejecting a submission. Material edits to a public listing return it for review. Existing approved inventory stays visible until an actual policy-governed transition; older listings without coordinates require seller correction to appear in nearby results. Moderation aims to respond to a complete submission within one business day when founder and trained-backup coverage is staffed, including planned holidays. Do not publish an unstaffed service promise.
 
-### Sellers
+An Active listing requires availability confirmation after 45 days. Sellers receive a reminder seven days before the deadline; an unconfirmed listing leaves active discovery under the approved expiry policy. The clock pauses while Reserved and restarts at 45 days if a seller makes the vehicle Available again. Seller and moderator status controls, notifications, and history must respect this lifecycle. [GBXMRKT-14](https://linear.app/mxndev/issue/GBXMRKT-14/confirm-listing-availability-after-45-days-and-expire-stale-inventory) owns the implementation details.
 
-An MVP seller must:
+Reserved vehicles remain visible in search, saved/recent views, and direct links with a clear Reserved badge and no new structured offers. A verified buyer may ask about availability. Sold, withdrawn, expired, rejected, pending, draft, and archived states follow their documented public-visibility rules. A seller can close an accepted deal as Sold or Available again; reactivation never revives older proposals.
 
-- be at least 18 years old;
-- have a verified email address and phone number;
-- be the titled owner or have documented authority to sell the vehicle;
-- accept the seller representations and marketplace rules;
-- provide accurate mileage, title, damage, and condition disclosures; and
-- use Gearboxe as a private seller rather than as an undisclosed dealer.
+## Buyer discovery and engagement
 
-Dealer inventory, curbstoning, title jumping, parts-only vehicles, vehicles
-without transferable ownership documentation, and prohibited or fraudulent
-content are not allowed.
+The inventory page starts with a ZIP prompt and nationwide listings. Entering a ZIP applies a visible 50-mile radius by default; buyers can change ZIP/radius, expand an empty local search, or view nationwide results while preserving other filters. The browser may remember the last entered ZIP locally, with an easy clear action. Explicit shared-URL geography and a buyer's nationwide choice take precedence. No device-location permission or exact-ZIP analytics collection occurs by default. Structured filters and keyword search launch first; AI-assisted search and saved-search alerts are deferred. See [GBXMRKT-11](https://linear.app/mxndev/issue/GBXMRKT-11/make-buyer-zip-the-starting-point-for-nationwide-discovery).
 
-### Buyers
+Saving a listing, sending a buyer inquiry, or submitting an offer requires a signed-in account with verified email; buyer phone verification is optional. Public browsing requires no account. Seller email and phone remain private until either party voluntarily shares contact information inside messaging. Seller replies are encouraged within 24 hours through onboarding and manual follow-up, not an automated guarantee. Blocking, reporting, suspension, and rate limits apply to engagement.
 
-Browsing is public. An authenticated account with verified contact information
-is required to favorite a vehicle, message a seller, report content, request a
-partner service, or participate in a popup market workflow.
+Launch offers are private, whole-dollar, price-only proposals. The recipient may accept, counter, or decline, and an unanswered proposal expires after 48 hours. Either side may continue countering with basic spam protection; a buyer may withdraw an unanswered offer. An accepted proposal is a **nonbinding agreement in principle**, automatically reserves the listing, and does not transfer funds or title. A seller may consider multiple buyers but only one offer may be accepted. Other open proposals remain visible to their participants but cannot be accepted while Reserved and do not revive after release. At day seven, remind the seller to mark Sold, release, or extend once for seven days; silence keeps the listing Reserved and alerts founder/backup. Either party can cancel the agreement, but only the seller or authorized moderator changes the listing outcome. Closed offer action history is retained for six months, subject to implemented deletion and approved privacy wording. The [approved offer lifecycle](OFFER_LIFECYCLE_DRAFT.md) has the founder-approved state table and user wording.
 
-## 4. Vehicle Eligibility
+## Trust, privacy, and operations
 
-The MVP supports passenger cars, trucks, SUVs, and street-legal specialty
-vehicles that can be legally transferred by a private seller.
+Gearboxe moderates before publication and handles seller support, account safety, reports, appeals, and listing disputes. Founder is the primary moderator; a trained backup is still to be named. Safety guidance must explain that Gearboxe does not guarantee seller statements, title, condition, or completion of a private sale. Ownership evidence is private, and support/admin access follows role checks and audit rules. See [trust and safety](TRUST_SAFETY.md), [notifications](NOTIFICATIONS.md), and [nationwide seller policy](NATIONWIDE_SELLER_POLICY.md).
 
-Recommended title policy:
+The founder approved nonbinding-offer wording on November 11, 2026. Effective marketplace Terms and Privacy Policy still need founder approval before public launch. Signup must link to the effective versions and store the accepted terms/privacy versions with a server timestamp; existing accounts cannot be falsely marked as consenting. The operator legal name and mailing address are still TBD; the planned privacy/support contact is `Help@gearboxe.com`. Draft local pages are not effective policy. See [GBXMRKT-2](https://linear.app/mxndev/issue/GBXMRKT-2/publish-approved-marketplace-terms-and-privacy-policy-linked-from) and [GBXMRKT-26](https://linear.app/mxndev/issue/GBXMRKT-26/store-signup-terms-and-privacy-consent-version-with-timestamp).
 
-- clean titles are permitted;
-- rebuilt, salvage, flood, lemon-law, or other branded titles require explicit
-  disclosure and enhanced manual review;
-- vehicles with unresolved ownership or title documentation are prohibited;
-- known liens must be disclosed and require a documented payoff path; and
-- odometer status must be declared as actual, exempt, or not actual.
+## Learning and release gates
 
-Vehicles manufactured in 1981 or later should use a valid 17-character VIN.
-Earlier vehicles may use their original manufacturer serial or chassis number
-and require manual review.
+Thirty approved listings is an inventory-learning milestone. The directional demand signal is qualified buyer–seller exchanges: a verified buyer's first inquiry about an Active listing followed by a seller response, including an offer response. Availability questions on Reserved vehicles are tracked separately. An initial target of ten qualified exchanges in thirty days is for learning, not a publication gate or a strict reporting deadline. Monitor listing quality, moderation turnaround, seller response, reports, and support load as well. See [GBXMRKT-15](https://linear.app/mxndev/issue/GBXMRKT-15/track-buyer-seller-engagement-as-a-directional-launch-signal).
 
-## 5. Listing Lifecycle
+The public marketplace soft launch requires a reviewed production build and CI, configured hosting and canonical `gearboxemarket.com` origin, isolated staging smoke tests, approved and versioned policy with consent records, listing/media/discovery/messaging/offer paths, moderation and backup coverage, support and safety controls, truthful notifications, and an isolated seller-to-buyer browser test. The founder records the go/no-go decision against [GBXMRKT-19](https://linear.app/mxndev/issue/GBXMRKT-19/run-public-soft-launch-readiness-review-and-founder-gono-go). The planning target was December 30, 2026; readiness and structured offers take priority if the date moves. Event checkout, Stripe live charges, QR check-in, event staff rehearsal, and event refund terms belong to the later popup release, not this gate. See the [deployment runbook](DEPLOYMENT.md).
 
-The production lifecycle is:
+The [route-by-route launch copy audit](LAUNCH_COPY_AUDIT.md) records reviewed marketplace claims and remaining founder and hosted-browser checks.
 
-1. Draft
-2. Submitted
-3. Pending review
-4. Approved and active, or rejected with a reason
-5. Reserved, sold, withdrawn, or expired
-6. Archived
+## Decision history
 
-Every new or materially edited listing is reviewed before public publication.
-Gearboxe targets a one-business-day moderation response during the pilot.
-
-Listings expire after 45 days unless the seller confirms availability. Sellers
-must promptly mark vehicles reserved, sold, or withdrawn. Gearboxe may suspend
-or remove listings when accuracy, safety, ownership, or policy concerns arise.
-
-## 6. Marketplace Revenue
-
-Recommended pilot pricing:
-
-- standard marketplace listings are free;
-- buyer browsing and messaging are free;
-- popup market vehicle registration is a configurable flat fee, initially
-  recommended at $49 per vehicle;
-- optional partner services are paid to the partner or processed as a clearly
-  disclosed referral transaction; and
-- Gearboxe does not collect a percentage of the private vehicle sale in the
-  MVP.
-
-Any future success fee, transaction fee, deposit, escrow, financing, insurance,
-or warranty revenue requires a separate legal, compliance, and operating-model
-review.
-
-## 7. Buyer and Seller Privacy
-
-Public seller information is limited to:
-
-- first name or chosen display name;
-- general location at city or metro level;
-- account tenure; and
-- seller verification indicators.
-
-Email address, phone number, home address, identity documents, ownership
-documents, and precise vehicle location are not public. Buyers and sellers
-communicate through Gearboxe messaging until they independently choose to share
-contact details.
-
-The full VIN is public on approved listings so every shopper can independently
-obtain history, specification, and recall information. VINs remain private on
-draft, pending, rejected, withdrawn, and archived listings.
-
-## 8. Trust and Safety
-
-The MVP requires:
-
-- manual review before publication;
-- verified seller email and phone number;
-- seller ownership and disclosure attestations;
-- reporting and blocking controls;
-- moderation notes and an immutable administrative audit trail;
-- messaging and listing rate limits;
-- prohibited-content and repeat-offender enforcement;
-- prominent private-sale, test-drive, payment, and meeting safety guidance;
-- a documented escalation path for fraud, threats, stolen vehicles, and law
-  enforcement requests; and
-- a support process for listing, payment, event, and account disputes.
-
-Gearboxe does not guarantee vehicle condition, seller statements, title status,
-or completion of a sale. Partner results and reports must identify the partner
-that provided them.
-
-## 9. Popup Market Model
-
-Only approved listings may register for a popup market. A registration is tied
-to one seller, one approved vehicle, and one event.
-
-Recommended event rules:
-
-- capacity is enforced before payment;
-- payment creates an idempotent registration and receipt;
-- each registration receives a non-guessable QR credential;
-- check-in is restricted to authorized event staff;
-- event staff can search the roster when QR scanning is unavailable;
-- seller instructions and event terms are delivered before the event; and
-- refunds are available until seven calendar days before the event, with
-  documented exceptions for cancellation or material event changes.
-
-Gearboxe may remove a vehicle from an event for safety, documentation,
-misrepresentation, or policy reasons.
-
-## 10. Partner Services
-
-Potential service categories, subject to founder review during the partnership
-phase, include:
-
-1. VIN decoding and recall data
-2. Vehicle-history report access
-3. Pre-purchase inspection booking
-4. Title and registration assistance
-
-No partner or service category is approved by this operating model. Before an
-integration is selected, the founder will review its customer value, provider,
-commercial structure, implementation approach, data sharing, support ownership,
-and regulatory implications.
-
-An approved service may launch as a tracked referral or concierge-assisted
-request before implementing a full API integration. Partner branding, pricing,
-responsibility, data sharing, customer support ownership, and referral
-compensation must be disclosed.
-
-Escrow, vehicle-purchase payments, financing, insurance binding, warranties,
-and transportation are post-MVP services unless a qualified partner assumes
-the regulated activity and the legal and operational model is approved.
-
-## 11. Customer Support
-
-Gearboxe owns first-line support for accounts, listings, messaging, moderation,
-event registration, and event operations. A partner owns fulfillment questions
-for its service, with Gearboxe providing escalation and status visibility.
-
-Pilot support target:
-
-- acknowledge standard requests within one business day;
-- prioritize payment, safety, fraud, and account-access incidents; and
-- retain an auditable record of support and moderation actions.
-
-## 12. MVP Non-Goals
-
-The first production release does not include:
-
-- Gearboxe custody of vehicle-purchase funds;
-- an internal Gearboxe escrow product;
-- direct lending or credit decisions;
-- direct insurance underwriting or binding;
-- guaranteed vehicle condition or seller representations;
-- dealer inventory;
-- nationwide launch;
-- native mobile applications; or
-- automated approval without human review.
-
-## 13. Pilot Success Measures
-
-The pilot should measure:
-
-- approved listings and approval turnaround time;
-- listing completion and photo-upload completion rates;
-- buyer-to-seller conversation starts;
-- seller response rate and time;
-- reported or removed listings;
-- vehicles marked reserved or sold;
-- event registration conversion;
-- payment and webhook failure rate;
-- event attendance and check-in success;
-- support volume and response time; and
-- partner-service request and completion rates.
-
-## 14. Production Launch Gates
-
-The MVP may enter a controlled pilot when:
-
-- the repository has a clean production build and CI pipeline;
-- all listing media is durably stored;
-- listing, messaging, moderation, payment, and check-in critical paths pass
-  automated end-to-end tests;
-- reporting, blocking, audit logging, and rate limiting are operational;
-- legal terms, privacy disclosures, safety guidance, event terms, and refund
-  policies have been approved;
-- production monitoring and incident ownership are configured;
-- live Stripe and Clerk webhook flows have been verified; and
-- staff have completed moderation, support, payment, and event runbooks.
-
-## 15. Approved Founder Decisions
-
-The following decisions were approved for the MVP:
-
-1. Initial launch market: Raleigh–Durham–Chapel Hill, North Carolina
-2. Standard marketplace listings are free
-3. Initial popup registration price is $49 per vehicle
-4. Branded-title vehicles require disclosure and enhanced manual review
-5. Full VINs are public on approved listings
-6. Event refunds are available until seven calendar days before the event
-7. Gearboxe remains outside the vehicle-purchase fund flow for the MVP
-8. All other defaults in this operating model are approved
-
-Partner selection is intentionally deferred. Each partner and service category
-requires founder review during the partnership implementation phase.
+- **November 4–5, 2026:** Founder replaced the earlier one-metro, popup-first pilot with open U.S. private-seller self-service, Triangle-focused outreach, nationwide buyer promotion after readiness, and popup events after marketplace launch. The earlier $49 event-registration and Raleigh-only launch assumptions are superseded for the marketplace release.
+- **November 11, 2026:** Founder simplified launch offers to whole-dollar, price-only accept/counter/decline actions with basic spam protection and chose six-month retention for closed offer history. Final public wording remains under review.

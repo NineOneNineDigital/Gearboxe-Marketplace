@@ -52,6 +52,9 @@ test("invalid URL values never reach server query arguments", () => {
     readDiscoveryUrl(new URLSearchParams("bodyStyle=spaceship&fuelType=water&transmission=other&titleStatus=unknown")).filters,
     {},
   );
+  assert.deepEqual(readDiscoveryUrl(new URLSearchParams("state=ZZ")).filters, {});
+  assert.equal(discoveryUrl({ state: "ZZ" }), "/vehicles");
+  assert.deepEqual(readDiscoveryUrl(new URLSearchParams("state=dc")).filters, { state: "DC" });
 });
 test("reversed ranges retain a valid lower bound", () => {
   assert.deepEqual(

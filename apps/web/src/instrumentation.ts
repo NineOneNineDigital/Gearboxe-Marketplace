@@ -6,6 +6,7 @@ export async function register() {
     // used for cold-start validation, matching what the browser actually uses.
     validateEnvironment({
       ...process.env,
+      NEXT_PUBLIC_POPUP_PAYMENTS_ENABLED: process.env.NEXT_PUBLIC_POPUP_PAYMENTS_ENABLED,
       NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY: process.env.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY,
       NEXT_PUBLIC_CONVEX_URL: process.env.NEXT_PUBLIC_CONVEX_URL,
       NEXT_PUBLIC_CONVEX_SITE_URL: process.env.NEXT_PUBLIC_CONVEX_SITE_URL,

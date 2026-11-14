@@ -40,6 +40,13 @@ test("malformed shared URLs cannot inject invalid bounds, sorts, or partial dist
     { filters: { latitude: 35, longitude: -78, radiusMiles: 50 }, sort: "newest" });
 });
 
+test("state discovery accepts all launch jurisdictions and rejects unknown codes", () => {
+  assert.equal(validateFilters({ state: "dc" }).state, "DC");
+  assert.equal(validateFilters({ state: "AK" }).state, "AK");
+  assert.equal(validateFilters({ state: "HI" }).state, "HI");
+  assert.throws(() => validateFilters({ state: "ZZ" }), /valid U.S. state/);
+});
+
 const clone = value => structuredClone(value);
 const listing = (id, fields = {}) => ({
   _id: id, _creationTime: 1, userId: "seller", status: "active", title: "2020 Toyota Camry", make: "Toyota", model: "Camry",
@@ -216,6 +223,54 @@ test("browse and metadata recheck visibility even when a stale index contains pr
   assert.equal(await discovery.metadataVehicle._handler(f.ctx, { id: "hidden" }), null);
   const metadata = await discovery.metadataVehicle._handler(f.ctx, { id: "active" });
   assert.equal(metadata.contactInfo, undefined); assert.equal(metadata.moderationReason, undefined); assert.equal(metadata.vin, undefined);
+});
+
+test("reserved vehicles remain public in searches, detail metadata, sitemap, favorites and recent views until sold", async () => {
+  const f = await indexedFixture([
+    listing("reserved", { status: "reserved", vin: "1HGCM82633A004352" }),
+    listing("active"),
+    listing("draft", { status: "draft" }),
+  ]);
+  const nearRaleigh = { latitude: 35.7796, longitude: -78.6382, radiusMiles: 50 };
+  for (const filters of [{}, { make: "Toyota", state: "NC" }, { search: "Camry" }, nearRaleigh]) {
+    const results = await browse(f, filters);
+    assert.deepEqual(results.page.map(row => row._id).sort(), ["active", "reserved"]);
+    assert.equal(results.page.find(row => row._id === "reserved").status, "reserved");
+  }
+  assert.equal(f.rows("vehicleCatalog").length, 2);
+  assert.equal((await discovery.metadataVehicle._handler(f.ctx, { id: "reserved" })).status, "reserved");
+  assert.equal((await vehicles.getVehicleById._handler(f.ctx, { id: "reserved" })).vin, "1HGCM82633A004352");
+  assert.equal((await vehicles.getVehicleById._handler(f.ctx, { id: "reserved" })).contactInfo, "");
+  assert.deepEqual((await discovery.sitemapPage._handler(f.ctx, { shard: 0, paginationOpts: { cursor: null, numItems: 10 } })).page.map(row => row._id).sort(), ["active", "reserved"]);
+  await recentViews.record._handler(f.ctx, { id: "reserved" });
+  assert.deepEqual((await recentViews.list._handler(f.ctx, {})).map(row => row._id), ["reserved"]);
+  f.as(null);
+  assert.deepEqual((await discovery.recentPublic._handler(f.ctx, { ids: ["reserved", "draft"] })).map(row => row._id), ["reserved"]);
+  f.rows("vehicles").find(row => row._id === "reserved").status = "sold";
+  // Even before a delayed index cleanup, public reads recheck the source row.
+  assert.deepEqual((await browse(f)).page.map(row => row._id), ["active"]);
+  assert.equal(await discovery.metadataVehicle._handler(f.ctx, { id: "reserved" }), null);
+  assert.equal(await vehicles.getVehicleById._handler(f.ctx, { id: "reserved" }), null);
+  assert.deepEqual((await discovery.recentPublic._handler(f.ctx, { ids: ["reserved"] })).map(row => row._id), []);
+  await syncDiscovery(f.ctx, "reserved");
+  assert.equal(f.rows("vehicleCatalog").length, 1);
+});
+
+test("availability deadline hides active listings at read time while reserved and legacy listings stay public", async () => {
+  const now = Date.now();
+  const f = await indexedFixture([
+    listing("due", { availabilityDueAt: now + 60_000 }),
+    listing("reserved", { status: "reserved", availabilityDueAt: now - 1 }),
+    listing("legacy"),
+  ]);
+  f.rows("vehicles").find(row => row._id === "due").availabilityDueAt = now - 1;
+  // The index is deliberately stale: the source vehicle and current clock govern access.
+  assert.deepEqual((await browse(f)).page.map(row => row._id).sort(), ["legacy", "reserved"]);
+  assert.equal(await discovery.metadataVehicle._handler(f.ctx, { id: "due" }), null);
+  assert.equal(await vehicles.getVehicleById._handler(f.ctx, { id: "due" }), null);
+  assert.deepEqual((await discovery.sitemapPage._handler(f.ctx, { shard: 0, paginationOpts: { cursor: null, numItems: 10 } })).page.map(row => row._id).sort(), ["legacy", "reserved"]);
+  assert.equal((await discovery.metadataVehicle._handler(f.ctx, { id: "reserved" })).status, "reserved");
+  assert.equal((await vehicles.getVehicleById._handler(f.ctx, { id: "legacy" })).status, "active");
 });
 
 test("indexed distance pages apply exact radius and omit listings without coordinates", async () => {

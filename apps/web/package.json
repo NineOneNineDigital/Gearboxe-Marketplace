@@ -9,6 +9,7 @@
     "build": "next build",
     "build:deploy": "node scripts/deploy.mjs",
     "test": "node --experimental-strip-types --test scripts/*.test.mjs",
+    "test:e2e:public": "playwright test --config=playwright.public.config.mjs",
     "start": "next start",
     "lint": "eslint --max-warnings=0",
     "typecheck": "tsc --noEmit --incremental false"
@@ -42,6 +43,7 @@
   },
   "devDependencies": {
     "@eslint/eslintrc": "^3",
+    "@playwright/test": "1.56.1",
     "@tailwindcss/postcss": "^4",
     "@types/node": "^20",
     "@types/react": "^19",

@@ -23,7 +23,10 @@ export const recordDocument = internalMutation({
     const lease = await ctx.db.get(args.leaseId);
     if (!lease || !lease.used || lease.userId !== user._id || lease.expiresAt < Date.now())
       throw new Error("Upload expired");
+    const vehicle = lease.vehicleId ? await ctx.db.get(lease.vehicleId) : null;
+    if (lease.vehicleId && vehicle?.userId !== user._id) throw new Error("Listing unavailable");
     const id = await ctx.db.insert("ownershipDocuments", {
+      vehicleVin: vehicle?.vin,
       userId: user._id, vehicleId: lease.vehicleId, storageId: args.storageId, status: "pending", createdAt: Date.now(), expiresAt: Date.now() + DOCUMENT_RETENTION_MS
     });
     await ctx.db.delete(lease._id);
@@ -36,12 +39,12 @@ export const authorizeDownload = internalMutation({
   handler: async (ctx, args) => {
     const user = await getCurrentUser(ctx);
     const document = await ctx.db.get(args.documentId);
-    if (!user || !document || document.expiresAt < Date.now() || (document.userId !== user._id && !isAdmin(user)))
+    if (!user || !document || document.expiresAt <= Date.now() || (document.userId !== user._id && !isAdmin(user)))
       throw new Error("Document unavailable");
-    if (isAdmin(user))
-      await ctx.db.insert("adminAuditLog", {
-        actorId: user._id, targetUserId: document.userId, vehicleId: document.vehicleId, action: "ownership_document_accessed", source: "moderation", reason: "Authenticated private document review", createdAt: Date.now()
-      });
+    await ctx.db.insert("adminAuditLog", {
+      actorId: user._id, targetUserId: document.userId, vehicleId: document.vehicleId, action: "ownership_document_accessed",
+      source: user._id === document.userId ? "seller" : "moderation", reason: `Authenticated access to document ${document._id}`, createdAt: Date.now(),
+    });
     return document.storageId;
   }
 });

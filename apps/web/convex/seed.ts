@@ -1,3 +1,4 @@
+import { popupPaymentsEnabled } from "./lib/environment";
 import { mutation } from "./_generated/server";
 import { syncDiscovery } from "./lib/discoveryIndex";
 import { requireSuperAdmin } from "./lib/authorization";
@@ -306,7 +307,7 @@ export const seedDatabase = mutation({
     }
 
     // Create some fake registrations
-    const registrations = [
+    const registrations = !popupPaymentsEnabled() ? [] : [
       {
         eventId: eventIds[0], // San Francisco event
         vehicleId: vehicleIds[0], // BMW M3

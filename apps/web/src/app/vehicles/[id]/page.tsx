@@ -17,7 +17,9 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
   };
   const title = `${vehicle.title} | Gearboxe`;
   const price = new Intl.NumberFormat("en-US", { style: "currency", currency: "USD", maximumFractionDigits: 0 }).format(vehicle.price);
-  const description = `${vehicle.year} ${vehicle.make} ${vehicle.model}${vehicle.trim ? ` ${vehicle.trim}` : ""} for sale at ${price}. ${vehicle.mileage.toLocaleString("en-US")} ${vehicle.mileageUnit === "km" ? "kilometers" : "miles"}${vehicle.location ? ` in ${vehicle.location.city}, ${vehicle.location.state}` : ""}. Connect with the seller on Gearboxe.`;
+  const description = vehicle.status === "reserved"
+    ? `${vehicle.year} ${vehicle.make} ${vehicle.model}${vehicle.trim ? ` ${vehicle.trim}` : ""} is reserved and not currently available for a new offer. It may become available again. View the listing on Gearboxe.`
+    : `${vehicle.year} ${vehicle.make} ${vehicle.model}${vehicle.trim ? ` ${vehicle.trim}` : ""} for sale at ${price}. ${vehicle.mileage.toLocaleString("en-US")} ${vehicle.mileageUnit === "km" ? "kilometers" : "miles"}${vehicle.location ? ` in ${vehicle.location.city}, ${vehicle.location.state}` : ""}. Connect with the seller on Gearboxe.`;
   const image = vehicle.photoUrl && isTrustedImageUrl(vehicle.photoUrl) ? vehicle.photoUrl : absoluteUrl("/opengraph-image");
   return {
     title, description, alternates: { canonical: url },
@@ -35,7 +37,7 @@ export default async function VehiclePage({ params }: Props) {
     vehicleModelDate: String(vehicle.year),
     mileageFromOdometer: { "@type": "QuantitativeValue", value: vehicle.mileage, unitCode: vehicle.mileageUnit === "km" ? "KMT" : "SMI" },
     ...(vehicle.photoUrl && isTrustedImageUrl(vehicle.photoUrl) ? { image: vehicle.photoUrl } : {}),
-    offers: { "@type": "Offer", price: vehicle.price, priceCurrency: "USD", availability: "https://schema.org/InStock", url: absoluteUrl(`/vehicles/${encodeURIComponent(id)}`) },
+    offers: { "@type": "Offer", price: vehicle.price, priceCurrency: "USD", availability: vehicle.status === "reserved" ? "https://schema.org/Reserved" : "https://schema.org/InStock", url: absoluteUrl(`/vehicles/${encodeURIComponent(id)}`) },
   } : null;
   return <>
     {jsonLd && <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: serializeJsonLd(jsonLd) }} />}

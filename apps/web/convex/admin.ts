@@ -1,17 +1,44 @@
-import { normalizeVehicleStatus } from "./lib/vehicleVisibility";
+import { isPublicVehicle, normalizeVehicleStatus } from "./lib/vehicleVisibility";
 import { v } from "convex/values";
-import { internalAction, mutation, query } from "./_generated/server";
+import { internalAction, internalQuery, mutation, query } from "./_generated/server";
+import { internal } from "./_generated/api";
 import { requireAdmin, requireSuperAdmin } from "./lib/authorization";
 import { validateEnvironment } from "./lib/environment";
 import { resolveVehicleMedia } from "./lib/vehicleMedia";
 
 // Operator-only readiness check, invoked by the protected release workflow.
 export const validateDeployment = internalAction({
-  args: { expectedEnvironment: v.string() },
-  handler: async (_ctx, { expectedEnvironment }) => {
-    const { mode } = validateEnvironment(process.env, "convex");
+  args: { expectedEnvironment: v.string(), expectedPopupPaymentsEnabled: v.optional(v.boolean()), webPaymentRecoveryConfigured: v.optional(v.boolean()) },
+  handler: async (ctx, { expectedEnvironment, expectedPopupPaymentsEnabled = false, webPaymentRecoveryConfigured = false }) => {
+    const { mode, paymentsEnabled } = validateEnvironment(process.env, "convex");
     if (mode !== expectedEnvironment) throw new Error("Backend environment does not match the release target");
-    return { ready: true, environment: mode };
+    if (paymentsEnabled !== expectedPopupPaymentsEnabled) throw new Error("Backend popup rollout does not match the web release");
+    if (!paymentsEnabled && (!process.env.STRIPE_SECRET_KEY || !process.env.STRIPE_WEBHOOK_SECRET || !webPaymentRecoveryConfigured)) {
+      const outstanding = await ctx.runQuery(internal.admin.hasOutstandingEventPayments, {});
+      if (outstanding) throw new Error("Keep web and backend Stripe API and webhook credentials configured until existing event payments and refunds are reconciled");
+    }
+    return { ready: true, environment: mode, paymentsEnabled };
+  },
+});
+
+// A disabled popup switch stops new checkout, not recovery of earlier charges.
+// Indexed existence checks keep this release guard bounded regardless of history size.
+export const hasOutstandingEventPayments = internalQuery({
+  args: {},
+  handler: async (ctx) => {
+    for (const status of ["held", "refund_pending"]) {
+      if (await ctx.db.query("eventReservations").withIndex("by_status_expiry", q => q.eq("status", status)).first()) return true;
+    }
+    for (const status of ["paid", "refund_pending", "refund_processing", "refund_failed"]) {
+      if (await ctx.db.query("eventPayments").withIndex("by_status_due", q => q.eq("status", status)).first()) return true;
+    }
+    for (const status of ["completed", "refund_pending"] as const) {
+      if (await ctx.db.query("registrations").withIndex("by_payment_status", q => q.eq("paymentStatus", status)).first()) return true;
+    }
+    for (const status of ["pending", "processing", "failed"]) {
+      if (await ctx.db.query("stripeWebhookEvents").withIndex("by_status_due", q => q.eq("status", status)).first()) return true;
+    }
+    return false;
   },
 });
 
@@ -25,12 +52,18 @@ export const getAdminStats = query({
 
     const pendingVehicles = vehicles.filter((v) => v.status === "pending");
     const approvedVehicles = vehicles.filter((v) => (v.status === "approved" || v.status === "active"));
+    const activeVehicles = approvedVehicles.filter(vehicle => isPublicVehicle(vehicle));
+    const reservedVehicles = vehicles.filter((v) => v.status === "reserved" && isPublicVehicle(v));
+    const soldVehicles = vehicles.filter((v) => v.status === "sold");
     const upcomingEvents = events.filter((e) => e.date > Date.now() && e.cancelledAt === undefined);
 
     return {
       totalVehicles: vehicles.length,
       pendingVehicles: pendingVehicles.length,
       approvedVehicles: approvedVehicles.length,
+      activeVehicles: activeVehicles.length,
+      reservedVehicles: reservedVehicles.length,
+      soldVehicles: soldVehicles.length,
       totalEvents: events.length,
       upcomingEvents: upcomingEvents.length,
       totalRegistrations: registrations.length,

@@ -1,3 +1,4 @@
+import "./popup-test-environment.mjs";
 import assert from "node:assert/strict";
 import test from "node:test";
 import { registerHooks } from "node:module";
@@ -69,6 +70,22 @@ test("favorite actions derive actor and cannot repeatedly notify a seller throug
   await favorites.removeFavorite._handler(f.ctx, { vehicleId: "car" });
   await favorites.addFavorite._handler(f.ctx, { vehicleId: "car" });
   assert.equal(f.rows("notifications").length, 1); assert.equal(f.rows("emailOutbox").length, 1);
+});
+
+test("favorites require verified buyer email, but removal stays available", async () => {
+  const f = fixture();
+  const buyer = f.rows("users").find(row => row._id === "buyer");
+  buyer.emailVerified = false;
+  buyer.phoneVerified = false;
+  await assert.rejects(favorites.addFavorite._handler(f.ctx, { vehicleId: "car" }), /Verify your email/);
+  assert.equal(f.rows("favorites").length, 0);
+  buyer.emailVerified = true;
+  await favorites.addFavorite._handler(f.ctx, { vehicleId: "car" });
+  buyer.emailVerified = false;
+  await favorites.removeFavorite._handler(f.ctx, { vehicleId: "car" });
+  assert.equal(f.rows("favorites").length, 0);
+  f.as(null);
+  await assert.rejects(favorites.addFavorite._handler(f.ctx, { vehicleId: "car" }), /Authentication/);
 });
 
 test("event payment replays and repeated check-ins produce one notification per transition", async () => {

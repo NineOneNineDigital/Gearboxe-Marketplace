@@ -1,5 +1,6 @@
 "use client";
 
+import { popupPaymentsEnabled } from "@/convex/lib/environment";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Footer } from "@/components/ui/footer";
@@ -25,6 +26,7 @@ import {
 import Link from "next/link";
 import Image from "next/image";
 import { isTrustedImageUrl } from "@/lib/trusted-images";
+import { useAvailabilityBoundary } from "@/lib/use-availability-boundary";
 import { redirect, useSearchParams } from "next/navigation";
 import { Suspense, useState } from "react";
 
@@ -52,12 +54,14 @@ function MyListingsContent() {
     api.vehicles.getVehiclesByUser,
     currentUser?._id ? { userId: currentUser._id } : "skip"
   );
+  const availabilityNow = useAvailabilityBoundary(userVehicles ?? [], 7 * 24 * 60 * 60 * 1000);
   const userRegistrations = useQuery(
     api.registrations.getRegistrationsByUser,
     currentUser?._id ? {} : "skip"
   );
   const analytics = useQuery(api.vehicles.getSellerAnalytics, currentUser?._id ? {} : "skip");
   const changeStatus = useMutation(api.vehicles.changeVehicleStatus);
+  const confirmAvailability = useMutation(api.vehicles.confirmAvailability);
   const [actionError, setActionError] = useState("");
   const [updatingId, setUpdatingId] = useState<string | null>(null);
   const deleteVehicle = useMutation(api.vehicles.deleteVehicle);
@@ -88,6 +92,16 @@ function MyListingsContent() {
       toast({ title: "Listing deleted" });
     } catch (error) {
       setActionError(error instanceof Error ? error.message : "Unable to delete this listing.");
+    } finally { setUpdatingId(null); }
+  };
+
+  const handleConfirm = async (id: Id<"vehicles">, dueAt: number) => {
+    setActionError(""); setUpdatingId(id);
+    try {
+      const confirmed = await confirmAvailability({ id, expectedDueAt: dueAt });
+      toast({ title: confirmed ? "Availability confirmed" : "Availability was already updated" });
+    } catch (error) {
+      setActionError(error instanceof Error ? error.message : "Unable to confirm availability.");
     } finally { setUpdatingId(null); }
   };
 
@@ -148,7 +162,7 @@ function MyListingsContent() {
             <div>
               <h1 className="text-3xl font-bold text-gray-900">My Listings</h1>
               <p className="text-gray-600">
-                Manage your vehicle listings and registrations
+                Manage your vehicle listings
               </p>
             </div>
             <Button asChild className="text-white">
@@ -185,6 +199,7 @@ function MyListingsContent() {
               const metrics = analytics?.find((entry) => entry.vehicleId === vehicle._id);
               const latestRejection = [...(vehicle.moderationHistory ?? [])].reverse().find((entry) => entry.toStatus === "rejected" && entry.reason);
               const moderationReason = vehicle.moderationReason || (vehicle.status === "rejected" ? latestRejection?.reason : undefined);
+              const expiredActive = ["active", "approved"].includes(vehicle.status) && vehicle.availabilityDueAt !== undefined && availabilityNow >= vehicle.availabilityDueAt;
 
               return (
                 <Card
@@ -293,22 +308,26 @@ function MyListingsContent() {
                         ))}
                       </dl>
                     )}
+                    {["active", "approved"].includes(vehicle.status) && vehicle.availabilityDueAt !== undefined && <p className="mb-3 text-sm">{availabilityNow >= vehicle.availabilityDueAt ? "This listing has expired and is being removed from discovery. Reopen it as a draft once processing finishes." : `Confirm availability by ${new Date(vehicle.availabilityDueAt).toLocaleString()}.`}</p>}
+                    {vehicle.status === "reserved" && <p className="mb-3 text-sm">Availability confirmation is paused while reserved. Releasing the reservation starts a new 45-day period.</p>}
+                    {vehicle.status === "archived" && vehicle.availabilityExpiredAt !== undefined && <p className="mb-3 text-sm">Expired because availability was not confirmed. Reopen as a draft and submit for review at no fee.</p>}
                     {moderationReason && <div className="mb-3 rounded-lg border border-amber-200 bg-amber-50 p-3 text-sm"><p className="font-semibold">{vehicle.status === "rejected" ? "Changes needed before resubmission" : "Moderation note"}</p><p className="mt-1">{moderationReason}</p></div>}
                     <details className="text-sm mb-3"><summary className="cursor-pointer">Listing history</summary><ol className="space-y-2 mt-2">{vehicle.moderationHistory?.map((entry, index) => <li key={index}>{new Date(entry.createdAt).toLocaleString()}: {entry.fromStatus ?? "new"} → {entry.toStatus}. {entry.reason}</li>)}</ol></details>
                     <div className="flex flex-wrap gap-2 mb-3">
-                      {!["sold", "archived", "withdrawn"].includes(vehicle.status) && <Button asChild size="sm" variant="outline"><Link href={`/myAccount/new-listing?edit=${vehicle._id}`}>{vehicle.status === "rejected" ? "Edit & resubmit" : vehicle.status === "draft" ? "Continue draft" : "Edit listing"}</Link></Button>}
+                      {!["sold", "archived", "withdrawn"].includes(vehicle.status) && !expiredActive && <Button asChild size="sm" variant="outline"><Link href={`/myAccount/new-listing?edit=${vehicle._id}`}>{vehicle.status === "rejected" ? "Edit & resubmit" : vehicle.status === "draft" ? "Continue draft" : "Edit listing"}</Link></Button>}
                       {vehicle.status === "pending" && <Button size="sm" variant="outline" disabled={updatingId !== null} onClick={() => handleStatus(vehicle._id, "draft")}>Return to draft</Button>}
                       {["archived", "withdrawn"].includes(vehicle.status) && <Button size="sm" variant="outline" disabled={updatingId !== null} onClick={() => handleStatus(vehicle._id, "draft")}>Reopen as draft</Button>}
                       {["draft", "rejected"].includes(vehicle.status) && <Button asChild size="sm"><Link href={`/myAccount/new-listing?edit=${vehicle._id}`}>Preview & submit</Link></Button>}
-                      {["active", "approved"].includes(vehicle.status) && <Button size="sm" disabled={updatingId !== null} onClick={() => handleStatus(vehicle._id, "reserved")}>Mark reserved</Button>}
+                      {["active", "approved"].includes(vehicle.status) && vehicle.availabilityDueAt !== undefined && availabilityNow >= vehicle.availabilityDueAt - 7 * 24 * 60 * 60 * 1000 && !expiredActive && <Button size="sm" disabled={updatingId !== null} onClick={() => handleConfirm(vehicle._id, vehicle.availabilityDueAt!)}>Confirm availability</Button>}
+                      {["active", "approved"].includes(vehicle.status) && !expiredActive && <Button size="sm" disabled={updatingId !== null} onClick={() => handleStatus(vehicle._id, "reserved")}>Mark reserved</Button>}
                       {vehicle.status === "reserved" && <Button size="sm" disabled={updatingId !== null} onClick={() => handleStatus(vehicle._id, "active")}>Release reservation</Button>}
-                      {["active", "approved", "reserved"].includes(vehicle.status) && <Button size="sm" disabled={updatingId !== null} onClick={() => handleStatus(vehicle._id, "sold")}>Mark sold</Button>}
-                      {!["withdrawn", "archived", "sold"].includes(vehicle.status) && <Button size="sm" variant="outline" disabled={updatingId !== null} onClick={() => handleStatus(vehicle._id, "withdrawn")}>Withdraw</Button>}
-                      {!["archived"].includes(vehicle.status) && <Button size="sm" variant="outline" disabled={updatingId !== null} onClick={() => handleStatus(vehicle._id, "archived")}>Archive</Button>}
+                      {["active", "approved", "reserved"].includes(vehicle.status) && !expiredActive && <Button size="sm" disabled={updatingId !== null} onClick={() => handleStatus(vehicle._id, "sold")}>Mark sold</Button>}
+                      {!["withdrawn", "archived", "sold"].includes(vehicle.status) && !expiredActive && <Button size="sm" variant="outline" disabled={updatingId !== null} onClick={() => handleStatus(vehicle._id, "withdrawn")}>Withdraw</Button>}
+                      {!["archived"].includes(vehicle.status) && !expiredActive && <Button size="sm" variant="outline" disabled={updatingId !== null} onClick={() => handleStatus(vehicle._id, "archived")}>Archive</Button>}
                     </div>
                     {["active", "approved", "pending", "reserved"].includes(vehicle.status) && <p className="mb-3 text-xs text-gray-600">Editing specifications requires a new review before the listing can go live.</p>}
                     <p className="mb-3 text-xs text-gray-600">Withdrawing keeps conversations and event registrations available.</p>
-                    {["active", "approved"].includes(vehicle.status) && <RegisterVehicle vehicleId={vehicle._id} />}
+                    {popupPaymentsEnabled() && ["active", "approved"].includes(vehicle.status) && <RegisterVehicle vehicleId={vehicle._id} />}
                     {/* Actions */}
                     <div className="flex space-x-2">
                       <Button
@@ -367,8 +386,7 @@ function MyListingsContent() {
                   No Listings Yet
                 </h3>
                 <p className="text-gray-600 mb-6">
-                  Create your first vehicle listing to get started selling at
-                  our events.
+                  List your first vehicle to reach private-party buyers.
                 </p>
                 <Button asChild className="text-white">
                   <Link href="/myAccount/new-listing">

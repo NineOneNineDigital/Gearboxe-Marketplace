@@ -1,3 +1,4 @@
+import "./popup-test-environment.mjs";
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import { registerHooks } from 'node:module';
@@ -13,7 +14,6 @@ registerHooks({ resolve(specifier, context, nextResolve) {
 const Stripe = (await import('stripe')).default;
 const payments = await import('../convex/registrationPayments.ts');
 const { getFunctionName } = await import('convex/server');
-process.env.STRIPE_SECRET_KEY='sk_test_stub';process.env.STRIPE_WEBHOOK_SECRET='whsec_stub';process.env.APP_URL='https://gearboxe.test';
 function stripeStub(overrides={}) {
   const calls=[];
   const request=Stripe.StripeResource.prototype._makeRequest;
@@ -93,7 +93,9 @@ test('webhook persistence deduplicates provider events and recovers expired proc
   row.nextAttemptAt=0;await records.claim._handler(ctx,{eventId:input.eventId});await records.finish._handler(ctx,{eventId:input.eventId});assert.equal(row.status,'completed');
   await records.finish._handler(ctx,{eventId:input.eventId,error:'late_failure'});assert.equal(row.status,'completed');assert.equal(await records.claim._handler(ctx,{eventId:input.eventId}),null);
 });
-test('signed webhook durably queues event and independently fetches session instead of trusting payload amount',async()=>{
+test('signed webhook durably reconciles existing payments while the rollout is disabled',async t=>{
+ process.env.NEXT_PUBLIC_POPUP_PAYMENTS_ENABLED = "false";
+ t.after(() => { process.env.NEXT_PUBLIC_POPUP_PAYMENTS_ENABLED = "true"; });
  const mutations=[];
  const row={eventId:'evt_valid',type:'checkout.session.completed',objectId:'cs_verified'};
  const ctx={runQuery:async()=>reservation,runMutation:async(ref,args)=>{const name=getFunctionName(ref);mutations.push({name,args});if(name==='paymentWebhookRecords:claim')return row;return null;}};
@@ -147,4 +149,19 @@ test('successful partial provider refund cannot complete a full registration ref
  const stub=stripeStub({handle:()=>({id:'re_partial',status:'succeeded',amount:100,currency:'usd',payment_intent:'pi_partial'})});
  try {await payments.sweep._handler(ctx,{});assert.equal(mutations.at(-1).name,'eventBookings:failRefund');assert.equal(mutations.at(-1).args.error,'stripe_refund_amount_requires_operator_reconciliation');assert.ok(!mutations.some(x=>x.name==='eventBookings:completeRefund'));assert.ok(stub.calls.every(x=>x.method==='GET'));}
  finally {stub.restore();}
+});
+
+test("marketplace-only checkout refuses before touching Stripe and an idle worker needs no key", async () => {
+  const key = process.env.STRIPE_SECRET_KEY;
+  delete process.env.NEXT_PUBLIC_POPUP_PAYMENTS_ENABLED;
+  delete process.env.STRIPE_SECRET_KEY;
+  const f = ctxFor();
+  try {
+    await assert.rejects(payments.createCheckout._handler(f.ctx, { eventId: "event", vehicleId: "vehicle" }), /unavailable/);
+    assert.deepEqual(f.mutations, []);
+    await payments.sweep._handler({ runQuery: async ref => getFunctionName(ref) === "paymentWebhookRecords:due" ? [] : { reservations: [], refunds: [], legacyMigrations: [] } }, {});
+  } finally {
+    process.env.STRIPE_SECRET_KEY = key;
+    process.env.NEXT_PUBLIC_POPUP_PAYMENTS_ENABLED = "true";
+  }
 });

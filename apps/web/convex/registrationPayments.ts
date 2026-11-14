@@ -1,5 +1,6 @@
 "use node";
 
+import { requirePopupPayments } from "./lib/environment";
 import Stripe from "stripe";
 import { v } from "convex/values";
 import { api, internal } from "./_generated/api";
@@ -66,6 +67,7 @@ async function reconcileSession(ctx: ActionCtx, stripe: Stripe, sessionId: strin
 export const createCheckout = action({
   args: { eventId: v.id("events"), vehicleId: v.id("vehicles"), acceptRules: v.optional(v.boolean()) },
   handler: async (ctx, args): Promise<{ url: string; sessionId: string; reservationId: Id<"eventReservations"> }> => {
+    requirePopupPayments();
     const stripe = stripeClient();
     const origin = applicationOrigin();
     const reservation = await ctx.runMutation(api.eventBookings.reserve, args);
@@ -191,10 +193,11 @@ export const migrateLegacyPayment = internalAction({
 });
 
 export const sweep = internalAction({ args: {}, handler: async ctx => {
-  const stripe = stripeClient();
   const due = await ctx.runQuery(internal.paymentWebhookRecords.due, {});
   for (const row of due) { try { await processWebhook(ctx, row.eventId); } catch { /* recorded for retry/operator review */ } }
   const work = await ctx.runQuery(internal.eventBookings.listWork, {});
+  if (!work.reservations.length && !work.refunds.length && !work.legacyMigrations.length) return;
+  const stripe = stripeClient();
   for (const registration of work.legacyMigrations) await migrateLegacy(ctx, registration._id);
   for (const workReservation of work.reservations) {
     const reservation = await ctx.runQuery(internal.eventBookings.getReservation, { reservationId: workReservation._id });

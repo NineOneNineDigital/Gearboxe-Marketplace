@@ -1,5 +1,6 @@
 "use client";
 
+import { popupPaymentsEnabled } from "@/convex/lib/environment";
 import { Button } from "@/components/ui/button";
 import { Footer } from "@/components/ui/footer";
 import { Navbar } from "@/components/ui/navbar";
@@ -10,7 +11,7 @@ import { useCurrentUser } from "@/hooks/useCurrentUser";
 import { useAction, useMutation, useQuery } from "convex/react";
 import { ArrowLeft, ArrowUpRight, CalendarDays, CreditCard, Ticket, Timer } from "lucide-react";
 import Link from "next/link";
-import { useSearchParams } from "next/navigation";
+import { notFound, useSearchParams } from "next/navigation";
 import { Suspense, useEffect, useRef, useState } from "react";
 
 type StatusTone = "success" | "warning" | "neutral";
@@ -90,6 +91,9 @@ function RegistrationsContent() {
     return () => { active = false; };
   }, [refresh, returnReservation, search, user]);
 
+  const allowBooking = popupPaymentsEnabled();
+  if (!allowBooking && mine && !mine.registrations.length && !mine.reservations.length && !mine.payments.length) notFound();
+
   const confirmedCount = mine?.registrations.filter((registration) => registration.paymentStatus === "completed" && !registration.event?.cancelledAt).length ?? 0;
   const openCheckoutCount = mine?.reservations.filter((reservation) => reservation.status === "held").length ?? 0;
 
@@ -107,7 +111,7 @@ function RegistrationsContent() {
                 <h1 className="text-3xl font-semibold leading-tight tracking-[-0.05em] sm:text-4xl">Event registrations<span className="text-primary">.</span></h1>
                 <p className="mt-2 max-w-xl text-sm leading-6 text-[hsl(var(--chrome))]">Your event places, checkout activity, and payment receipts.</p>
               </div>
-              <Button asChild size="sm" className="text-white"><Link href="/events">Explore events <ArrowUpRight className="h-4 w-4" /></Link></Button>
+              {allowBooking && <Button asChild size="sm" className="text-white"><Link href="/events">Explore events <ArrowUpRight className="h-4 w-4" /></Link></Button>}
             </div>
           </div>
           <div className="market-ruler relative opacity-60" />
@@ -115,7 +119,7 @@ function RegistrationsContent() {
 
         <div className="market-shell space-y-10 py-10 sm:py-12">
           {search.get("payment") === "success" && <div role="status" className="rounded-xl border border-primary/25 bg-primary/5 p-5 text-sm leading-6"><p className="font-semibold">Checkout returned successfully</p><p className="mt-1 text-muted-foreground">Your place is confirmed when payment verification shows a completed registration below.</p>{returnReservation && <Button variant="outline" size="sm" className="mt-3" disabled={!!busy} onClick={() => perform(returnReservation, () => refresh({ reservationId: returnReservation as Id<"eventReservations"> }), "Payment status refreshed. Check your registration below.")}>Refresh payment status</Button>}</div>}
-          {search.get("payment") === "cancelled" && <p role="status" className="rounded-xl border border-amber-200 bg-amber-50 p-5 text-sm leading-6 text-amber-900">Checkout was interrupted. You can continue or cancel the reservation below. Unpaid reservations expire automatically.</p>}
+          {search.get("payment") === "cancelled" && <p role="status" className="rounded-xl border border-amber-200 bg-amber-50 p-5 text-sm leading-6 text-amber-900">Checkout was interrupted. You can cancel the reservation below. Unpaid reservations expire automatically.</p>}
           {error && <p role="alert" className="rounded-xl border border-red-200 bg-red-50 p-4 text-sm text-red-800">{error}</p>}
           {notice && <p role="status" className="rounded-xl border border-primary/25 bg-primary/5 p-4 text-sm">{notice}</p>}
 
@@ -130,7 +134,7 @@ function RegistrationsContent() {
 
             <section aria-labelledby="registrations-heading" className="space-y-5">
               <div><p className="market-eyebrow">01 / Your places</p><h2 id="registrations-heading" className="mt-3 text-2xl font-semibold">Registrations</h2></div>
-              {mine.registrations.length === 0 ? <div className="rounded-2xl border border-black/10 bg-white p-8"><CalendarDays className="h-7 w-7 text-primary" aria-hidden="true" /><p className="mt-4 font-semibold">No registrations yet</p><p className="mt-1 text-sm text-muted-foreground">Find an upcoming event and register an approved vehicle.</p><Button asChild variant="outline" className="mt-5"><Link href="/events">Browse events <ArrowUpRight className="h-4 w-4" /></Link></Button></div> : (
+              {mine.registrations.length === 0 ? <div className="rounded-2xl border border-black/10 bg-white p-8"><CalendarDays className="h-7 w-7 text-primary" aria-hidden="true" /><p className="mt-4 font-semibold">No registrations yet</p>{allowBooking && <><p className="mt-1 text-sm text-muted-foreground">Find an upcoming event and register an approved vehicle.</p><Button asChild variant="outline" className="mt-5"><Link href="/events">Browse events <ArrowUpRight className="h-4 w-4" /></Link></Button></>}</div> : (
                 <div className="space-y-4">{mine.registrations.map((registration) => {
                   const receipt = receiptLink(registration.receiptUrl);
                   const eventCancelled = !!registration.event?.cancelledAt;
@@ -153,7 +157,7 @@ function RegistrationsContent() {
 
             <section aria-labelledby="reservations-heading" className="space-y-5">
               <div><p className="market-eyebrow">02 / Checkout</p><h2 id="reservations-heading" className="mt-3 text-2xl font-semibold">Checkout reservations</h2></div>
-              {mine.reservations.length === 0 ? <p className="rounded-2xl border border-black/10 bg-white p-6 text-sm text-muted-foreground">No checkout reservations.</p> : <div className="grid gap-4 lg:grid-cols-2">{mine.reservations.map((reservation) => <article key={reservation._id} className="rounded-2xl border border-black/10 bg-white p-6"><div className="flex flex-wrap items-start justify-between gap-3"><div><h3 className="font-semibold">{reservation.eventName || "Event checkout"}</h3><p className="mt-1 text-sm text-muted-foreground">{reservation.vehicleName || "Vehicle registration"}</p></div><StatusPill label={reservation.status.replaceAll("_", " ")} tone={reservation.status === "held" ? "warning" : reservation.status === "paid" ? "success" : "neutral"} /></div><p className="mt-5 text-sm"><span className="text-muted-foreground">Checkout deadline</span><br /><time dateTime={new Date(reservation.expiresAt).toISOString()} className="font-medium">{new Date(reservation.expiresAt).toLocaleString()}</time></p>{reservation.lastError && <p role="alert" className="mt-4 rounded-lg border border-red-200 bg-red-50 p-3 text-sm text-red-800">{reservation.lastError}</p>}<div className="mt-5 flex flex-wrap gap-2 border-t border-black/10 pt-5"><Button variant="outline" size="sm" disabled={!!busy} onClick={() => perform(reservation._id, () => refresh({ reservationId: reservation._id }), "Payment status refreshed.")}>{busy === reservation._id ? "Refreshing…" : "Refresh status"}</Button>{reservation.status === "held" && <><Button asChild size="sm"><Link href={`/events/${reservation.eventId}/register?vehicleId=${reservation.vehicleId}`}>Continue checkout</Link></Button><Button variant="outline" size="sm" disabled={!!busy} onClick={() => perform(reservation._id, () => cancel({ reservationId: reservation._id }), "Checkout reservation cancelled or reconciled. Check its status above.")}>Cancel checkout</Button></>}{["expired", "cancelled", "failed"].includes(reservation.status) && <Button asChild variant="outline" size="sm"><Link href={`/events/${reservation.eventId}/register?vehicleId=${reservation.vehicleId}`}>Try registering again</Link></Button>}</div></article>)}</div>}
+              {mine.reservations.length === 0 ? <p className="rounded-2xl border border-black/10 bg-white p-6 text-sm text-muted-foreground">No checkout reservations.</p> : <div className="grid gap-4 lg:grid-cols-2">{mine.reservations.map((reservation) => <article key={reservation._id} className="rounded-2xl border border-black/10 bg-white p-6"><div className="flex flex-wrap items-start justify-between gap-3"><div><h3 className="font-semibold">{reservation.eventName || "Event checkout"}</h3><p className="mt-1 text-sm text-muted-foreground">{reservation.vehicleName || "Vehicle registration"}</p></div><StatusPill label={reservation.status.replaceAll("_", " ")} tone={reservation.status === "held" ? "warning" : reservation.status === "paid" ? "success" : "neutral"} /></div><p className="mt-5 text-sm"><span className="text-muted-foreground">Checkout deadline</span><br /><time dateTime={new Date(reservation.expiresAt).toISOString()} className="font-medium">{new Date(reservation.expiresAt).toLocaleString()}</time></p>{reservation.lastError && <p role="alert" className="mt-4 rounded-lg border border-red-200 bg-red-50 p-3 text-sm text-red-800">{reservation.lastError}</p>}<div className="mt-5 flex flex-wrap gap-2 border-t border-black/10 pt-5"><Button variant="outline" size="sm" disabled={!!busy} onClick={() => perform(reservation._id, () => refresh({ reservationId: reservation._id }), "Payment status refreshed.")}>{busy === reservation._id ? "Refreshing…" : "Refresh status"}</Button>{reservation.status === "held" && <>{allowBooking && <Button asChild size="sm"><Link href={`/events/${reservation.eventId}/register?vehicleId=${reservation.vehicleId}`}>Continue checkout</Link></Button>}<Button variant="outline" size="sm" disabled={!!busy} onClick={() => perform(reservation._id, () => cancel({ reservationId: reservation._id }), "Checkout reservation cancelled or reconciled. Check its status above.")}>Cancel checkout</Button></>}{allowBooking && ["expired", "cancelled", "failed"].includes(reservation.status) && <Button asChild variant="outline" size="sm"><Link href={`/events/${reservation.eventId}/register?vehicleId=${reservation.vehicleId}`}>Try registering again</Link></Button>}</div></article>)}</div>}
             </section>
 
             <section aria-labelledby="payments-heading" className="space-y-5">

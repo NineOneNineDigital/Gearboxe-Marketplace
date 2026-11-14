@@ -1,9 +1,10 @@
+import { popupPaymentsEnabled } from "@/convex/lib/environment";
 import { BrandLockup } from "@/components/ui/brand-lockup";
 import Link from "next/link";
 
 const footerLinks = [
   { href: "/vehicles", label: "Browse vehicles" },
-  { href: "/events", label: "Upcoming events" },
+  ...(popupPaymentsEnabled() ? [{ href: "/events", label: "Upcoming events" }] : []),
   { href: "/myAccount/new-listing", label: "List a vehicle" },
   { href: "/contact", label: "Support" },
 ];
@@ -17,8 +18,7 @@ export function Footer() {
           <div>
             <BrandLockup inverse />
             <p className="mt-5 max-w-md text-sm leading-7 text-[hsl(var(--chrome))]">
-              Private-party cars, documented ownership, and local events—all
-              under the Gearboxe umbrella.
+              Shop private-party vehicles and connect directly with their sellers.
             </p>
           </div>
           <nav className="grid grid-cols-2 gap-x-10 gap-y-4 text-xs sm:flex sm:flex-wrap sm:gap-7">

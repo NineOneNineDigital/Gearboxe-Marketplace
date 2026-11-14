@@ -2,6 +2,7 @@ import { defineSchema, defineTable } from "convex/server";
 import { v } from "convex/values";
 
 import { optionalSpecificationFields, storedListingStatus, moderationEntry, decodedFields } from "./lib/vehicleSpecification";
+import { offerTables } from "./lib/offerSchema";
 import { discoveryFilters, discoverySort } from "./lib/discoveryPolicy";
 
 const catalogFields = {
@@ -13,6 +14,15 @@ const catalogFields = {
 const notificationPreferences = v.object({ emailEnabled: v.boolean(), messages: v.boolean(), listings: v.boolean(), favorites: v.boolean(), events: v.boolean() });
 
 export default defineSchema({
+  ...offerTables,
+  // Private append-only evidence; never copied into public user projections.
+  policyAcceptances: defineTable({
+    userId: v.id("users"), clerkUserId: v.string(),
+    termsVersion: v.string(), privacyVersion: v.string(),
+    termsEffectiveAt: v.number(), privacyEffectiveAt: v.number(),
+    termsUrl: v.string(), privacyUrl: v.string(), acceptedAt: v.number(),
+  }).index("by_user_pair", ["userId", "termsVersion", "privacyVersion"])
+    .index("by_user", ["userId"]),
   eventStaff: defineTable({ eventId: v.id("events"), userId: v.id("users"), role: v.union(v.literal("checkin"), v.literal("manager")), assignedBy: v.id("users"), createdAt: v.number() }).index("by_event_user", ["eventId", "userId"]).index("by_user", ["userId"]).index("by_event", ["eventId"]),
   eventCheckinRequests: defineTable({ eventId: v.id("events"), registrationId: v.id("registrations"), actorId: v.id("users"), requestId: v.string(), expectedRevision: v.number(), resultRevision: v.number(), createdAt: v.number() }).index("by_actor_request", ["actorId", "requestId"]),
   eventIncidents: defineTable({ eventId: v.id("events"), registrationId: v.optional(v.id("registrations")), actorId: v.id("users"), reason: v.string(), severity: v.union(v.literal("low"), v.literal("medium"), v.literal("high"), v.literal("critical")), notes: v.string(), status: v.union(v.literal("open"), v.literal("escalated"), v.literal("resolved")), createdAt: v.number(), updatedAt: v.number() }).index("by_event", ["eventId"]),
@@ -31,7 +41,12 @@ export default defineSchema({
   trustRateLimits: defineTable({ userId: v.id("users"), action: v.string(), windowStart: v.number(), count: v.number() }).index("by_user_action", ["userId", "action"]),
   trustNotes: defineTable({ reportId: v.id("trustReports"), adminId: v.id("users"), note: v.string(), reason: v.string(), createdAt: v.number() }).index("by_report", ["reportId"]),
   trustAppeals: defineTable({ userId: v.id("users"), reportId: v.optional(v.id("trustReports")), message: v.string(), status: v.union(v.literal("open"), v.literal("reviewing"), v.literal("resolved")), response: v.optional(v.string()), createdAt: v.number(), updatedAt: v.number() }).index("by_user", ["userId"]).index("by_status", ["status"]),
-  ownershipDocuments: defineTable({ userId: v.id("users"), vehicleId: v.optional(v.id("vehicles")), storageId: v.id("_storage"), status: v.union(v.literal("pending"), v.literal("verified"), v.literal("rejected")), createdAt: v.number(), expiresAt: v.number(), reviewedAt: v.optional(v.number()), reviewerId: v.optional(v.id("users")), reason: v.optional(v.string()) }).index("by_user", ["userId"]).index("by_expiry", ["expiresAt"]).index("by_storage", ["storageId"]).index("by_status", ["status"]),
+  ownershipReviewCases: defineTable({
+    vehicleId: v.id("vehicles"), triggers: v.array(v.string()), request: v.optional(v.string()),
+    clearedRevision: v.optional(v.number()), reviewerId: v.optional(v.id("users")), reason: v.optional(v.string()),
+    documentId: v.optional(v.id("ownershipDocuments")),
+  }).index("by_vehicle", ["vehicleId"]),
+  ownershipDocuments: defineTable({ vehicleVin: v.optional(v.string()), userId: v.id("users"), vehicleId: v.optional(v.id("vehicles")), storageId: v.id("_storage"), status: v.union(v.literal("pending"), v.literal("verified"), v.literal("rejected")), createdAt: v.number(), expiresAt: v.number(), reviewedAt: v.optional(v.number()), reviewerId: v.optional(v.id("users")), reason: v.optional(v.string()) }).index("by_vehicle", ["vehicleId"]).index("by_user", ["userId"]).index("by_expiry", ["expiresAt"]).index("by_storage", ["storageId"]).index("by_status", ["status"]),
   identityReviews: defineTable({ userId: v.id("users"), status: v.union(v.literal("pending"), v.literal("verified"), v.literal("rejected")), createdAt: v.number(), updatedAt: v.number(), reviewerId: v.optional(v.id("users")), reason: v.optional(v.string()) }).index("by_user", ["userId"]).index("by_status", ["status"]),
   vehicleCatalog: defineTable(catalogFields).index("by_vehicle", ["vehicleId"]).index("by_sitemap_shard", ["sitemapShard"]),
   vehicleSearchTerms: defineTable({ ...catalogFields, token: v.string(), scope: v.string() })
@@ -41,6 +56,11 @@ export default defineSchema({
     .index("by_year", ["token", "scope", "year"])
     .index("by_recency", ["token", "scope", "listedAt"]),
   discoveryCounters: defineTable({ key: v.string(), next: v.number() }).index("by_key", ["key"]),
+  // First-party aggregate activity only: no visitor, listing, ZIP, or coordinate fields.
+  discoveryActivity: defineTable({ day: v.number(), kind: v.union(
+    v.literal("zip_entry"), v.literal("zero_results"), v.literal("radius_expand"),
+    v.literal("nationwide_view"), v.literal("listing_click")), count: v.number() })
+    .index("by_day_kind", ["day", "kind"]).index("by_day", ["day"]),
   savedSearches: defineTable({ userId: v.id("users"), name: v.string(), filters: discoveryFilters, sort: discoverySort, createdAt: v.number() }).index("by_user", ["userId"]),
   recentViews: defineTable({ userId: v.id("users"), vehicleId: v.id("vehicles"), viewedAt: v.number() })
     .index("by_user_time", ["userId", "viewedAt"]).index("by_user_vehicle", ["userId", "vehicleId"]),
@@ -117,10 +137,16 @@ export default defineSchema({
     price: v.number(),
     vin: v.optional(v.string()),
     vinKey: v.optional(v.string()),
+    ownershipRole: v.optional(v.union(v.literal("owner"), v.literal("authorized"))),
     ownershipAttestedAt: v.optional(v.number()),
     moderationRemovedAt: v.optional(v.number()),
+    availabilityDueAt: v.optional(v.number()),
+    availabilityNextCheckAt: v.optional(v.number()),
+    availabilityConfirmedAt: v.optional(v.number()),
+    availabilityExpiredAt: v.optional(v.number()),
+    availabilityHistory: v.optional(v.array(v.object({ kind: v.string(), at: v.number(), actorId: v.optional(v.id("users")) }))),
     photos: v.array(v.string()),
-    media: v.optional(v.array(v.object({ id: v.id("vehicleMedia"), caption: v.string() }))),
+    media: v.optional(v.array(v.object({ id: v.id("vehicleMedia"), caption: v.string(), view: v.optional(v.union(v.literal("front"), v.literal("rear"), v.literal("left side"), v.literal("right side"), v.literal("interior"))) }))),
     description: v.string(),
     contactInfo: v.string(),
     ...optionalSpecificationFields,
@@ -141,7 +167,8 @@ export default defineSchema({
     .index("by_status", ["status"])
     .index("by_make_model", ["make", "model"])
     .index("by_price_range", ["price"])
-    .index("by_status_updated", ["status", "updatedAt"]),
+    .index("by_status_updated", ["status", "updatedAt"])
+    .index("by_status_availability_check", ["status", "availabilityNextCheckAt"]),
 
   events: defineTable({
     eventRules: v.optional(v.string()), registrationDeadline: v.optional(v.number()), vendorInstructions: v.optional(v.string()),
@@ -229,6 +256,14 @@ export default defineSchema({
     .index("by_recipient", ["recipientId"])
     .index("by_recipient_read", ["recipientId", "read"])
     .index("by_conversation_recipient_read", ["conversationId", "recipientId", "read"]),
+
+  engagementPairs: defineTable({
+    vehicleId: v.id("vehicles"), buyerId: v.id("users"), sellerId: v.id("users"),
+    kind: v.union(v.literal("active"), v.literal("reserved")),
+    firstAt: v.number(), respondedAt: v.optional(v.number()), purgeAt: v.number(),
+    firstSource: v.union(v.literal("message"), v.literal("offer")),
+  }).index("by_vehicle_buyer_kind", ["vehicleId", "buyerId", "kind"]).index("by_first_at", ["firstAt"]).index("by_purge_at", ["purgeAt"]),
+  engagementTracking: defineTable({ key: v.literal("global"), startedAt: v.number() }).index("by_key", ["key"]),
 
   favorites: defineTable({
     userId: v.id("users"),

@@ -1,5 +1,6 @@
 "use client";
 
+import { OfferThread } from "@/components/ui/offer-thread";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Textarea } from "@/components/ui/textarea";
@@ -7,8 +8,10 @@ import { api } from "@/convex/_generated/api";
 import type { Id } from "@/convex/_generated/dataModel";
 import { useCurrentUser } from "@/hooks/useCurrentUser";
 import { useToast } from "@/hooks/useToast";
-import { useMutation, usePaginatedQuery, useQuery } from "convex/react";
+import { useAuth } from "@clerk/nextjs";
+import { useConvexAuth, useMutation, usePaginatedQuery, useQuery } from "convex/react";
 import { Check, CheckCheck, MessageCircle, Send } from "lucide-react";
+import Link from "next/link";
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
 
 interface MessageThreadProps {
@@ -25,6 +28,8 @@ export function MessageThread({
   conversationId,
 }: MessageThreadProps) {
   const { user: convexUser } = useCurrentUser();
+  const { isAuthenticated, isLoading: isAuthLoading } = useConvexAuth();
+  const { isSignedIn } = useAuth();
   const [newMessage, setNewMessage] = useState("");
   const [isLoading, setIsLoading] = useState(false);
   const { toast } = useToast();
@@ -38,7 +43,7 @@ export function MessageThread({
     convexUser ? { vehicleId: vehicleId as Id<"vehicles">, otherUserId: recipientId as Id<"users"> } : "skip");
   const threadId = conversationId ?? foundConversation?._id;
   const contact = useQuery(api.conversations.getContactState,
-    convexUser ? { otherUserId: recipientId as Id<"users"> } : "skip");
+    convexUser ? { otherUserId: recipientId as Id<"users">, vehicleId: vehicleId as Id<"vehicles"> } : "skip");
   const { results, status, loadMore } = usePaginatedQuery(
     api.messages.getMessagesByConversation,
     convexUser && threadId ? { conversationId: threadId as Id<"conversations"> } : "skip",
@@ -108,7 +113,7 @@ export function MessageThread({
       <Card>
         <CardContent className="p-6 text-center">
           <MessageCircle className="h-12 w-12 mx-auto text-gray-400 mb-4" />
-          <p className="text-gray-600">Please sign in to send messages</p>
+          <p className="text-gray-600">{isAuthLoading || isAuthenticated || isSignedIn ? "Your account is finishing setup. This page will update when it is ready. If it takes more than a few minutes, contact Help@gearboxe.com." : "Please sign in to send messages"}</p>
         </CardContent>
       </Card>
     );
@@ -129,6 +134,7 @@ export function MessageThread({
             const node = event.currentTarget;
             atBottom.current = node.scrollHeight - node.scrollTop - node.clientHeight < 100;
           }} className="flex-1 overflow-y-auto space-y-4 p-4">
+          {process.env.NEXT_PUBLIC_OFFERS_ENABLED === "true" && threadId && <OfferThread conversationId={threadId as Id<"conversations">} userId={convexUser._id} />}
           {(status === "CanLoadMore" || status === "LoadingMore") && <Button variant="outline" size="sm" disabled={status === "LoadingMore"} onClick={() => {
             if (scrollRef.current) olderScroll.current = { height: scrollRef.current.scrollHeight, top: scrollRef.current.scrollTop };
             loadMore(30);
@@ -188,7 +194,7 @@ export function MessageThread({
 
         {/* Message Input */}
         <div className="border-t border-gray-200 bg-gray-50 p-4">
-          {contact?.canContact === false && <p className="mb-2 text-sm" role="status">Messaging is unavailable between these accounts.</p>}
+          {contact?.canContact === false && <p className="mb-2 text-sm" role="status">{"needsEmailVerification" in contact && contact.needsEmailVerification ? <>Verify your email in <Link className="underline" href={`/myAccount/safety?next=${encodeURIComponent(`/myAccount/messages/${vehicleId}/${recipientId}`)}`}>account settings</Link> before messaging a seller.</> : "Messaging is unavailable between these accounts."}</p>}
           <div className="flex space-x-2">
             <Textarea
               placeholder="Type your message..."

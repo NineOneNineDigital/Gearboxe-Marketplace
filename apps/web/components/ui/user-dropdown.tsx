@@ -1,5 +1,6 @@
 "use client";
 
+import { popupPaymentsEnabled } from "@/convex/lib/environment";
 import { Button } from "@/components/ui/button";
 import { useCurrentUser } from "@/hooks/useCurrentUser";
 import { api } from "@/convex/_generated/api";
@@ -20,26 +21,11 @@ import Link from "next/link";
 import { useQuery } from "convex/react";
 import { usePathname } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
+import { adminAppOrigin } from "@/lib/admin-portal";
 
 interface UserDropdownProps {
   afterSignOutUrl?: string;
   inverse?: boolean;
-}
-
-function adminAppOrigin(value: string | undefined, localPort: number) {
-  const candidate = value?.trim() || (process.env.NODE_ENV === "development" ? `http://localhost:${localPort}` : "");
-  if (!candidate) return null;
-
-  try {
-    const url = new URL(candidate);
-    const local = process.env.NODE_ENV === "development" &&
-      ["localhost", "127.0.0.1"].includes(url.hostname) && url.protocol === "http:";
-    if ((!local && url.protocol !== "https:") || url.username || url.password ||
-        url.pathname !== "/" || url.search || url.hash) return null;
-    return url.origin;
-  } catch {
-    return null;
-  }
 }
 
 const adminPortalOrigin = adminAppOrigin(process.env.NEXT_PUBLIC_ADMIN_PORTAL_URL, 3002);
@@ -119,7 +105,7 @@ export function UserDropdown({
       icon: Heart,
       active: pathname === "/myAccount/favorites",
     },
-    { label: "Event registrations", href: "/myAccount/registrations", icon: Calendar, active: pathname === "/myAccount/registrations" },
+    ...(popupPaymentsEnabled() ? [{ label: "Event registrations", href: "/myAccount/registrations", icon: Calendar, active: pathname === "/myAccount/registrations" }] : []),
     {
       label: "Notifications",
       href: "/myAccount/notifications",

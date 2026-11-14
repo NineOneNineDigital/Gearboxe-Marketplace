@@ -1,5 +1,6 @@
 "use client";
 
+import { popupPaymentsEnabled } from "@/convex/lib/environment";
 import { BrandLockup } from "@/components/ui/brand-lockup";
 import { Button } from "@/components/ui/button";
 import { UserDropdown } from "@/components/ui/user-dropdown";
@@ -12,7 +13,7 @@ import { useState } from "react";
 
 const navigation = [
   { href: "/vehicles", label: "Vehicles" },
-  { href: "/events", label: "Events" },
+  ...(popupPaymentsEnabled() ? [{ href: "/events", label: "Events" }] : []),
 ];
 
 export function Navbar() {

@@ -1,9 +1,9 @@
-import { publicVehicle } from "./lib/vehicleVisibility";
+import { isPublicVehicle, publicVehicle } from "./lib/vehicleVisibility";
 import { v } from "convex/values";
 import { mutation, query } from "./_generated/server";
 import { requireCurrentUser } from "./lib/authorization";
 import { enqueueNotification } from "./notifications";
-import { consumeRateLimit } from "./lib/trustGuards";
+import { assertBuyerEmailVerified, consumeRateLimit } from "./lib/trustGuards";
 import { resolveVehicleMedia } from "./lib/vehicleMedia";
 
 export const addFavorite = mutation({
@@ -12,8 +12,9 @@ export const addFavorite = mutation({
   },
   handler: async (ctx, args) => {
     const user = await requireCurrentUser(ctx);
+    assertBuyerEmailVerified(user);
     const vehicle = await ctx.db.get(args.vehicleId);
-    if (!vehicle || (vehicle.status !== "approved" && vehicle.status !== "active")) {
+    if (!vehicle || !isPublicVehicle(vehicle)) {
       throw new Error("Vehicle is not available");
     }
     // Check if already favorited
@@ -76,7 +77,7 @@ export const getFavoritesByUser = query({
     );
 
     const visible = vehicles.flatMap((vehicle) =>
-      (vehicle?.status === "approved" || vehicle?.status === "active") ? [publicVehicle(vehicle)] : []
+      vehicle && isPublicVehicle(vehicle) ? [publicVehicle(vehicle)] : []
     );
     return Promise.all(visible.map(vehicle => resolveVehicleMedia(ctx, vehicle)));
   },

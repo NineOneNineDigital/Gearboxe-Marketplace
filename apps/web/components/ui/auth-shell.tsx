@@ -22,7 +22,7 @@ export function AuthShell({ area, children }: { area: "market" | "admin"; childr
           Find your people.<br /><span className="text-primary">Find your drive.</span>
         </h2>
         <p className="mt-6 max-w-md text-sm leading-7 text-[hsl(var(--chrome))]">
-          Discover standout vehicles, meet local enthusiasts, and be part of the next popup market.
+          Discover owner-listed vehicles and connect with private sellers.
         </p>
         <div className="market-ruler mt-10 max-w-sm opacity-60" aria-hidden="true" />
       </div>

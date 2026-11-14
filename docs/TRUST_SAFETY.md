@@ -7,6 +7,9 @@ Convex, including calls made outside the UI.
 
 ## Seller verification and ownership
 
+Buyer engagement uses a separate rule: public browsing needs no account, while saving a listing and sending a buyer-to-seller message require a signed-in account with verified email. Buyer phone verification is not required. Convex uses the email verification status supplied by signed Clerk webhooks; a stale or missing webhook status denies new engagement until it is refreshed. Existing favorites and conversation history stay readable if verification is later lost, and a favorite can still be removed, but new buyer messages and favorites are blocked. Seller replies follow the seller account's existing suspension and messaging controls. Structured offers will use the same buyer-email rule when implemented.
+
+
 Clerk manages email and phone verification. Signed Clerk webhook updates supply
 the primary email/phone verification status; client requests cannot claim these
 statuses. Enable phone verification in the Clerk deployment before accepting
@@ -14,22 +17,23 @@ seller submissions. Existing accounts need a refreshed Clerk webhook event to
 populate their verification fields. Sellers manage their contact methods through
 the safety center's account settings button.
 
-Submitting a listing requires verified email, verified phone, and an attestation
-that the seller owns the vehicle or has the owner's authorization to sell it.
-Save the draft, select it in the safety center, and record the attestation before
-submitting. Changing the VIN invalidates the prior attestation. Optional identity
-review is a manual support workflow; requesting it never marks the seller as
-verified. Moderators record their review basis and approve or reject the request.
+Sellers select **titled owner** or **authorized by the titled owner** in Trust & safety for each listing and attest to its accuracy. Submission requires this declaration and verified email and phone. A VIN change clears the declaration. A legacy combined attestation needs an explicit role before a new submission or approval. Existing published listings stay visible until the seller changes their declaration or another moderation or lifecycle action occurs. Updating a published declaration returns the listing to review. Account identity review remains optional and separate.
 
-Public seller indicators expose verification booleans and the listing ownership
-attestation timestamp, never contact values or document evidence. Attestation and verification are signals, not guarantees of title,
-vehicle condition, or transaction safety.
+### Ownership and lien decisions
+
+1. Review the pending listing, seller declaration, title and lien disclosures. An ordinary titled owner with a clean title and no lien can proceed through normal independent moderation without a document upload. An authorized seller needs private, independently reviewed evidence. Branded, other or unknown title status, an outstanding lien, or an uncertain lien enters enhanced review. Prior submitted indicators stay with the case after corrections so the moderator can evaluate the change.
+2. If authority, title or payoff is unclear, note what would resolve it. A moderator can request private evidence for ambiguous ownership, a VIN or identity discrepancy, credible fraud reports, repeat-activity concerns, a title issue or a lien. Evaluate the circumstances individually. Open the evidence request for the specific listing and write the seller’s next step. The seller receives an inbox notice and can read the instructions by selecting the listing in Trust & safety. An evidence request against a published listing immediately returns it to private pending review.
+3. For an authorized seller, ask for the relevant portion of the titled owner’s signed authorization identifying the vehicle and seller, with enough information to connect the authorization to the titled owner. For an outstanding lien, review the seller’s payoff and title-release path and request private corroboration when needed. Ask for the minimum necessary material and permit unrelated addresses, signatures and account numbers to be covered. Do not request uploads in messages or public photos. These are review criteria, not state-specific transfer instructions.
+4. In **Admin → Safety**, inspect the private upload and accept it or reject it with a concise reason suitable for the seller. In the listing review, record a factual resolution for the current revision. An authorized seller or explicit evidence request requires an accepted, unexpired document for that seller, listing and VIN. An uncertain lien must be clarified by the seller before clearance. If information conflicts, request more information, reject with a correction path, or escalate through the private report or appeal queue to the safety lead.
+5. Approve the listing separately after the clearance. Edits and resubmissions invalidate previous clearance. Evidence must still be valid when the listing is approved. Document expiry after publication does not by itself withdraw the listing. Sellers can appeal in Trust & safety. An independent authorized moderator may record a new decision with a factual basis; an escalation or appeal cannot override missing evidence, an uncertain lien, or the prohibition on self-review.
+
+Record decisions, their listing revision and relevant case references in the private audit trail. Keep document contents and sensitive identifiers out of notes and notifications. Listing review metadata and audit history currently have no automated deletion schedule; the 30-day limit applies to the uploaded evidence and its document record. Private evidence requirements and uploaded files do not provide a public ownership guarantee. Confirm final trigger wording, reviewer coverage and the public privacy wording before launch.
 
 ## Privacy, visibility, and retention
 
 | Data | Visibility | Retention and deletion |
 | --- | --- | --- |
-| Full VIN | Public on active/legacy-approved listings, consistent with the MVP operating model. Private on draft, pending, rejected, withdrawn and archived listings. Listing owners and authorized admins can inspect the private listing. | Kept while the listing is live. Removed from draft, rejected, sold, withdrawn and archived listings after 90 days of inactivity, measured from the latest update or creation. Cached VIN decode records expire after 30 days. |
+| Full VIN | Public on active/legacy-approved and reserved listings, consistent with the MVP operating model. Private on draft, pending, rejected, withdrawn and archived listings. Listing owners and authorized admins can inspect the private listing. | Kept while the listing is live. Removed from draft, rejected, sold, withdrawn and archived listings after 90 days of inactivity, measured from the latest update or creation. Cached VIN decode records expire after 30 days. |
 | Email and phone | The owner and authorized administrators can access account values. Public seller queries expose verification booleans only. Contact fields are omitted from public listings. Buyers and sellers choose independently whether to share contact details in private messages. | Account phone data remains until changed or the Clerk account deletion webhook removes the account record. Private listing contact text follows the inactive-listing 90 day cleanup. Clerk retains its own account data under deployment/provider policy. |
 | Ownership document | Uploader and authorized admins only, via an authenticated document endpoint. Never included in public photos, listing responses, messages, or permanent storage URLs. | Access expires exactly 30 days after upload. An hourly bounded cleanup physically deletes expired storage objects and metadata. Cleanup may finish after expiry when there is a backlog; expired files remain inaccessible. |
 | Precise location | Do not collect a home/street address. Public listings expose city and state only. New writes discard postal codes and round coordinates to two decimal places, approximately one kilometer. Private listing/admin data can retain those rounded coordinates for discovery. | Precise inputs are discarded on write. The daily bounded privacy sweep sanitizes legacy stored locations. Rounded location is retained with the listing. |
@@ -90,6 +94,15 @@ entry; listing removals also preserve listing moderation history and notify the
 owner. The queue prioritizes the oldest unresolved cases (up to 100 per status);
 document and identity queues prioritize the oldest 100 pending requests.
 The audit UI shows the latest 200 records.
+
+Sellers must describe accidents, damage, and mechanical issues known to them;
+they may leave each detail field blank only if they know of no issue to describe.
+A blank appears as “No issue disclosed by seller,” not a verification or
+condition guarantee. Compare disclosures against photos, VIN/history evidence,
+reports, and seller statements. If they conflict, reject the listing with a
+specific reason and request correction. Edits to approved listings return them to
+review. Existing conversations remain available, but this transition does not
+send a conversation-specific disclosure-change notification.
 
 Appeals and support requests enter the same private queue and remain accessible
 to suspended users. Staff respond in the application. Prefer a reviewer other

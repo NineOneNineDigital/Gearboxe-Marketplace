@@ -1,3 +1,4 @@
+import "./popup-test-environment.mjs";
 import assert from "node:assert/strict";
 import test from "node:test";
 import { registerHooks } from "node:module";
@@ -12,7 +13,6 @@ registerHooks({ resolve(specifier, context, nextResolve) {
 const bookings = await import("../convex/eventBookings.ts");
 const registrations = await import("../convex/registrations.ts");
 const policy = await import("../convex/lib/eventPaymentPolicy.ts");
-process.env.EVENT_REGISTRATION_PRICE_CENTS = "4900";
 function fixture(capacity = 1) {
   let actor = "seller", sequence = 0;
   const tables = { users: ["seller", "other", "admin"].map(id => ({ _id: id, externalId: id, email: `${id}@example.test`, role: id === "admin" ? "admin" : "user", notificationPreferences: { emailEnabled: false } })), vehicles: [{ _id: "car", title: "My car", userId: "seller", status: "active" }, { _id: "other-car", userId: "other", status: "approved", title: "Other car" }], events: [{ _id: "event", name: "Market", date: Date.now() + 30 * 86400000, capacity }] };
@@ -180,4 +180,20 @@ test("roster search indexes seller and vehicle display names without private VIN
   await f.ctx.db.patch("car", { year: 2020, make: "Example", model: "Coupe", vin: "PRIVATE-VIN-123" });
   const payment = await pay(f, await held(f)); const registration = await f.get(payment.registrationId);
   assert.equal(registration.rosterSearch, "Seller Name 2020 Example Coupe"); assert.ok(!registration.rosterSearch.includes("PRIVATE")); assert.ok(!registration.rosterSearch.includes("phone"));
+});
+
+test("historical settlement and owner receipts remain accessible when popups are disabled", async () => {
+  const f = fixture();
+  const reservation = await held(f);
+  await bookings.attachSession._handler(f.ctx, { reservationId: reservation._id, stripeSessionId: "cs-one", checkoutUrl: "https://checkout.stripe.com/fixture" });
+  process.env.NEXT_PUBLIC_POPUP_PAYMENTS_ENABLED = "false";
+  try {
+    assert.equal((await bookings.getMine._handler(f.ctx, {})).reservations[0].checkoutUrl, undefined);
+    const result = await pay(f, reservation);
+    const mine = await bookings.getMine._handler(f.ctx, {});
+    assert.equal(mine.registrations[0]._id, result.registrationId);
+    assert.equal(mine.payments.length, 1);
+  } finally {
+    process.env.NEXT_PUBLIC_POPUP_PAYMENTS_ENABLED = "true";
+  }
 });

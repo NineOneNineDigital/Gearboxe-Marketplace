@@ -141,8 +141,8 @@ const complete = {
   vin: "3GCUDHEL3NG668790", mileage: 12000, price: 40000, trim: "ZR2", bodyStyle: "Truck", engine: "V8",
   transmission: "Automatic", drivetrain: "4WD", fuelType: "Gasoline", exteriorColor: "Blue", interiorColor: "Black",
   mileageUnit: "mi", odometerStatus: "actual", titleStatus: "clean", sellerState: "NC", condition: "good",
-  mechanicalIssues: "None known", accidentDisclosure: "Unknown", damageDisclosure: "None known",
-  serviceRecords: "partial", modifications: "None", sellerType: "private", location: { city: "Raleigh", state: "NC" },
+  lienStatus: "none", vehicleCategory: "truck", mechanicalIssues: "None known", accidentDisclosure: "Unknown", damageDisclosure: "None known",
+  serviceRecords: "partial", modifications: "None", sellerType: "private", location: { city: "Raleigh", state: "NC", latitude: 35.78, longitude: -78.64 },
   features: [], negotiable: true, description: "Well maintained vehicle with service records.", contactInfo: "Private contact", photos: [],
 };
 
@@ -152,9 +152,9 @@ test("restoration clears moderation removal marker and requires an active verifi
   f.ctx.auth.getUserIdentity = async () => ({ subject: "clerk-admin" });
   f.user.emailVerified = true;
   f.user.phoneVerified = true;
-  f.tables.vehicles = [{ _id: "listing", userId: "owner", status: "archived", createdAt: 1, updatedAt: 2, ownershipAttestedAt: 1, moderationRemovedAt: 5, ...complete, media: [{ id: "photo", caption: "Front" }] }];
-  f.tables.vehicleMedia = [{ _id: "photo", userId: "owner", vehicleId: "listing", status: "ready", thumbnailId: "thumb", detailId: "detail" }];
-  f.tables._storage.push({ _id: "thumb" }, { _id: "detail" });
+  f.tables.vehicles = [{ _id: "listing", userId: "owner", status: "archived", createdAt: 1, updatedAt: 2, ownershipAttestedAt: 1, ownershipRole: "owner", moderationRemovedAt: 5, ...complete, media: ["front", "rear", "left side", "right side", "interior"].map((view, index) => ({ id: `photo-${index}`, caption: "", view })) }];
+  f.tables.vehicleMedia = ["front", "rear", "left side", "right side", "interior"].map((_, index) => ({ _id: `photo-${index}`, userId: "owner", vehicleId: "listing", status: "ready", thumbnailId: `thumb-${index}`, detailId: `detail-${index}` }));
+  for (let index = 0; index < 5; index++) f.tables._storage.push({ _id: `thumb-${index}` }, { _id: `detail-${index}` });
   f.ctx.db.system.get = f.ctx.db.get;
   f.user.suspendedAt = 1;
   await assert.rejects(trust.restoreListing._handler(f.ctx, { vehicleId: "listing", reason: "Appeal accepted" }), /suspended/);

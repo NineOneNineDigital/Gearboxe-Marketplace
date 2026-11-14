@@ -1,5 +1,6 @@
 import { v } from "convex/values";
-import { assertCanContact, consumeRateLimit } from "./lib/trustGuards";
+import { isPublicVehicle } from "./lib/vehicleVisibility";
+import { assertBuyerEmailVerified, assertCanContact, consumeRateLimit } from "./lib/trustGuards";
 import { mutation, query } from "./_generated/server";
 import {
   getCurrentUser,
@@ -48,7 +49,8 @@ export const getOrCreateConversation = mutation({
     if (existingConversation) {
       return existingConversation._id;
     }
-    if (vehicle.status !== "approved" && vehicle.status !== "active") throw new Error("This listing no longer accepts new conversations");
+    if (!isPublicVehicle(vehicle)) throw new Error("This listing no longer accepts new conversations");
+    if (vehicle.userId !== currentUser._id) assertBuyerEmailVerified(currentUser);
 
     await consumeRateLimit(ctx, currentUser._id, "conversation");
     // Create new conversation
@@ -114,7 +116,9 @@ export const getConversationsByUser = query({
           _id: conversation._id,
           vehicleId: conversation.vehicleId,
           otherUserId,
-          vehicleTitle: vehicle?.title || "Unknown Vehicle",
+          vehicleTitle: vehicle && (isPublicVehicle(vehicle) || vehicle.userId === user._id)
+            ? vehicle.title || "Unknown Vehicle"
+            : "Listing no longer public",
           otherUserName: otherUser?.name || "Unknown User",
           lastMessage,
           unreadCount: unreadMessages.length,
@@ -198,19 +202,27 @@ export const getVehicleContext = query({
     if (!thread || !isConversationParticipant(thread, user._id)) return null;
     const vehicle = await ctx.db.get(vehicleId);
     if (!vehicle) return null;
+    if (!isPublicVehicle(vehicle) && vehicle.userId !== user._id) {
+      return { _id: vehicle._id, status: vehicle.status, title: "Listing no longer public" };
+    }
     return { _id: vehicle._id, title: vehicle.title, year: vehicle.year, make: vehicle.make, model: vehicle.model, mileage: vehicle.mileage, mileageUnit: vehicle.mileageUnit, price: vehicle.price, status: vehicle.status };
   },
 });
 
 // Return only whether composing is allowed; never disclose who blocked whom.
 export const getContactState = query({
-  args: { otherUserId: v.id("users") },
-  handler: async (ctx, { otherUserId }) => {
+  args: { otherUserId: v.id("users"), vehicleId: v.optional(v.id("vehicles")) },
+  handler: async (ctx, { otherUserId, vehicleId }) => {
     const user = await getCurrentUser(ctx);
     if (!user || user.suspendedAt !== undefined) return { canContact: false };
     try {
       if (user._id === otherUserId) return { canContact: false };
       await assertCanContact(ctx, user._id, otherUserId);
+      if (vehicleId) {
+        const vehicle = await ctx.db.get(vehicleId);
+        if (!vehicle || (vehicle.userId !== user._id && vehicle.userId !== otherUserId)) return { canContact: false };
+        if (vehicle.userId !== user._id && !user.emailVerified) return { canContact: false, needsEmailVerification: true };
+      }
       return { canContact: true };
     } catch {
       return { canContact: false };
