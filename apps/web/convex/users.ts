@@ -2,7 +2,7 @@ import type { UserJSON } from "@clerk/backend";
 import { v, type Validator } from "convex/values";
 import { paginationOptsValidator } from "convex/server";
 import { provisionFirstSuperAdmin } from "./lib/provisioning";
-import { PUBLISHED_POLICY_PAIR, recordPolicyAcceptance } from "./lib/policyConsent";
+import { PUBLISHED_POLICY_PAIR, currentPolicyStatus as readCurrentPolicyStatus, recordPolicyAcceptance } from "./lib/policyConsent";
 import {
   internalMutation,
   mutation,
@@ -27,6 +27,11 @@ export const current = query({
 export const publishedPolicies = query({
   args: {},
   handler: async () => PUBLISHED_POLICY_PAIR,
+});
+
+export const currentPolicyStatus = query({
+  args: {},
+  handler: async (ctx) => readCurrentPolicyStatus(ctx),
 });
 
 export const acceptPolicies = mutation({

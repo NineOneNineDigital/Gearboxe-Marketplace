@@ -1,6 +1,6 @@
 import { ConvexError } from "convex/values";
-import type { MutationCtx } from "../_generated/server";
-import { requireCurrentUser } from "./authorization";
+import type { MutationCtx, QueryCtx } from "../_generated/server";
+import { getCurrentUser, requireCurrentUser } from "./authorization";
 
 export type PublishedPolicyPair = Readonly<{
   termsVersion: string;
@@ -21,6 +21,23 @@ export type PolicyAcceptance = {
   termsVersion: string;
   privacyVersion: string;
 };
+
+// Signup can complete before Clerk's webhook provisions the Convex user. This
+// read exposes only the caller's acceptance state and never infers consent from
+// the Clerk session or the old signup checkbox.
+export async function currentPolicyStatus(
+  ctx: QueryCtx,
+  published: PublishedPolicyPair | null = PUBLISHED_POLICY_PAIR,
+) {
+  const user = await getCurrentUser(ctx);
+  if (!published) return { published: null, provisioned: user !== null, accepted: false };
+  if (!user) return { published, provisioned: false, accepted: false };
+  const acceptance = await ctx.db.query("policyAcceptances")
+    .withIndex("by_user_pair", q => q.eq("userId", user._id)
+      .eq("termsVersion", published.termsVersion).eq("privacyVersion", published.privacyVersion))
+    .unique();
+  return { published, provisioned: true, accepted: acceptance !== null };
+}
 
 // The registry argument is for focused tests; public callers cannot supply it.
 export async function recordPolicyAcceptance(
