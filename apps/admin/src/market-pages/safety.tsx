@@ -32,7 +32,7 @@ export default function AdminSafetyPage() {
         <Card><CardHeader><CardTitle>Optional identity reviews</CardTitle></CardHeader><CardContent className="space-y-4"><p className="text-sm text-muted-foreground">Verify only after a manual review with the seller. A request alone is not evidence.</p>{queue.identities.length === 0 && <p>No identity reviews.</p>}{queue.identities.map((review) => <IdentityCase key={review._id} review={review} onFeedback={setFeedback} />)}</CardContent></Card>
         <Card><CardHeader><CardTitle>Abuse escalation</CardTitle></CardHeader><CardContent className="space-y-3 text-sm"><p>For immediate danger, advise the reporter to contact emergency services. Escalate threats, suspected stolen vehicles, fraud rings, or disclosure of private documents to the designated safety lead.</p><p>Record factual evidence, the reason code and the next owner in a case note. Apply suspension or takedown when warranted. Keep the appeal open for independent review.</p><p>Never send private documents through public links or put full VINs, phone numbers or precise addresses into notes. Follow the operating procedure in docs/TRUST_SAFETY.md.</p></CardContent></Card>
       </div>
-      <Card><CardHeader><CardTitle>Immutable admin audit log</CardTitle></CardHeader><CardContent className="space-y-3"><p className="text-sm text-muted-foreground">Latest 200 entries. Entries cannot be edited or deleted through the application.</p>{audit?.map((entry) => <div key={entry._id} className="rounded-md border p-3 text-sm break-words"><p className="font-medium">{reasonLabel(entry.action)} · {new Date(entry.createdAt).toLocaleString()}</p><p>Reason: {entry.reason}</p>{"actorId" in entry && entry.actorId && <p>Actor: {entry.actorId}</p>}{entry.targetUserId && <p>User: {entry.targetUserId}</p>}{"vehicleId" in entry && entry.vehicleId && <p>Listing: {entry.vehicleId}</p>}</div>)}</CardContent></Card>
+        <Card><CardHeader><CardTitle>Immutable admin audit log</CardTitle></CardHeader><CardContent className="space-y-3"><p className="text-sm text-muted-foreground">Latest 200 entries. Entries cannot be edited or deleted through the application.</p>{audit?.map((entry) => <div key={entry._id} className="rounded-md border p-3 text-sm break-words"><p className="font-medium">{reasonLabel(entry.action)} · {new Date(entry.createdAt).toLocaleString()}</p><p>Reason: {entry.reason}</p>{"actorId" in entry && entry.actorId && <p>Actor: {entry.actorId}</p>}{entry.targetUserId && <p>User: {entry.targetUserId}</p>}{"vehicleId" in entry && entry.vehicleId && <p>Listing: {entry.vehicleId}</p>}{entry.wantedRequestId && <p>Wanted request: {entry.wantedRequestId}</p>}</div>)}</CardContent></Card>
     </>}
   </main>;
 }
@@ -48,11 +48,12 @@ function useModerationFeedback(onFeedback: (text: string) => void) {
   return { busy, run };
 }
 
-function ReportCase({ report, onFeedback }: { report: Doc<"trustReports"> & { indicators: string[] }; onFeedback: (text: string) => void }) {
+function ReportCase({ report, onFeedback }: { report: Doc<"trustReports"> & { indicators: string[]; wantedContext: { title: string; status: string; area: string; maxBudget: number } | null }; onFeedback: (text: string) => void }) {
   const moderate = useMutation(api.trust.moderateReport);
   const suspend = useMutation(api.trust.setSuspension);
   const takedown = useMutation(api.trust.takedownListing);
   const restore = useMutation(api.trust.restoreListing);
+  const removeWanted = useMutation(api.wanted.moderateRemove);
   const [reason, setReason] = useState<SafetyReason>(report.reason as SafetyReason);
   const [status, setStatus] = useState<"reviewing" | "resolved" | "dismissed" | "escalated">("reviewing");
   const [note, setNote] = useState("");
@@ -62,6 +63,7 @@ function ReportCase({ report, onFeedback }: { report: Doc<"trustReports"> & { in
   return <div className="space-y-3 rounded-md border p-4">
     <p className="font-semibold">{reasonLabel(report.reason)} · {report.status}</p><p className="text-xs break-words">Case {report._id} · User {report.targetUserId}</p>
     {report.vehicleId && <Link href={`/vehicles/${report.vehicleId}`} className="text-sm underline">View listing</Link>}
+    {report.wantedRequestId && <div className="text-sm"><p>Wanted request: {report.wantedContext?.title ?? "Unavailable"} · {report.wantedContext?.status ?? "missing"}{report.wantedContext && ` · ${report.wantedContext.area} · up to $${report.wantedContext.maxBudget.toLocaleString()}`}</p>{report.wantedContext?.status === "active" && <Link href={`/wanted#request-${report.wantedRequestId}`} className="underline">View public request</Link>}</div>}
     <p className="text-sm whitespace-pre-wrap break-words">{report.details}</p>
     {report.indicators.length > 0 && <p className="text-sm rounded-md bg-amber-50 p-3">Activity indicators: {report.indicators.map(reasonLabel).join(", ")}</p>}
     <form className="space-y-3" onSubmit={(event) => { event.preventDefault(); void run(async () => { await moderate({ reportId: report._id, status, reason, note }); setNote(""); }); }}>
@@ -69,7 +71,7 @@ function ReportCase({ report, onFeedback }: { report: Doc<"trustReports"> & { in
       <label className="block text-sm">Private moderation note<Textarea required maxLength={2000} className="mt-1" value={note} onChange={(event) => setNote(event.target.value)} /></label>
       <Button size="sm" disabled={busy || !note.trim()}>Save case decision</Button>
     </form>
-    <div className="flex flex-wrap gap-2"><Button size="sm" variant="outline" disabled={busy} onClick={() => run(() => suspend({ targetUserId: report.targetUserId, suspended: true, reason }))}>Suspend user & remove listings</Button><Button size="sm" variant="outline" disabled={busy} onClick={() => run(() => suspend({ targetUserId: report.targetUserId, suspended: false, reason }))}>Restore account access</Button>{report.vehicleId && <Button size="sm" variant="outline" disabled={busy} onClick={() => run(() => takedown({ vehicleId: report.vehicleId!, reason }))}>Take down listing</Button>}{report.vehicleId && <Button size="sm" variant="outline" disabled={busy} onClick={() => run(() => restore({ vehicleId: report.vehicleId!, reason }))}>Return listing for review</Button>}<Button size="sm" variant="outline" onClick={() => setShowNotes(!showNotes)}>{showNotes ? "Hide" : "Show"} notes</Button></div>
+    <div className="flex flex-wrap gap-2"><Button size="sm" variant="outline" disabled={busy} onClick={() => run(() => suspend({ targetUserId: report.targetUserId, suspended: true, reason }))}>Suspend user & remove listings</Button><Button size="sm" variant="outline" disabled={busy} onClick={() => run(() => suspend({ targetUserId: report.targetUserId, suspended: false, reason }))}>Restore account access</Button>{report.vehicleId && <Button size="sm" variant="outline" disabled={busy} onClick={() => run(() => takedown({ vehicleId: report.vehicleId!, reason }))}>Take down listing</Button>}{report.vehicleId && <Button size="sm" variant="outline" disabled={busy} onClick={() => run(() => restore({ vehicleId: report.vehicleId!, reason }))}>Return listing for review</Button>}{report.wantedRequestId && report.wantedContext && !["removed", "deleted"].includes(report.wantedContext.status) && <Button size="sm" variant="outline" disabled={busy} onClick={() => run(() => removeWanted({ id: report.wantedRequestId!, reason }))}>Take down wanted request</Button>}<Button size="sm" variant="outline" onClick={() => setShowNotes(!showNotes)}>{showNotes ? "Hide" : "Show"} notes</Button></div>
     {showNotes && <div className="space-y-2">{notes?.length === 0 && <p className="text-sm">No notes.</p>}{notes?.map((entry) => <p key={entry._id} className="text-sm whitespace-pre-wrap break-words">{new Date(entry.createdAt).toLocaleString()} · {reasonLabel(entry.reason)}: {entry.note}</p>)}</div>}
   </div>;
 }

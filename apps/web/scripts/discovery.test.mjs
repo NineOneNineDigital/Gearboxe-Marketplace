@@ -256,6 +256,36 @@ test("reserved vehicles remain public in searches, detail metadata, sitemap, fav
   assert.equal(f.rows("vehicleCatalog").length, 1);
 });
 
+test("shared Sold URL returns only the safe summary regardless of account; other inactive URLs stay generic", async () => {
+  const sold = listing("sold", { status: "sold", vin: "PRIVATEVIN123456789", price: 12345, photos: ["https://private.example/old-photo"], description: "private details" });
+  const f = fixture([
+    sold,
+    listing("draft", { status: "draft" }),
+    listing("withdrawn", { status: "withdrawn" }),
+    listing("moderated", { status: "sold", moderationRemovedAt: 10 }),
+    listing("moderated-active", { moderationRemovedAt: 10 }),
+    listing("active"),
+  ]);
+  const expected = { kind: "sold", year: 2020, make: "Toyota", model: "Camry", location: { city: "Raleigh", state: "NC" } };
+  for (const actor of [null, "buyer", "seller"]) {
+    f.as(actor);
+    assert.deepEqual(await discovery.sharedListing._handler(f.ctx, { id: "sold" }), expected);
+    assert.equal(await vehicles.getPublicVehicleById._handler(f.ctx, { id: "sold" }), null);
+    for (const id of ["draft", "withdrawn", "moderated", "moderated-active", "missing", "invalid-id"]) {
+      assert.deepEqual(await discovery.sharedListing._handler(f.ctx, { id }), { kind: "unavailable" });
+    }
+    assert.equal(await vehicles.getPublicVehicleById._handler(f.ctx, { id: "moderated-active" }), null);
+  }
+  assert.equal(await discovery.metadataVehicle._handler(f.ctx, { id: "sold" }), null);
+  assert.equal(await discovery.metadataVehicle._handler(f.ctx, { id: "moderated" }), null);
+  f.as("seller");
+  const available = await discovery.sharedListing._handler(f.ctx, { id: "active" });
+  assert.equal(available.kind, "available");
+  assert.equal(available.vehicle.vin, undefined);
+  assert.equal(available.vehicle.contactInfo, undefined);
+  assert.equal((await vehicles.getPublicVehicleById._handler(f.ctx, { id: "active" })).contactInfo, "");
+});
+
 test("availability deadline hides active listings at read time while reserved and legacy listings stay public", async () => {
   const now = Date.now();
   const f = await indexedFixture([

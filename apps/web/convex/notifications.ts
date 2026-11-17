@@ -57,6 +57,8 @@ export async function enqueueNotification(ctx: MutationCtx, input: NotificationI
   return id;
 }
 function subject(kind: string) {
+  if (kind === "wanted_expiry_reminder") return "Your Gearboxe wanted request expires soon";
+  if (kind === "wanted_removed") return "Your Gearboxe wanted request was removed";
   if (kind === "new_message") return "You have a new Gearboxe message";
   if (kind === "offer_review_alert") return "A Gearboxe reservation needs support review";
   if (kind.startsWith("offer_")) return "Your Gearboxe offer has an update";
@@ -71,6 +73,8 @@ function subject(kind: string) {
   return "A Gearboxe listing update";
 }
 function emailMessage(kind: string) {
+  if (kind === "wanted_expiry_reminder") return "Your wanted request expires in three days. Sign in to My Requests and choose Still looking to keep it active.";
+  if (kind === "wanted_removed") return "Your wanted request was removed by the safety team. Sign in to My Requests or Safety & support for help.";
   // Email deliberately excludes message content, VIN, contact details, private
   // moderator reasons and event admission/QR credentials.
   if (kind === "new_message") return "You received a new message. Sign in to read it and reply.";

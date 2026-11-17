@@ -5,7 +5,7 @@ export function isPublicVehicleStatus(status: Doc<"vehicles">["status"]) {
 }
 
 export function isPublicVehicle(vehicle: Doc<"vehicles">, now = Date.now()) {
-  return isPublicVehicleStatus(vehicle.status) &&
+  return vehicle.moderationRemovedAt === undefined && isPublicVehicleStatus(vehicle.status) &&
     (vehicle.status === "reserved" || vehicle.availabilityDueAt === undefined || now < vehicle.availabilityDueAt);
 }
 

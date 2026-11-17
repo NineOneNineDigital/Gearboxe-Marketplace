@@ -103,6 +103,21 @@ test("nonadministrators cannot moderate reports or suspend users",async()=>{
  const f=fixture();await assert.rejects(trust.moderateReport._handler(f.ctx,{reportId:"case",status:"resolved",reason:"spam",note:"reviewed"}),/Administrator/);
  await assert.rejects(trust.setSuspension._handler(f.ctx,{targetUserId:"other",suspended:true,reason:"spam"}),/Administrator/);
 });
+test("suspending an account removes its active wanted requests and does not republish on reinstatement", async () => {
+  const f = fixture();
+  f.user.role = "admin";
+  f.tables.users.push({ _id: "other", role: "user" });
+  f.tables.wantedRequests = [
+    { _id: "wanted-active", userId: "other", status: "active", updatedAt: 1 },
+    { _id: "wanted-closed", userId: "other", status: "closed", updatedAt: 1 },
+  ];
+  await trust.setSuspension._handler(f.ctx, { targetUserId: "other", suspended: true, reason: "spam" });
+  assert.equal(f.tables.wantedRequests[0].status, "removed");
+  assert.equal(f.tables.wantedRequests[1].status, "closed");
+  assert.ok(f.tables.adminAuditLog.some(row => row.wantedRequestId === "wanted-active"));
+  await trust.setSuspension._handler(f.ctx, { targetUserId: "other", suspended: false, reason: "spam" });
+  assert.equal(f.tables.wantedRequests[0].status, "removed");
+});
 test("expired documents and tagged orphan files are removed without deleting other storage",async()=>{
  const f=fixture();const storageId=await f.ctx.storage.store(new Blob(["old"],{type:"application/pdf; gearboxe=ownership-document"}));
  f.tables.ownershipDocuments=[{_id:"document",storageId,expiresAt:0}];await trust.cleanupDocuments._handler(f.ctx,{});assert.equal(f.blobs.size,0);

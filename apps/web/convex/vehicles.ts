@@ -214,6 +214,16 @@ export const getVehicleById = query({
   },
 });
 
+// Public detail routes must use the same projection for every visitor, including
+// the owner and administrators. Account management can use getVehicleById.
+export const getPublicVehicleById = query({
+  args: { id: v.id("vehicles") },
+  handler: async (ctx, { id }) => {
+    const vehicle = await ctx.db.get(id);
+    return vehicle && isPublicVehicle(vehicle) ? resolveVehicleMedia(ctx, publicVehicle(vehicle)) : null;
+  },
+});
+
 export const getVehiclesByUser = query({
   args: { userId: v.id("users") },
   handler: async (ctx, args) => {

@@ -16,7 +16,10 @@ import { useToast } from "@/hooks/useToast";
 import { recordLocalView } from "@/lib/recently-viewed";
 import { useAuth } from "@clerk/nextjs";
 import { isAvailableNow, useAvailabilityBoundary } from "@/lib/use-availability-boundary";
+import { discoveryUrl } from "@/lib/discovery-url";
+import type { SharedListing } from "@/lib/public-listing-seo";
 import { useConvexAuth, useMutation, useQuery } from "convex/react";
+import { makeFunctionReference } from "convex/server";
 import {
   Calendar,
   Car,
@@ -39,6 +42,8 @@ interface VehiclePageProps {
   id: string;
 }
 
+const sharedListingQuery = makeFunctionReference<"query", { id: string }, SharedListing>("discovery:sharedListing");
+
 export default function VehicleDetailClient({ id }: VehiclePageProps) {
   const { isAuthenticated, isLoading: isAuthLoading } = useConvexAuth();
   const { isLoaded: clerkAuthLoaded, isSignedIn } = useAuth();
@@ -49,9 +54,9 @@ export default function VehicleDetailClient({ id }: VehiclePageProps) {
   const [showShareMenu, setShowShareMenu] = useState(false);
   const { toast } = useToast();
 
-  const vehicle = useQuery(api.vehicles.getVehicleById, {
-    id: id as Id<"vehicles">,
-  });
+  const sharedListing = useQuery(sharedListingQuery, { id });
+  const vehicle = useQuery(api.vehicles.getPublicVehicleById,
+    sharedListing?.kind === "available" ? { id: id as Id<"vehicles"> } : "skip");
   const seller = useQuery(
     api.users.getUserById,
     vehicle?.userId ? { id: vehicle.userId } : "skip"
@@ -113,7 +118,35 @@ export default function VehicleDetailClient({ id }: VehiclePageProps) {
   }, [showShareMenu]);
 
   // Loading state
-  if (vehicle === undefined) {
+  if (sharedListing?.kind === "sold") {
+    const similar = discoveryUrl({ make: sharedListing.make, model: sharedListing.model, state: sharedListing.location?.state });
+    return <div className="market-page min-h-screen flex flex-col">
+      <Navbar />
+      <main className="market-shell flex-1 py-16 sm:py-24">
+        <div className="mx-auto max-w-xl rounded-2xl border border-black/10 bg-white p-8 text-center sm:p-12">
+          <Car className="mx-auto mb-5 h-10 w-10 text-primary" aria-hidden="true" />
+          <h1 className="text-3xl font-semibold">This car has sold</h1>
+          <p className="mt-5 text-xl">{sharedListing.year} {sharedListing.make} {sharedListing.model}</p>
+          {sharedListing.location && <p className="mt-2 text-sm text-gray-600">{sharedListing.location.city}, {sharedListing.location.state}</p>}
+          <Button asChild className="mt-8"><Link href={similar}>Browse similar cars</Link></Button>
+        </div>
+      </main>
+      <Footer />
+    </div>;
+  }
+
+  if (sharedListing?.kind === "unavailable") {
+    return <div className="market-page min-h-screen flex flex-col">
+      <Navbar />
+      <main className="market-shell flex-1 py-16 sm:py-24 text-center">
+        <h1 className="text-3xl font-semibold">Listing unavailable</h1>
+        <Button asChild className="mt-8"><Link href="/vehicles">Browse cars</Link></Button>
+      </main>
+      <Footer />
+    </div>;
+  }
+
+  if (sharedListing === undefined || vehicle === undefined) {
     return (
       <div className="market-page min-h-screen flex flex-col">
         <Navbar />

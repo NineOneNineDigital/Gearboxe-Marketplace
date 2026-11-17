@@ -36,7 +36,18 @@ export default defineSchema({
   emailSuppressions: defineTable({ email: v.string(), reason: v.string(), createdAt: v.number() }).index("by_email", ["email"]),
   emailWebhookEvents: defineTable({ eventKey: v.string(), createdAt: v.number(), providerId: v.string(), type: v.string(), recipientEmail: v.optional(v.string()), permanentBounce: v.boolean() }).index("by_event", ["eventKey"]).index("by_provider", ["providerId"]).index("by_created", ["createdAt"]),
   ownershipUploadLeases: defineTable({ userId: v.id("users"), vehicleId: v.optional(v.id("vehicles")), token: v.string(), expiresAt: v.number(), used: v.boolean() }).index("by_token", ["token"]).index("by_expiry", ["expiresAt"]),
-  trustReports: defineTable({ reporterId: v.id("users"), targetUserId: v.id("users"), vehicleId: v.optional(v.id("vehicles")), reason: v.string(), details: v.string(), status: v.union(v.literal("open"), v.literal("reviewing"), v.literal("resolved"), v.literal("dismissed"), v.literal("escalated")), createdAt: v.number(), updatedAt: v.number() }).index("by_reporter", ["reporterId"]).index("by_status", ["status"]).index("by_target", ["targetUserId"]).index("by_target_status", ["targetUserId", "status"]),
+  trustReports: defineTable({ reporterId: v.id("users"), targetUserId: v.id("users"), vehicleId: v.optional(v.id("vehicles")), wantedRequestId: v.optional(v.id("wantedRequests")), reason: v.string(), details: v.string(), status: v.union(v.literal("open"), v.literal("reviewing"), v.literal("resolved"), v.literal("dismissed"), v.literal("escalated")), createdAt: v.number(), updatedAt: v.number() }).index("by_reporter", ["reporterId"]).index("by_status", ["status"]).index("by_target", ["targetUserId"]).index("by_target_status", ["targetUserId", "status"]),
+  wantedRequests: defineTable({
+    userId: v.id("users"), title: v.string(), maxBudget: v.number(), zip: v.string(),
+    area: v.string(), radiusMiles: v.optional(v.number()), make: v.optional(v.string()),
+    model: v.optional(v.string()), yearMin: v.optional(v.number()), yearMax: v.optional(v.number()),
+    maxMileage: v.optional(v.number()), transmission: v.optional(v.string()),
+    details: v.optional(v.string()), status: v.union(v.literal("active"), v.literal("expired"), v.literal("closed"), v.literal("removed"), v.literal("deleted")),
+    createdAt: v.number(), updatedAt: v.number(), expiresAt: v.number(), reminderAt: v.number(),
+    remindedForExpiryAt: v.optional(v.number()), closedAt: v.optional(v.number()), removedAt: v.optional(v.number()), moderationReason: v.optional(v.string()), deletedAt: v.optional(v.number()),
+  }).index("by_status_expiry", ["status", "expiresAt"])
+    .index("by_status_reminder", ["status", "reminderAt"])
+    .index("by_user_created", ["userId", "createdAt"]),
   userBlocks: defineTable({ userId: v.id("users"), blockedUserId: v.id("users"), createdAt: v.number() }).index("by_pair", ["userId", "blockedUserId"]).index("by_user", ["userId"]),
   trustRateLimits: defineTable({ userId: v.id("users"), action: v.string(), windowStart: v.number(), count: v.number() }).index("by_user_action", ["userId", "action"]),
   trustNotes: defineTable({ reportId: v.id("trustReports"), adminId: v.id("users"), note: v.string(), reason: v.string(), createdAt: v.number() }).index("by_report", ["reportId"]),
@@ -92,6 +103,7 @@ export default defineSchema({
     targetUserId: v.optional(v.id("users")),
     actorId: v.optional(v.id("users")),
     vehicleId: v.optional(v.id("vehicles")),
+    wantedRequestId: v.optional(v.id("wantedRequests")),
     reportId: v.optional(v.id("trustReports")),
     source: v.string(),
     reason: v.string(),

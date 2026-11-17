@@ -32,6 +32,18 @@ export function vehicleBrowseMetadata(filtered = false): Metadata {
   };
 }
 
+export function soldListingMetadata(listing: { year: number; make: string; model: string }, url: string): Metadata {
+  const title = `${listing.year} ${listing.make} ${listing.model} has sold | Gearboxe`;
+  return {
+    title,
+    description: "This car has sold. Browse similar cars on Gearboxe.",
+    alternates: { canonical: url },
+    robots: { index: false, follow: true },
+    openGraph: { title, description: "This car has sold. Browse similar cars on Gearboxe.", type: "website", url, images: [] },
+    twitter: { card: "summary", title, description: "This car has sold. Browse similar cars on Gearboxe.", images: [] },
+  };
+}
+
 export function serializeJsonLd(value: unknown): string {
   return JSON.stringify(value).replace(/</g, "\\u003c");
 }

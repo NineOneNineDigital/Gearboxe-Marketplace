@@ -8,6 +8,8 @@ import { resolveVehicleMedia } from "./lib/vehicleMedia";
 import { syncDiscovery } from "./lib/discoveryIndex";
 import { requireAdmin } from "./lib/authorization";
 import { mutation } from "./_generated/server";
+import type { Doc } from "./_generated/dataModel";
+import type { QueryCtx } from "./_generated/server";
 import { matchesVehicleFacets } from "../lib/vehicle-facets";
 
 function boundedPagination(options: PaginationOptions, cap: number, rows = 256) {
@@ -69,15 +71,36 @@ export const recentPublic = query({ args: { ids: v.array(v.string()) }, handler:
   return rows.filter(row => row !== null);
 } });
 
+async function publicMetadata(ctx: QueryCtx, vehicle: Doc<"vehicles">) {
+  const media = await resolveVehicleMedia(ctx, publicVehicle(vehicle));
+  return { _id: vehicle._id, title: vehicle.title, year: vehicle.year, make: vehicle.make, model: vehicle.model, trim: vehicle.trim, price: vehicle.price, mileage: vehicle.mileage, mileageUnit: vehicle.mileageUnit, status: media.status,
+    location: vehicle.location ? { city: vehicle.location.city, state: vehicle.location.state } : undefined,
+    photoUrl: media.photos[0], updatedAt: vehicle.updatedAt ?? vehicle.createdAt };
+}
+
 export const metadataVehicle = query({
   args: { id: v.id("vehicles") },
   handler: async (ctx, { id }) => {
     const vehicle = await ctx.db.get(id);
-    if (!vehicle || !isPublicVehicle(vehicle)) return null;
-    const media = await resolveVehicleMedia(ctx, publicVehicle(vehicle));
-    return { _id: vehicle._id, title: vehicle.title, year: vehicle.year, make: vehicle.make, model: vehicle.model, trim: vehicle.trim, price: vehicle.price, mileage: vehicle.mileage, mileageUnit: vehicle.mileageUnit, status: media.status,
+    return vehicle && isPublicVehicle(vehicle) ? publicMetadata(ctx, vehicle) : null;
+  },
+});
+
+// A direct/shared URL has a deliberately small, authentication-independent
+// projection. Every private, missing, or moderated listing is indistinguishable.
+export const sharedListing = query({
+  args: { id: v.string() },
+  handler: async (ctx, { id }) => {
+    const normalized = ctx.db.normalizeId("vehicles", id);
+    const vehicle = normalized ? await ctx.db.get(normalized) : null;
+    if (!vehicle || vehicle.moderationRemovedAt !== undefined) return { kind: "unavailable" as const };
+    if (vehicle.status === "sold") return {
+      kind: "sold" as const,
+      year: vehicle.year, make: vehicle.make, model: vehicle.model,
       location: vehicle.location ? { city: vehicle.location.city, state: vehicle.location.state } : undefined,
-      photoUrl: media.photos[0], updatedAt: vehicle.updatedAt ?? vehicle.createdAt };
+    };
+    if (!isPublicVehicle(vehicle)) return { kind: "unavailable" as const };
+    return { kind: "available" as const, vehicle: await publicMetadata(ctx, vehicle) };
   },
 });
 export const sitemapManifest = query({ args: {}, handler: async ctx => {

@@ -50,6 +50,7 @@ import type * as lib_vehicleValidation from "../lib/vehicleValidation.js";
 import type * as lib_vehicleVisibility from "../lib/vehicleVisibility.js";
 import type * as lib_vinDecoder from "../lib/vinDecoder.js";
 import type * as lib_vpic from "../lib/vpic.js";
+import type * as lib_wantedPolicy from "../lib/wantedPolicy.js";
 import type * as media from "../media.js";
 import type * as mediaProcessing from "../mediaProcessing.js";
 import type * as mediaRecords from "../mediaRecords.js";
@@ -71,6 +72,7 @@ import type * as trustDocuments from "../trustDocuments.js";
 import type * as users from "../users.js";
 import type * as vehicles from "../vehicles.js";
 import type * as vin from "../vin.js";
+import type * as wanted from "../wanted.js";
 
 /**
  * A utility for referencing Convex functions in your app's API.
@@ -118,6 +120,7 @@ declare const fullApi: ApiFromModules<{
   "lib/vehicleVisibility": typeof lib_vehicleVisibility;
   "lib/vinDecoder": typeof lib_vinDecoder;
   "lib/vpic": typeof lib_vpic;
+  "lib/wantedPolicy": typeof lib_wantedPolicy;
   media: typeof media;
   mediaProcessing: typeof mediaProcessing;
   mediaRecords: typeof mediaRecords;
@@ -139,6 +142,7 @@ declare const fullApi: ApiFromModules<{
   users: typeof users;
   vehicles: typeof vehicles;
   vin: typeof vin;
+  wanted: typeof wanted;
 }>;
 export declare const api: FilterApi<
   typeof fullApi,
