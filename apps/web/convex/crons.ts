@@ -8,6 +8,7 @@ crons.interval("recover listing availability checks", { minutes: 1 }, internal.v
 crons.interval("remind expiring wanted requests", { hours: 1 }, internal.wanted.remindExpiring, {});
 crons.interval("expire wanted requests", { minutes: 1 }, internal.wanted.expireDue, {});
 crons.interval("clean abandoned vehicle uploads", { minutes: 15 }, internal.mediaRecords.cleanup, {});
+crons.interval("clean abandoned private wanted photos", { minutes: 15 }, internal.wantedMedia.cleanup, {});
 crons.interval("clean old listing view sessions", { hours: 1 }, internal.vehicles.cleanupViews, {});
 crons.interval("purge closed listing sensitive data", { hours: 24 }, internal.privacy.cleanup, { cursor: null });
 crons.interval("purge VIN decode cache", { hours: 24 }, internal.privacy.cleanupVinCache, {});

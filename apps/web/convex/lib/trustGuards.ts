@@ -26,6 +26,15 @@ export async function assertCanContact(ctx: QueryCtx | MutationCtx, senderId: Id
     if (pairs.some(Boolean))
         throw new Error("Messaging is unavailable between these accounts");
 }
+export async function assertNoRecentDuplicateMessage(ctx: QueryCtx | MutationCtx, senderId: Id<"users">, content: string) {
+    const cutoff = Date.now() - 60_000;
+    const [listingMessages, wantedMessages] = await Promise.all([
+        ctx.db.query("messages").withIndex("by_sender", q => q.eq("senderId", senderId)).order("desc").take(30),
+        ctx.db.query("wantedMessages").withIndex("by_sender", q => q.eq("senderId", senderId)).order("desc").take(30),
+    ]);
+    if ([...listingMessages, ...wantedMessages].some(message => message.content === content && message.createdAt > cutoff))
+        throw new Error("Wait before sending the same message again");
+}
 export function assertBuyerEmailVerified(user: Pick<Doc<"users">, "emailVerified">) {
     if (!user.emailVerified)
         throw new Error("Verify your email in account settings before contacting a seller or saving a listing");

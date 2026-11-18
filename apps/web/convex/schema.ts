@@ -48,6 +48,23 @@ export default defineSchema({
   }).index("by_status_expiry", ["status", "expiresAt"])
     .index("by_status_reminder", ["status", "reminderAt"])
     .index("by_user_created", ["userId", "createdAt"]),
+  wantedConversations: defineTable({
+    requestId: v.id("wantedRequests"), buyerId: v.id("users"), sellerId: v.id("users"),
+    requestSnapshot: v.object({ title: v.string(), maxBudget: v.number(), area: v.string(), radiusMiles: v.optional(v.number()), make: v.optional(v.string()), model: v.optional(v.string()), yearMin: v.optional(v.number()), yearMax: v.optional(v.number()), maxMileage: v.optional(v.number()), transmission: v.optional(v.string()), details: v.optional(v.string()) }),
+    sellerVehicle: v.object({ year: v.number(), make: v.string(), model: v.string(), askingPrice: v.number(), mileage: v.number(), city: v.string(), state: v.string() }),
+    lastMessageAt: v.number(), createdAt: v.number(), dismissedAt: v.optional(v.number()),
+  }).index("by_request_seller", ["requestId", "sellerId"]).index("by_buyer", ["buyerId"]).index("by_seller", ["sellerId"]),
+  wantedMessages: defineTable({
+    conversationId: v.id("wantedConversations"), senderId: v.id("users"), recipientId: v.id("users"),
+    content: v.string(), photoIds: v.array(v.id("wantedReplyPhotos")), read: v.boolean(), createdAt: v.number(),
+  }).index("by_conversation", ["conversationId"]).index("by_sender", ["senderId"]).index("by_conversation_recipient_read", ["conversationId", "recipientId", "read"]),
+  wantedReplyPhotos: defineTable({
+    userId: v.id("users"), requestId: v.id("wantedRequests"), conversationId: v.optional(v.id("wantedConversations")),
+    messageId: v.optional(v.id("wantedMessages")), token: v.string(),
+    status: v.union(v.literal("awaiting"), v.literal("uploading"), v.literal("uploaded"), v.literal("processing"), v.literal("ready")),
+    sourceId: v.optional(v.id("_storage")), detailId: v.optional(v.id("_storage")),
+    createdAt: v.number(), expiresAt: v.number(),
+  }).index("by_token", ["token"]).index("by_user_request", ["userId", "requestId"]).index("by_expiry", ["expiresAt"]),
   userBlocks: defineTable({ userId: v.id("users"), blockedUserId: v.id("users"), createdAt: v.number() }).index("by_pair", ["userId", "blockedUserId"]).index("by_user", ["userId"]),
   trustRateLimits: defineTable({ userId: v.id("users"), action: v.string(), windowStart: v.number(), count: v.number() }).index("by_user_action", ["userId", "action"]),
   trustNotes: defineTable({ reportId: v.id("trustReports"), adminId: v.id("users"), note: v.string(), reason: v.string(), createdAt: v.number() }).index("by_report", ["reportId"]),

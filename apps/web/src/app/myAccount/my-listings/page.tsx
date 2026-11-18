@@ -8,6 +8,7 @@ import { Navbar } from "@/components/ui/navbar";
 import { RegisterVehicle } from "@/components/ui/register-vehicle";
 import { QRDisplay } from "@/components/ui/qr-display";
 import { ListingNotifications } from "@/components/ui/listing-notifications";
+import { SellerShareKit } from "@/components/ui/seller-share-kit";
 import { Toast, ToastClose, ToastDescription, ToastProvider, ToastTitle, ToastViewport } from "@/components/ui/toast";
 import { useToast } from "@/hooks/useToast";
 import { api } from "@/convex/_generated/api";
@@ -20,6 +21,7 @@ import {
   Eye,
   Plus,
   QrCode,
+  Share2,
   Trash2,
   XCircle,
 } from "lucide-react";
@@ -44,6 +46,7 @@ function MyListingsContent() {
   const { isAuthenticated, isLoading } = useConvexAuth();
   const { user } = useUser();
   const [selectedQR, setSelectedQR] = useState<string | null>(null);
+  const [shareListingId, setShareListingId] = useState<Id<"vehicles"> | null>(null);
 
   // Always call hooks to maintain hook order
   const currentUser = useQuery(
@@ -341,6 +344,13 @@ function MyListingsContent() {
                           View
                         </Link>
                       </Button>
+                      {["active", "approved", "reserved"].includes(vehicle.status) && !expiredActive && <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        onClick={() => setShareListingId(vehicle._id)}
+                        aria-label={`Share ${vehicle.year} ${vehicle.make} ${vehicle.model}`}
+                      ><Share2 className="mr-1 h-4 w-4" />Share</Button>}
                       {["draft", "rejected"].includes(vehicle.status) && !registration && (!metrics || metrics.conversations === 0) && <Button
                         variant="outline"
                         size="sm"
@@ -400,6 +410,7 @@ function MyListingsContent() {
       </div>
 
       {/* QR Code Modal */}
+      {shareListingId && <SellerShareKit id={shareListingId} onClose={() => setShareListingId(null)} />}
       {selectedQR && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-50">
           <div className="bg-white rounded-lg p-6 max-w-sm w-full">

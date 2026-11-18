@@ -233,6 +233,34 @@ export const getVehiclesByUser = query({
   },
 });
 
+// The seller's share tools must not receive the editable listing record.
+// Return only currently public, approved fields used by the post and card.
+export const getSellerShareListing = query({
+  args: { id: v.id("vehicles") },
+  handler: async (ctx, { id }) => {
+    const user = await requireCurrentUser(ctx);
+    const vehicle = await ctx.db.get(id);
+    if (!vehicle || vehicle.userId !== user._id || !isPublicVehicle(vehicle)) return null;
+    const resolved = await resolveVehicleMedia(ctx, vehicle);
+    return {
+      id: vehicle._id,
+      year: vehicle.year,
+      make: vehicle.make,
+      model: vehicle.model,
+      trim: vehicle.trim,
+      transmission: vehicle.transmission,
+      drivetrain: vehicle.drivetrain,
+      fuelType: vehicle.fuelType,
+      price: vehicle.price,
+      mileage: vehicle.mileage,
+      mileageUnit: vehicle.mileageUnit,
+      city: vehicle.location?.city,
+      state: vehicle.location?.state,
+      leadPhotoUrl: resolved.photos[0],
+    };
+  },
+});
+
 export const updateVehicle = mutation({
   args: {
     id: v.id("vehicles"),

@@ -73,6 +73,10 @@ import type * as users from "../users.js";
 import type * as vehicles from "../vehicles.js";
 import type * as vin from "../vin.js";
 import type * as wanted from "../wanted.js";
+import type * as wantedConversations from "../wantedConversations.js";
+import type * as wantedMedia from "../wantedMedia.js";
+import type * as wantedMediaHttp from "../wantedMediaHttp.js";
+import type * as wantedMediaProcessing from "../wantedMediaProcessing.js";
 
 /**
  * A utility for referencing Convex functions in your app's API.
@@ -143,6 +147,10 @@ declare const fullApi: ApiFromModules<{
   vehicles: typeof vehicles;
   vin: typeof vin;
   wanted: typeof wanted;
+  wantedConversations: typeof wantedConversations;
+  wantedMedia: typeof wantedMedia;
+  wantedMediaHttp: typeof wantedMediaHttp;
+  wantedMediaProcessing: typeof wantedMediaProcessing;
 }>;
 export declare const api: FilterApi<
   typeof fullApi,
