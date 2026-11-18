@@ -1,6 +1,7 @@
 import type { UserJSON } from "@clerk/backend";
 import { v, type Validator } from "convex/values";
 import { paginationOptsValidator } from "convex/server";
+import { internal } from "./_generated/api";
 import { provisionFirstSuperAdmin } from "./lib/provisioning";
 import { PUBLISHED_POLICY_PAIR, currentPolicyStatus as readCurrentPolicyStatus, recordPolicyAcceptance } from "./lib/policyConsent";
 import {
@@ -91,6 +92,11 @@ export const upsertFromClerk = internalMutation({
     };
 
     const user = await userByExternalId(ctx, data.id);
+    if (user?.deletedAt !== undefined) {
+      // Clerk webhooks may be delivered out of order. A deleted account must
+      // never be recreated by a delayed user.updated event.
+      return;
+    }
     if (user === null) {
       await ctx.db.insert("users", userAttributes);
     } else {
@@ -109,14 +115,26 @@ export const deleteFromClerk = internalMutation({
   args: { clerkUserId: v.string() },
   async handler(ctx, { clerkUserId }) {
     const user = await userByExternalId(ctx, clerkUserId);
-
-    if (user !== null) {
-      await ctx.db.delete(user._id);
-    } else {
-      console.warn(
-        `Can't delete user, there is none for Clerk user ID: ${clerkUserId}`
-      );
+    if (!user) {
+      // A deletion may arrive before Clerk's create/update delivery. Retain a
+      // minimal tombstone keyed by the Clerk ID so late events cannot revive it.
+      await ctx.db.insert("users", { externalId: clerkUserId, deletedAt: Date.now(),
+        name: "Deleted account", email: "", emailVerified: false, phoneVerified: false,
+        role: "user", createdAt: Date.now() });
+      return;
     }
+    if (user.deletedAt !== undefined) {
+      await ctx.scheduler.runAfter(0, internal.accountDeletion.cleanup, { userId: user._id, phase: "vehicles", cursor: null });
+      return;
+    }
+    const deletedAt = Date.now();
+    // Keep a stable internal participant ID for authorized read-only history.
+    // All public reads treat this tombstone as absent.
+    await ctx.db.patch(user._id, {
+      deletedAt, name: "Deleted account", email: "", phone: undefined,
+      emailVerified: false, phoneVerified: false, role: "user", notificationPreferences: undefined,
+    });
+    await ctx.scheduler.runAfter(0, internal.accountDeletion.cleanup, { userId: user._id, phase: "vehicles", cursor: null });
   },
 });
 
@@ -173,6 +191,7 @@ export const getUserById = query({
   args: { id: v.id("users") },
   handler: async (ctx, { id }) => {
     const user = await ctx.db.get(id);
+    if (!user || user.deletedAt !== undefined) return null;
     const identity = user ? await ctx.db.query("identityReviews").withIndex("by_user", q => q.eq("userId", user._id)).unique() : null;
     return user
       ? { _id: user._id, name: user.name, createdAt: user.createdAt, emailVerified: !!user.emailVerified, phoneVerified: !!user.phoneVerified, identityVerified: identity?.status === "verified" }

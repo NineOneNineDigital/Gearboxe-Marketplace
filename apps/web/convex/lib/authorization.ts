@@ -8,10 +8,11 @@ export async function getCurrentUser(ctx: AuthContext) {
   const identity = await ctx.auth.getUserIdentity();
   if (!identity) return null;
 
-  return await ctx.db
+  const user = await ctx.db
     .query("users")
     .withIndex("byExternalId", (q) => q.eq("externalId", identity.subject))
     .unique();
+  return user?.deletedAt === undefined ? user : null;
 }
 
 export async function requireCurrentUser(ctx: AuthContext) {
@@ -24,7 +25,7 @@ export async function requireCurrentUser(ctx: AuthContext) {
 }
 
 export function isAdmin(user: Doc<"users">) {
-  return user.suspendedAt === undefined && (user.role === "admin" || user.role === "superAdmin");
+  return user.deletedAt === undefined && user.suspendedAt === undefined && (user.role === "admin" || user.role === "superAdmin");
 }
 
 export async function requireAdmin(ctx: AuthContext) {

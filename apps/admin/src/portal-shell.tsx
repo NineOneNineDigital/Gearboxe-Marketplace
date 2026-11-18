@@ -12,6 +12,7 @@ import { AccountMenu } from "./account-menu";
 const marketLinks = [
   { href: "/admin", label: "Overview", icon: CarFront },
   { href: "/admin/listings", label: "Listings", icon: ClipboardList },
+  { href: "/admin/photo-reviews", label: "Photo reviews", icon: ClipboardList },
   { href: "/admin/events", label: "Events setup", icon: CalendarDays },
   { href: "/admin/safety", label: "Trust & safety", icon: ShieldCheck },
   { href: "/admin/payments", label: "Payments", icon: CreditCard },

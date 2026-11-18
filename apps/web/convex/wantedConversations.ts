@@ -107,7 +107,7 @@ export const listMine = query({ args: {}, handler: async ctx => {
       ctx.db.query("wantedMessages").withIndex("by_conversation_recipient_read", q => q.eq("conversationId", row._id).eq("recipientId", user._id).eq("read", false)).collect(),
     ]);
     return { _id: row._id, requestId: row.requestId, role: row.buyerId === user._id ? "buyer" as const : "seller" as const,
-      otherUserName: other ? (row.buyerId === user._id ? (other.name || "Seller") : "Buyer") : "Deleted account", requestSnapshot: row.requestSnapshot, sellerVehicle: row.sellerVehicle,
+      otherUserName: other && other.deletedAt === undefined ? (row.buyerId === user._id ? (other.name || "Seller") : "Buyer") : "Deleted account", requestSnapshot: row.requestSnapshot, sellerVehicle: row.sellerVehicle,
       lastMessageAt: row.lastMessageAt, dismissed: row.dismissedAt !== undefined, lastMessage: last ? { content: last.content, createdAt: last.createdAt } : null, unreadCount: unread.length };
   }));
 } });
@@ -124,7 +124,7 @@ export const getThread = query({ args: { conversationId: v.id("wantedConversatio
   }
   const { _id, requestId, requestSnapshot, sellerVehicle, createdAt, lastMessageAt } = thread;
   return { conversation: { _id, requestId, requestSnapshot, sellerVehicle, createdAt, lastMessageAt, role: thread.buyerId === user._id ? "buyer" as const : "seller" as const },
-    otherUserName: other ? (thread.buyerId === user._id ? (other.name || "Seller") : "Buyer") : "Deleted account", canContact, blocked: !!ownBlock, dismissed: thread.dismissedAt !== undefined };
+    otherUserName: other && other.deletedAt === undefined ? (thread.buyerId === user._id ? (other.name || "Seller") : "Buyer") : "Deleted account", canContact, blocked: !!ownBlock, dismissed: thread.dismissedAt !== undefined };
 } });
 
 export const dismiss = mutation({ args: { conversationId: v.id("wantedConversations") }, handler: async (ctx, { conversationId }) => {

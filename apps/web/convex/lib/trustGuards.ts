@@ -15,9 +15,9 @@ export async function consumeRateLimit(ctx: MutationCtx, userId: Id<"users">, ac
 }
 export async function assertCanContact(ctx: QueryCtx | MutationCtx, senderId: Id<"users">, recipientId: Id<"users">) {
     const [sender, recipient] = await Promise.all([ctx.db.get(senderId), ctx.db.get(recipientId)]);
-    if (!sender || sender.suspendedAt !== undefined)
+    if (!sender || sender.deletedAt !== undefined || sender.suspendedAt !== undefined)
         throw new Error("This account cannot send messages");
-    if (!recipient || recipient.suspendedAt !== undefined)
+    if (!recipient || recipient.deletedAt !== undefined || recipient.suspendedAt !== undefined)
         throw new Error("This account cannot receive messages");
     const pairs = await Promise.all([
         ctx.db.query("userBlocks").withIndex("by_pair", q => q.eq("userId", senderId).eq("blockedUserId", recipientId)).unique(),
@@ -28,11 +28,12 @@ export async function assertCanContact(ctx: QueryCtx | MutationCtx, senderId: Id
 }
 export async function assertNoRecentDuplicateMessage(ctx: QueryCtx | MutationCtx, senderId: Id<"users">, content: string) {
     const cutoff = Date.now() - 60_000;
-    const [listingMessages, wantedMessages] = await Promise.all([
+    const [listingMessages, wantedMessages, photoRequestEntries] = await Promise.all([
         ctx.db.query("messages").withIndex("by_sender", q => q.eq("senderId", senderId)).order("desc").take(30),
         ctx.db.query("wantedMessages").withIndex("by_sender", q => q.eq("senderId", senderId)).order("desc").take(30),
+        ctx.db.query("photoRequestEntries").withIndex("by_sender", q => q.eq("senderId", senderId)).order("desc").take(30),
     ]);
-    if ([...listingMessages, ...wantedMessages].some(message => message.content === content && message.createdAt > cutoff))
+    if ([...listingMessages, ...wantedMessages, ...photoRequestEntries].some(message => message.content === content && message.createdAt > cutoff))
         throw new Error("Wait before sending the same message again");
 }
 export function assertBuyerEmailVerified(user: Pick<Doc<"users">, "emailVerified">) {

@@ -38,7 +38,11 @@ export const browse = query({
   handler: async (ctx, { paginationOpts }) => {
     const now = Date.now();
     const result = await ctx.db.query("wantedRequests").withIndex("by_status_expiry", q => q.eq("status", "active").gt("expiresAt", now)).order("desc").paginate(paginationOpts);
-    return { ...result, page: result.page.map(wantedPublicProjection) };
+    const visible = await Promise.all(result.page.map(async row => {
+      const owner = await ctx.db.get(row.userId);
+      return owner && owner.deletedAt === undefined ? wantedPublicProjection(row) : null;
+    }));
+    return { ...result, page: visible.filter((row): row is NonNullable<typeof row> => row !== null) };
   },
 });
 
@@ -124,6 +128,8 @@ export const report = mutation({
     const reporter = await requireCurrentUser(ctx);
     const row = await ctx.db.get(args.id);
     if (!row || !wantedIsPublic(row, Date.now()) || row.userId === reporter._id) throw new Error("Wanted request unavailable.");
+    const owner = await ctx.db.get(row.userId);
+    if (!owner || owner.deletedAt !== undefined) throw new Error("Wanted request unavailable.");
     await consumeRateLimit(ctx, reporter._id, "report");
     const now = Date.now();
     return ctx.db.insert("trustReports", { reporterId: reporter._id, targetUserId: row.userId, wantedRequestId: row._id, reason: trustReason(args.reason), details: trustText(args.details, "Report details"), status: "open", createdAt: now, updatedAt: now });
@@ -145,6 +151,11 @@ export const moderateRemove = mutation({
 });
 
 async function sendReminder(ctx: MutationCtx, row: Doc<"wantedRequests">, now: number) {
+  const owner = await ctx.db.get(row.userId);
+  if (!owner || owner.deletedAt !== undefined) {
+    if (row.status === "active") await ctx.db.patch(row._id, { reminderAt: Number.MAX_SAFE_INTEGER });
+    return;
+  }
   if (!wantedReminderDue(row, now)) {
     if (row.status === "active" && row.reminderAt <= now) await ctx.db.patch(row._id, { reminderAt: Number.MAX_SAFE_INTEGER });
     return;

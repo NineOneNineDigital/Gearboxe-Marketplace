@@ -37,7 +37,7 @@ export async function enqueueNotification(ctx: MutationCtx, input: NotificationI
   if (existing) return existing._id;
   if (!safeNotificationPath(input.link) || !categories.includes(input.category)) throw new Error("Invalid notification link or category");
   const user = await ctx.db.get(input.userId);
-  if (!user) return null;
+  if (!user || user.deletedAt !== undefined) return null;
   const { email, sourceUserId, ...fields } = input;
   const now = Date.now();
   const id = await ctx.db.insert("notifications", { ...fields, createdAt: now });

@@ -13,7 +13,9 @@ export const deliver = internalAction({
     const unsubscribeToken = crypto.randomUUID() + crypto.randomUUID();
     const mail: Doc<"emailOutbox"> | null = await ctx.runMutation(internal.emailRecords.claim, { id, leaseToken, unsubscribeToken });
     if (!mail?.recipientEmail || !mail.unsubscribeToken) return;
-    const outcome = await sendAutosend(config, { ...mail, recipientEmail: mail.recipientEmail, unsubscribeToken: mail.unsubscribeToken });
+    const ready: Doc<"emailOutbox"> | null = await ctx.runMutation(internal.emailRecords.checkBeforeSend, { id, leaseToken });
+    if (!ready?.recipientEmail || !ready.unsubscribeToken) return;
+    const outcome = await sendAutosend(config, { ...ready, recipientEmail: ready.recipientEmail, unsubscribeToken: ready.unsubscribeToken });
     await ctx.runMutation(internal.emailRecords.complete, { id, leaseToken, status: outcome.status, providerId: outcome.providerId, error: outcome.error, delayMs: outcome.delayMs });
   },
 });

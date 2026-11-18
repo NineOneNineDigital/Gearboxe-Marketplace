@@ -29,7 +29,7 @@ export const claim = internalMutation({
     const now = Date.now();
     if (!row || row.status !== "pending" || row.nextAttemptAt > now) return null;
     const user = await ctx.db.get(row.userId);
-    let allowed = !!user && emailAllowed(user, row.category);
+    let allowed = !!user && user.deletedAt === undefined && emailAllowed(user, row.category);
     if (allowed && row.sourceUserId) {
       try { await assertCanContact(ctx, row.sourceUserId, row.userId); } catch { allowed = false; }
     }
@@ -46,6 +46,22 @@ export const claim = internalMutation({
     const patch = { status: "sending", recipientEmail: email, leaseToken, leaseExpiresAt: now + EMAIL_LEASE_MS, unsubscribeToken: row.unsubscribeToken || unsubscribeToken, attempts: row.attempts + 1, updatedAt: now };
     await ctx.db.patch(id, patch);
     return { ...row, ...patch };
+  },
+});
+
+// Recheck immediately before the provider call: a Clerk deletion can commit
+// after claim returns while this action is still preparing the request.
+export const checkBeforeSend = internalMutation({
+  args: { id: v.id("emailOutbox"), leaseToken: v.string() },
+  handler: async (ctx, { id, leaseToken }) => {
+    const row = await ctx.db.get(id);
+    if (!row || row.status !== "sending" || row.leaseToken !== leaseToken) return null;
+    const user = await ctx.db.get(row.userId);
+    if (user && user.deletedAt === undefined) return row;
+    await ctx.db.patch(id, { status: "skipped", recipientEmail: undefined,
+      unsubscribeToken: undefined, leaseToken: undefined, leaseExpiresAt: undefined,
+      lastError: "recipient_deleted", updatedAt: Date.now() });
+    return null;
   },
 });
 

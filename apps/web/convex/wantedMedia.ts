@@ -67,6 +67,8 @@ export const claimUpload = internalMutation({ args: { token: v.string() }, handl
 export const recordSource = internalMutation({ args: { photoId: v.id("wantedReplyPhotos"), storageId: v.id("_storage") }, handler: async (ctx, { photoId, storageId }) => {
   const row = await ctx.db.get(photoId);
   if (!row || row.status !== "uploading" || row.expiresAt < Date.now()) throw new Error("Upload expired");
+  const owner = await ctx.db.get(row.userId);
+  if (!owner || owner.deletedAt !== undefined) throw new Error("Upload unavailable");
   await ctx.db.patch(photoId, { sourceId: storageId, status: "uploaded" });
 } });
 
@@ -80,6 +82,8 @@ export const claimProcessing = internalMutation({ args: { photoId: v.id("wantedR
 export const complete = internalMutation({ args: { photoId: v.id("wantedReplyPhotos"), detailId: v.id("_storage") }, handler: async (ctx, { photoId, detailId }) => {
   const row = await ctx.db.get(photoId);
   if (!row || row.status !== "processing" || !row.sourceId) throw new Error("Upload unavailable");
+  const owner = await ctx.db.get(row.userId);
+  if (!owner || owner.deletedAt !== undefined) throw new Error("Upload unavailable");
   await ctx.storage.delete(row.sourceId);
   await ctx.db.patch(photoId, { detailId, sourceId: undefined, status: "ready", token: "" });
   return { photoId };

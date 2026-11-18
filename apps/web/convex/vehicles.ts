@@ -15,7 +15,7 @@ import type { Doc } from "./_generated/dataModel";
 import type { MutationCtx } from "./_generated/server";
 import { onOfferListingTransition } from "./lib/offerListing";
 import { assertPublicationReview, rememberReviewTriggers } from "./lib/ownershipReview";
-import { isPublicVehicle, publicVehicle, normalizeVehicleStatus } from "./lib/vehicleVisibility";
+import { isPublicVehicle, isPublicVehicleFromActiveSeller, publicVehicle, normalizeVehicleStatus } from "./lib/vehicleVisibility";
 import { mediaReference, attachMedia, resolveVehicleMedia } from "./lib/vehicleMedia";
 import { removeMedia } from "./mediaRecords";
 import { enqueueNotification, notifySeller, notifyListingFollowers } from "./notifications";
@@ -174,7 +174,6 @@ export const getVehicles = query({
 
     const legacy = requestedStatus === "active" ? await ctx.db.query("vehicles").withIndex("by_status", q => q.eq("status", "approved")).collect() : [];
     const filtered = [...vehicles, ...legacy].filter((vehicle) => {
-      if ((requestedStatus === "active" || requestedStatus === "approved") && !isPublicVehicle(vehicle)) return false;
       if (args.make && vehicle.make.toLowerCase() !== args.make.toLowerCase()) {
         return false;
       }
@@ -197,8 +196,11 @@ export const getVehicles = query({
         return false;
       }
       return true;
-    }).map(vehicle => requestedStatus === "active" || requestedStatus === "approved" ? publicVehicle(vehicle) : vehicle);
-    return Promise.all(filtered.map(vehicle => resolveVehicleMedia(ctx, vehicle)));
+    });
+    const publicRead = requestedStatus === "active" || requestedStatus === "approved";
+    const visible = await Promise.all(filtered.map(async vehicle =>
+      (!publicRead || await isPublicVehicleFromActiveSeller(ctx, vehicle)) ? vehicle : null));
+    return Promise.all(visible.filter(vehicle => vehicle !== null).map(vehicle => resolveVehicleMedia(ctx, publicRead ? publicVehicle(vehicle) : vehicle)));
   },
 });
 
@@ -209,7 +211,7 @@ export const getVehicleById = query({
     if (!vehicle) return null;
     const user = await getCurrentUser(ctx);
     if (user && (vehicle.userId === user._id || isAdmin(user))) return resolveVehicleMedia(ctx, normalizeVehicleStatus(vehicle));
-    if (isPublicVehicle(vehicle)) return resolveVehicleMedia(ctx, publicVehicle(vehicle));
+    if (await isPublicVehicleFromActiveSeller(ctx, vehicle)) return resolveVehicleMedia(ctx, publicVehicle(vehicle));
     return null;
   },
 });
@@ -220,7 +222,7 @@ export const getPublicVehicleById = query({
   args: { id: v.id("vehicles") },
   handler: async (ctx, { id }) => {
     const vehicle = await ctx.db.get(id);
-    return vehicle && isPublicVehicle(vehicle) ? resolveVehicleMedia(ctx, publicVehicle(vehicle)) : null;
+    return vehicle && await isPublicVehicleFromActiveSeller(ctx, vehicle) ? resolveVehicleMedia(ctx, publicVehicle(vehicle)) : null;
   },
 });
 
@@ -444,7 +446,7 @@ export const recordView = mutation({
   handler: async (ctx, { id, visitorKey }) => {
     if (!/^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(visitorKey)) throw new Error("Invalid view session");
     const vehicle = await ctx.db.get(id);
-    if (!vehicle || !isPublicVehicle(vehicle)) return;
+    if (!vehicle || !await isPublicVehicleFromActiveSeller(ctx, vehicle)) return;
     const user = await getCurrentUser(ctx);
     if (user && (user._id === vehicle.userId || isAdmin(user))) return;
     const day = Math.floor(Date.now() / 86_400_000);

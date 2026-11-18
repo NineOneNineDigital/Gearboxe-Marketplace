@@ -32,10 +32,10 @@ export default defineSchema({
   eventPayments: defineTable({ reservationId: v.id("eventReservations"), eventId: v.id("events"), vehicleId: v.id("vehicles"), userId: v.id("users"), stripeSessionId: v.string(), stripePaymentId: v.string(), amount: v.number(), currency: v.string(), status: v.string(), createdAt: v.number(), updatedAt: v.number(), stripeCustomerId: v.optional(v.string()), stripeChargeId: v.optional(v.string()), receiptUrl: v.optional(v.string()), registrationId: v.optional(v.id("registrations")), stripeRefundId: v.optional(v.string()), refundReason: v.optional(v.string()), refundStatus: v.optional(v.string()), refundAmount: v.optional(v.number()), refundGeneration: v.optional(v.number()), lastError: v.optional(v.string()), attempts: v.number(), nextAttemptAt: v.number(), leaseToken: v.optional(v.string()), leaseExpiresAt: v.optional(v.number()) }).index("by_payment", ["stripePaymentId"]).index("by_session", ["stripeSessionId"]).index("by_status_due", ["status", "nextAttemptAt"]).index("by_registration", ["registrationId"]).index("by_status_lease", ["status", "leaseExpiresAt"]).index("by_user", ["userId"]).index("by_status_error", ["status", "lastError"]),
   stripeWebhookEvents: defineTable({ eventId: v.string(), type: v.string(), objectId: v.string(), status: v.string(), attempts: v.number(), nextAttemptAt: v.number(), createdAt: v.number(), updatedAt: v.number(), lastError: v.optional(v.string()) }).index("by_event", ["eventId"]).index("by_status_due", ["status", "nextAttemptAt"]),
   notifications: defineTable({ userId: v.id("users"), category: v.string(), kind: v.string(), message: v.string(), link: v.string(), dedupeKey: v.string(), vehicleId: v.optional(v.id("vehicles")), conversationId: v.optional(v.id("conversations")), registrationId: v.optional(v.id("registrations")), createdAt: v.number(), readAt: v.optional(v.number()) }).index("by_user", ["userId"]).index("by_dedupe", ["dedupeKey"]),
-  emailOutbox: defineTable({ userId: v.id("users"), sourceUserId: v.optional(v.id("users")), conversationId: v.optional(v.id("conversations")), category: v.string(), eventKey: v.string(), subject: v.string(), message: v.string(), path: v.string(), status: v.string(), attempts: v.number(), nextAttemptAt: v.number(), createdAt: v.number(), updatedAt: v.number(), leaseToken: v.optional(v.string()), leaseExpiresAt: v.optional(v.number()), providerId: v.optional(v.string()), recipientEmail: v.optional(v.string()), lastError: v.optional(v.string()), unsubscribeToken: v.optional(v.string()) }).index("by_event", ["eventKey"]).index("by_status_due", ["status", "nextAttemptAt"]).index("by_status_lease", ["status", "leaseExpiresAt"]).index("by_provider", ["providerId"]).index("by_unsubscribe", ["unsubscribeToken"]).index("by_updated", ["updatedAt"]).index("by_status_updated", ["status", "updatedAt"]),
+  emailOutbox: defineTable({ userId: v.id("users"), sourceUserId: v.optional(v.id("users")), conversationId: v.optional(v.id("conversations")), category: v.string(), eventKey: v.string(), subject: v.string(), message: v.string(), path: v.string(), status: v.string(), attempts: v.number(), nextAttemptAt: v.number(), createdAt: v.number(), updatedAt: v.number(), leaseToken: v.optional(v.string()), leaseExpiresAt: v.optional(v.number()), providerId: v.optional(v.string()), recipientEmail: v.optional(v.string()), lastError: v.optional(v.string()), unsubscribeToken: v.optional(v.string()) }).index("by_user", ["userId"]).index("by_event", ["eventKey"]).index("by_status_due", ["status", "nextAttemptAt"]).index("by_status_lease", ["status", "leaseExpiresAt"]).index("by_provider", ["providerId"]).index("by_unsubscribe", ["unsubscribeToken"]).index("by_updated", ["updatedAt"]).index("by_status_updated", ["status", "updatedAt"]),
   emailSuppressions: defineTable({ email: v.string(), reason: v.string(), createdAt: v.number() }).index("by_email", ["email"]),
   emailWebhookEvents: defineTable({ eventKey: v.string(), createdAt: v.number(), providerId: v.string(), type: v.string(), recipientEmail: v.optional(v.string()), permanentBounce: v.boolean() }).index("by_event", ["eventKey"]).index("by_provider", ["providerId"]).index("by_created", ["createdAt"]),
-  ownershipUploadLeases: defineTable({ userId: v.id("users"), vehicleId: v.optional(v.id("vehicles")), token: v.string(), expiresAt: v.number(), used: v.boolean() }).index("by_token", ["token"]).index("by_expiry", ["expiresAt"]),
+  ownershipUploadLeases: defineTable({ userId: v.id("users"), vehicleId: v.optional(v.id("vehicles")), token: v.string(), expiresAt: v.number(), used: v.boolean() }).index("by_user", ["userId"]).index("by_token", ["token"]).index("by_expiry", ["expiresAt"]),
   trustReports: defineTable({ reporterId: v.id("users"), targetUserId: v.id("users"), vehicleId: v.optional(v.id("vehicles")), wantedRequestId: v.optional(v.id("wantedRequests")), reason: v.string(), details: v.string(), status: v.union(v.literal("open"), v.literal("reviewing"), v.literal("resolved"), v.literal("dismissed"), v.literal("escalated")), createdAt: v.number(), updatedAt: v.number() }).index("by_reporter", ["reporterId"]).index("by_status", ["status"]).index("by_target", ["targetUserId"]).index("by_target_status", ["targetUserId", "status"]),
   wantedRequests: defineTable({
     userId: v.id("users"), title: v.string(), maxBudget: v.number(), zip: v.string(),
@@ -65,6 +65,32 @@ export default defineSchema({
     sourceId: v.optional(v.id("_storage")), detailId: v.optional(v.id("_storage")),
     createdAt: v.number(), expiresAt: v.number(),
   }).index("by_token", ["token"]).index("by_user_request", ["userId", "requestId"]).index("by_expiry", ["expiresAt"]),
+  photoRequestPairs: defineTable({
+    vehicleId: v.id("vehicles"), buyerId: v.id("users"),
+    openRequestId: v.optional(v.id("photoRequests")), disabledAt: v.optional(v.number()), updatedAt: v.number(),
+  }).index("by_vehicle_buyer", ["vehicleId", "buyerId"]),
+  photoRequests: defineTable({
+    vehicleId: v.id("vehicles"), conversationId: v.id("conversations"), buyerId: v.id("users"), sellerId: v.id("users"),
+    status: v.union(v.literal("requested"), v.literal("replied"), v.literal("followup"), v.literal("declined"), v.literal("closed")),
+    views: v.array(v.string()), note: v.optional(v.string()), createdAt: v.number(), updatedAt: v.number(), closedAt: v.optional(v.number()),
+  }).index("by_conversation_created", ["conversationId", "createdAt"]).index("by_vehicle_buyer", ["vehicleId", "buyerId"]),
+  photoRequestEntries: defineTable({
+    requestId: v.id("photoRequests"), senderId: v.id("users"), kind: v.union(v.literal("request"), v.literal("reply"), v.literal("followup")),
+    content: v.string(), views: v.optional(v.array(v.string())), photoIds: v.optional(v.array(v.id("photoRequestPhotos"))), createdAt: v.number(),
+  }).index("by_request_created", ["requestId", "createdAt"]).index("by_sender", ["senderId"]),
+  photoRequestPhotos: defineTable({
+    userId: v.id("users"), requestId: v.id("photoRequests"), entryId: v.optional(v.id("photoRequestEntries")), token: v.string(),
+    status: v.union(v.literal("awaiting"), v.literal("uploading"), v.literal("uploaded"), v.literal("processing"), v.literal("ready")),
+    sourceId: v.optional(v.id("_storage")), detailId: v.optional(v.id("_storage")), createdAt: v.number(), expiresAt: v.number(),
+  }).index("by_token", ["token"]).index("by_user_request", ["userId", "requestId"]).index("by_expiry", ["expiresAt"])
+    .index("by_source", ["sourceId"]).index("by_detail", ["detailId"]),
+  photoPublicSelections: defineTable({
+    photoId: v.id("photoRequestPhotos"), requestId: v.id("photoRequests"), vehicleId: v.id("vehicles"), sellerId: v.id("users"),
+    caption: v.string(), revision: v.number(), vehicleRevision: v.number(),
+    status: v.union(v.literal("pending"), v.literal("approved"), v.literal("rejected"), v.literal("stale")),
+    reason: v.optional(v.string()), createdAt: v.number(), reviewedAt: v.optional(v.number()), reviewerId: v.optional(v.id("users")),
+    publicMediaId: v.optional(v.id("vehicleMedia")),
+  }).index("by_photo", ["photoId"]).index("by_status", ["status", "createdAt"]).index("by_request", ["requestId"]).index("by_seller", ["sellerId"]),
   userBlocks: defineTable({ userId: v.id("users"), blockedUserId: v.id("users"), createdAt: v.number() }).index("by_pair", ["userId", "blockedUserId"]).index("by_user", ["userId"]),
   trustRateLimits: defineTable({ userId: v.id("users"), action: v.string(), windowStart: v.number(), count: v.number() }).index("by_user_action", ["userId", "action"]),
   trustNotes: defineTable({ reportId: v.id("trustReports"), adminId: v.id("users"), note: v.string(), reason: v.string(), createdAt: v.number() }).index("by_report", ["reportId"]),
@@ -127,6 +153,7 @@ export default defineSchema({
     createdAt: v.number(),
   }),
   users: defineTable({
+    deletedAt: v.optional(v.number()),
     notificationPreferences: v.optional(notificationPreferences),
     suspendedAt: v.optional(v.number()),
     suspensionReason: v.optional(v.string()),

@@ -1,5 +1,5 @@
 import { v } from "convex/values";
-import { isPublicVehicle } from "./lib/vehicleVisibility";
+import { isPublicVehicle, isPublicVehicleFromActiveSeller } from "./lib/vehicleVisibility";
 import { assertBuyerEmailVerified, assertCanContact, consumeRateLimit } from "./lib/trustGuards";
 import { mutation, query } from "./_generated/server";
 import {
@@ -116,10 +116,10 @@ export const getConversationsByUser = query({
           _id: conversation._id,
           vehicleId: conversation.vehicleId,
           otherUserId,
-          vehicleTitle: vehicle && (isPublicVehicle(vehicle) || vehicle.userId === user._id)
+          vehicleTitle: vehicle && (await isPublicVehicleFromActiveSeller(ctx, vehicle) || vehicle.userId === user._id)
             ? vehicle.title || "Unknown Vehicle"
             : "Listing no longer public",
-          otherUserName: otherUser?.name || "Unknown User",
+          otherUserName: otherUser?.deletedAt !== undefined || !otherUser ? "Deleted account" : otherUser.name || "User",
           lastMessage,
           unreadCount: unreadMessages.length,
           lastMessageAt: conversation.lastMessageAt,
@@ -160,6 +160,9 @@ export const updateLastMessageTime = mutation({
     ) {
       throw new Error("Conversation not found");
     }
+    const otherUserId = conversation.participant1Id === currentUser._id
+      ? conversation.participant2Id : conversation.participant1Id;
+    await assertCanContact(ctx, currentUser._id, otherUserId);
     await ctx.db.patch(args.conversationId, {
       lastMessageAt: Date.now(),
     });
@@ -202,7 +205,7 @@ export const getVehicleContext = query({
     if (!thread || !isConversationParticipant(thread, user._id)) return null;
     const vehicle = await ctx.db.get(vehicleId);
     if (!vehicle) return null;
-    if (!isPublicVehicle(vehicle) && vehicle.userId !== user._id) {
+    if (!await isPublicVehicleFromActiveSeller(ctx, vehicle) && vehicle.userId !== user._id) {
       return { _id: vehicle._id, status: vehicle.status, title: "Listing no longer public" };
     }
     return { _id: vehicle._id, title: vehicle.title, year: vehicle.year, make: vehicle.make, model: vehicle.model, mileage: vehicle.mileage, mileageUnit: vehicle.mileageUnit, price: vehicle.price, status: vehicle.status };

@@ -3,7 +3,7 @@ import type { PaginationOptions } from "convex/server";
 import { v } from "convex/values";
 import { query, internalMutation } from "./_generated/server";
 import { discoveryFilters, discoverySort, validateFilters, words, scopeKey, geoScope, matches } from "./lib/discoveryPolicy";
-import { isPublicVehicle, publicVehicle } from "./lib/vehicleVisibility";
+import { isPublicVehicleFromActiveSeller, publicVehicle } from "./lib/vehicleVisibility";
 import { resolveVehicleMedia } from "./lib/vehicleMedia";
 import { syncDiscovery } from "./lib/discoveryIndex";
 import { requireAdmin } from "./lib/authorization";
@@ -41,7 +41,7 @@ export const browse = query({
     const result = await indexed.order(direction).paginate(boundedPagination(args.paginationOpts, 48));
     const page = await Promise.all(result.page.filter(row => matches(row, f)).map(async row => {
       const vehicle = await ctx.db.get(row.vehicleId);
-      if (!vehicle || !isPublicVehicle(vehicle) || !matchesVehicleFacets(vehicle, f)) return null;
+      if (!vehicle || !await isPublicVehicleFromActiveSeller(ctx, vehicle) || !matchesVehicleFacets(vehicle, f)) return null;
       return resolveVehicleMedia(ctx, publicVehicle(vehicle));
     }));
     return { ...result, page: page.filter(row => row !== null) };
@@ -50,13 +50,13 @@ export const browse = query({
 
 export const related = query({ args: { id: v.id("vehicles") }, handler: async (ctx, { id }) => {
   const vehicle = await ctx.db.get(id);
-  if (!vehicle || !isPublicVehicle(vehicle)) return [];
+  if (!vehicle || !await isPublicVehicleFromActiveSeller(ctx, vehicle)) return [];
   const rows = await ctx.db.query("vehicleSearchTerms").withIndex("by_recency", q => q.eq("token", "").eq("scope", scopeKey({ make: vehicle.make }))).order("desc").take(4);
   const result = [];
   for (const row of rows) {
     if (row.vehicleId === id) continue;
     const candidate = await ctx.db.get(row.vehicleId);
-    if (candidate && isPublicVehicle(candidate)) result.push(await resolveVehicleMedia(ctx, publicVehicle(candidate)));
+    if (candidate && await isPublicVehicleFromActiveSeller(ctx, candidate)) result.push(await resolveVehicleMedia(ctx, publicVehicle(candidate)));
     if (result.length === 3) break;
   }
   return result;
@@ -66,7 +66,7 @@ export const recentPublic = query({ args: { ids: v.array(v.string()) }, handler:
   const rows = await Promise.all([...new Set(ids)].map(async value => {
     const id = ctx.db.normalizeId("vehicles", value); if (!id) return null;
     const vehicle = await ctx.db.get(id);
-    return vehicle && isPublicVehicle(vehicle) ? resolveVehicleMedia(ctx, publicVehicle(vehicle)) : null;
+    return vehicle && await isPublicVehicleFromActiveSeller(ctx, vehicle) ? resolveVehicleMedia(ctx, publicVehicle(vehicle)) : null;
   }));
   return rows.filter(row => row !== null);
 } });
@@ -82,7 +82,7 @@ export const metadataVehicle = query({
   args: { id: v.id("vehicles") },
   handler: async (ctx, { id }) => {
     const vehicle = await ctx.db.get(id);
-    return vehicle && isPublicVehicle(vehicle) ? publicMetadata(ctx, vehicle) : null;
+    return vehicle && await isPublicVehicleFromActiveSeller(ctx, vehicle) ? publicMetadata(ctx, vehicle) : null;
   },
 });
 
@@ -93,13 +93,14 @@ export const sharedListing = query({
   handler: async (ctx, { id }) => {
     const normalized = ctx.db.normalizeId("vehicles", id);
     const vehicle = normalized ? await ctx.db.get(normalized) : null;
-    if (!vehicle || vehicle.moderationRemovedAt !== undefined) return { kind: "unavailable" as const };
+    const seller = vehicle ? await ctx.db.get(vehicle.userId) : null;
+    if (!vehicle || !seller || seller.deletedAt !== undefined || vehicle.moderationRemovedAt !== undefined) return { kind: "unavailable" as const };
     if (vehicle.status === "sold") return {
       kind: "sold" as const,
       year: vehicle.year, make: vehicle.make, model: vehicle.model,
       location: vehicle.location ? { city: vehicle.location.city, state: vehicle.location.state } : undefined,
     };
-    if (!isPublicVehicle(vehicle)) return { kind: "unavailable" as const };
+    if (!await isPublicVehicleFromActiveSeller(ctx, vehicle)) return { kind: "unavailable" as const };
     return { kind: "available" as const, vehicle: await publicMetadata(ctx, vehicle) };
   },
 });
@@ -112,7 +113,7 @@ export const sitemapPage = query({ args: { shard: v.number(), paginationOpts: pa
   const result = await ctx.db.query("vehicleCatalog").withIndex("by_sitemap_shard", q => q.eq("sitemapShard", args.shard)).paginate(boundedPagination(args.paginationOpts, 500, 501));
   const page = await Promise.all(result.page.map(async row => {
     const vehicle = await ctx.db.get(row.vehicleId);
-    return vehicle && isPublicVehicle(vehicle) ? { _id: row.vehicleId, updatedAt: row.updatedAt } : null;
+    return vehicle && await isPublicVehicleFromActiveSeller(ctx, vehicle) ? { _id: row.vehicleId, updatedAt: row.updatedAt } : null;
   }));
   return { ...result, page: page.filter(row => row !== null) };
 } });

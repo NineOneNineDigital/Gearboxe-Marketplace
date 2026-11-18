@@ -1,4 +1,4 @@
-import { isPublicVehicle, publicVehicle } from "./lib/vehicleVisibility";
+import { isPublicVehicleFromActiveSeller, publicVehicle } from "./lib/vehicleVisibility";
 import { v } from "convex/values";
 import { mutation, query } from "./_generated/server";
 import { requireCurrentUser } from "./lib/authorization";
@@ -14,7 +14,7 @@ export const addFavorite = mutation({
     const user = await requireCurrentUser(ctx);
     assertBuyerEmailVerified(user);
     const vehicle = await ctx.db.get(args.vehicleId);
-    if (!vehicle || !isPublicVehicle(vehicle)) {
+    if (!vehicle || !await isPublicVehicleFromActiveSeller(ctx, vehicle)) {
       throw new Error("Vehicle is not available");
     }
     // Check if already favorited
@@ -76,9 +76,9 @@ export const getFavoritesByUser = query({
       })
     );
 
-    const visible = vehicles.flatMap((vehicle) =>
-      vehicle && isPublicVehicle(vehicle) ? [publicVehicle(vehicle)] : []
-    );
+    const visible = (await Promise.all(vehicles.map(async vehicle =>
+      vehicle && await isPublicVehicleFromActiveSeller(ctx, vehicle) ? publicVehicle(vehicle) : null
+    ))).filter(vehicle => vehicle !== null);
     return Promise.all(visible.map(vehicle => resolveVehicleMedia(ctx, vehicle)));
   },
 });
