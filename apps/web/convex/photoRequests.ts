@@ -180,8 +180,12 @@ export const getForConversation = query({ args: { conversationId: v.id("conversa
   if (role === "buyer") {
     try { await assertCanContact(ctx, user._id, vehicle.userId); canContact = true; } catch { /* Do not reveal block direction. */ }
   }
+  const canRequest = role === "buyer" && !!user.emailVerified && canContact && await buyerCanRequest(ctx, vehicle, buyerId);
+  const openRequest = canRequest && pair?.openRequestId ? await ctx.db.get(pair.openRequestId) : null;
   return { role, vehicleId: vehicle._id, buyerId, disabled: pair?.disabledAt !== undefined,
-    canOpen: role === "buyer" && !!user.emailVerified && canContact && !pair?.openRequestId && pair?.disabledAt === undefined && await buyerCanRequest(ctx, vehicle, buyerId),
+    openRequestId: pair?.openRequestId,
+    canOpen: canRequest && !pair?.openRequestId && pair?.disabledAt === undefined,
+    canFollowUp: !!openRequest && openRequest.status === "replied" && openRequest.buyerId === buyerId && openRequest.sellerId === vehicle.userId,
   };
 } });
 
@@ -205,10 +209,12 @@ export const listEntries = query({ args: { requestId: v.id("photoRequests"), pag
     senderRole: entry.senderId === row.buyerId ? "buyer" as const : "seller" as const, createdAt: entry.createdAt })) };
 } });
 
-export const getEligibility = query({ args: { vehicleId: v.id("vehicles"), buyerId: v.optional(v.id("users")) }, handler: async (ctx, args) => {
+export const getEligibility = query({ args: { vehicleId: v.id("vehicles"), buyerId: v.optional(v.id("users")), expectedSellerId: v.optional(v.id("users")) }, handler: async (ctx, args) => {
   const user = await requireCurrentUser(ctx);
   const vehicle = await ctx.db.get(args.vehicleId);
   if (!vehicle) return { canOpen: false, reason: "Listing unavailable", disabled: false };
+  if (args.expectedSellerId && vehicle.userId !== args.expectedSellerId)
+    return { canOpen: false, reason: "Listing unavailable", disabled: false };
   if (args.buyerId && vehicle.userId !== user._id) throw unavailable();
   const buyerId = args.buyerId ?? user._id;
   const pair = await pairFor(ctx, vehicle._id, buyerId);

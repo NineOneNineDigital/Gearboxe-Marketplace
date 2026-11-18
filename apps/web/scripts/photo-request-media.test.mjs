@@ -133,6 +133,31 @@ test("seller deletion during approval prevents public photo publication", async 
   await assert.rejects(moderation.approvalSnapshot._handler(f.ctx, { selectionId }), /Seller account unavailable|Selection changed/);
 });
 
+test("surviving buyer retains private photo access after seller deletion", async () => {
+  const f = fixture();
+  f.rows("users").find(row => row._id === "seller").deletedAt = Date.now();
+  f.as("buyer");
+  assert.equal(await media.authorizePhoto._handler(f.ctx, { photoId: "photo" }), "private-storage");
+  f.as("seller"); await assert.rejects(media.authorizePhoto._handler(f.ctx, { photoId: "photo" }), /Authentication/);
+  f.as("other"); await assert.rejects(media.authorizePhoto._handler(f.ctx, { photoId: "photo" }), /unavailable/);
+});
+
+test("withdrawal and a full listing reject stale public-photo approval without publishing", async () => {
+  for (const change of ["withdrawn", "full"]) {
+    const f = fixture();
+    const selectionId = await moderation.select._handler(f.ctx, { photoId: "photo", caption: "Rear seats" });
+    f.as("admin");
+    const snapshot = await moderation.approvalSnapshot._handler(f.ctx, { selectionId });
+    if (change === "withdrawn") f.rows("vehicles")[0].status = "withdrawn";
+    else f.rows("vehicles")[0].photos = Array.from({ length: 30 }, (_, index) => `photo-${index}`);
+    assert.equal(await moderation.completeApproval._handler(f.ctx, { selectionId, revision: snapshot.revision,
+      vehicleRevision: snapshot.vehicleRevision, detailId: "public-detail", thumbnailId: "public-thumb" }), false);
+    assert.equal(f.rows("vehicles")[0].media.length, 0);
+    assert.equal(f.rows("vehicleMedia").length, 0);
+    assert.equal(f.rows("photoPublicSelections")[0].status, "stale");
+  }
+});
+
 test("private storage sweep removes interrupted orphan but keeps referenced and recent files", async () => {
   const old = Date.now() - 25 * 60 * 60 * 1000;
   const files = [

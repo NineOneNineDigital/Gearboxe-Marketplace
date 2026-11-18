@@ -15,6 +15,7 @@ registerHooks({ resolve(specifier, context, nextResolve) {
 } });
 
 const requests = await import("../convex/photoRequests.ts");
+const messages = await import("../convex/messages.ts");
 const { RATE_LIMITS, rateWindow } = await import("../convex/lib/trustPolicy.ts");
 const vehicleId = "vehicle-1";
 const views = ["Front seats", "Engine bay", "Rear cargo area"];
@@ -99,7 +100,8 @@ test("decline and durable disable are distinct; ordinary listing messages remain
   f.as("seller"); await f.mutate(requests.decline, { requestId: second.requestId });
   f.as("buyer"); await assert.rejects(f.mutate(requests.open, { vehicleId, views: ["Rear seats"] }), /unavailable/);
   assert.equal(f.rows("conversations").length, 1);
-  assert.equal(f.rows("messages").length, 0);
+  await f.mutate(messages.sendMessage, { recipientId: "seller", vehicleId, content: "Is the car still available?" });
+  assert.equal(f.rows("messages").length, 1);
 });
 
 test("accepted buyer may request while reserved; manual reservation and other buyers may not", async () => {
@@ -125,6 +127,10 @@ test("shared duplicate and account quotas apply across listing and photo-request
   await assert.rejects(f.mutate(requests.open, { vehicleId, views }), /same message/);
   f.rows("messages").length = 0;
   f.rows("trustRateLimits").push({ _id: "conversation-quota", userId: "buyer", action: "conversation", windowStart: rateWindow(Date.now(), RATE_LIMITS.conversation.windowMs), count: RATE_LIMITS.conversation.count });
+  await assert.rejects(f.mutate(requests.open, { vehicleId, views }), /Too many requests/);
+  assert.equal(f.rows("photoRequests").length, 0);
+  f.rows("trustRateLimits").length = 0;
+  f.rows("trustRateLimits").push({ _id: "message-quota", userId: "buyer", action: "message", windowStart: rateWindow(Date.now(), RATE_LIMITS.message.windowMs), count: RATE_LIMITS.message.count });
   await assert.rejects(f.mutate(requests.open, { vehicleId, views }), /Too many requests/);
   assert.equal(f.rows("photoRequests").length, 0);
 });
@@ -182,4 +188,74 @@ test("seller deletion tombstone blocks a new request before listing cleanup fini
   assert.equal((await requests.getEligibility._handler(f.ctx, { vehicleId })).canOpen, false);
   await assert.rejects(f.mutate(requests.open, { vehicleId, views }), /unavailable/);
   assert.equal(f.rows("photoRequests").length, 0);
+});
+
+test("buyer follow-up controls track live reservation, listing and contact eligibility", async () => {
+  const f = fixture();
+  const { requestId, conversationId } = await f.mutate(requests.open, { vehicleId, views });
+  f.as("seller"); await f.mutate(requests.reply, { requestId, content: "I will send the requested views." });
+  f.as("buyer");
+  assert.equal((await requests.getForConversation._handler(f.ctx, { conversationId })).canFollowUp, true);
+  f.rows("vehicles")[0].status = "reserved";
+  assert.equal((await requests.getForConversation._handler(f.ctx, { conversationId })).canFollowUp, false);
+  f.rows("offerCycles").push({ _id: "cycle-1", vehicleId, winner: "offer-1" });
+  f.rows("offerThreads").push({ _id: "offer-1", vehicleId, buyerId: "buyer", status: "reserved" });
+  assert.equal((await requests.getForConversation._handler(f.ctx, { conversationId })).canFollowUp, true);
+  f.rows("userBlocks").push({ _id: "block-1", userId: "seller", blockedUserId: "buyer" });
+  assert.equal((await requests.getForConversation._handler(f.ctx, { conversationId })).canFollowUp, false);
+  f.rows("userBlocks").length = 0;
+  f.rows("vehicles")[0].status = "sold";
+  assert.equal((await requests.getForConversation._handler(f.ctx, { conversationId })).canFollowUp, false);
+});
+
+test("mismatched conversation recipient cannot open a photo request from that page", async () => {
+  const f = fixture();
+  const eligibility = await requests.getEligibility._handler(f.ctx, { vehicleId, expectedSellerId: "other" });
+  assert.equal(eligibility.canOpen, false);
+  assert.equal(eligibility.reason, "Listing unavailable");
+  assert.equal((await requests.getEligibility._handler(f.ctx, { vehicleId, expectedSellerId: "seller" })).canOpen, true);
+});
+
+test("accepted buyer may open while Reserved, but another buyer cannot follow up on an existing request", async () => {
+  const f = fixture();
+  f.as("other");
+  const otherRequest = await f.mutate(requests.open, { vehicleId, views: ["Front tire"] });
+  f.rows("vehicles")[0].status = "reserved";
+  f.rows("offerCycles").push({ _id: "cycle-1", vehicleId, winner: "offer-1" });
+  f.rows("offerThreads").push({ _id: "offer-1", vehicleId, buyerId: "buyer", status: "reserved" });
+  f.as("seller"); await f.mutate(requests.reply, { requestId: otherRequest.requestId, content: "Front tire photo is ready." });
+  f.as("other"); await assert.rejects(f.mutate(requests.followUp, { requestId: otherRequest.requestId, content: "Please show the rear tire." }), /unavailable/);
+  f.as("buyer");
+  const winnerRequest = await f.mutate(requests.open, { vehicleId, views: ["Rear tire"] });
+  assert.equal(f.rows("photoRequests").find(row => row._id === winnerRequest.requestId).status, "requested");
+  f.as("seller"); await f.mutate(requests.decline, { requestId: otherRequest.requestId });
+  await f.mutate(requests.decline, { requestId: winnerRequest.requestId });
+  assert.equal(f.rows("photoRequestPairs").filter(row => row.openRequestId).length, 0);
+});
+
+test("manual reservation preserves seller replies and declines; reactivation starts only fresh requests", async () => {
+  const f = fixture();
+  const first = await f.mutate(requests.open, { vehicleId, views: ["Dashboard"] });
+  f.rows("vehicles")[0].status = "reserved";
+  f.as("seller"); await f.mutate(requests.reply, { requestId: first.requestId, content: "The dashboard view is ready." });
+  f.as("buyer"); await assert.rejects(f.mutate(requests.followUp, { requestId: first.requestId, content: "A second angle please." }), /unavailable/);
+  f.as("seller"); await f.mutate(requests.decline, { requestId: first.requestId });
+  f.as("buyer"); await assert.rejects(f.mutate(requests.open, { vehicleId, views: ["Second angle"] }), /unavailable/);
+  f.rows("vehicles")[0].status = "active";
+  await assert.rejects(f.mutate(requests.followUp, { requestId: first.requestId, content: "A second angle please." }), /unavailable/);
+  const second = await f.mutate(requests.open, { vehicleId, views: ["Second angle"] });
+  assert.notEqual(second.requestId, first.requestId);
+});
+
+test("withdrawn and availability-expired listings deny new requests and follow-ups", async () => {
+  for (const unavailableState of ["withdrawn", "expired"]) {
+    const f = fixture();
+    const { requestId } = await f.mutate(requests.open, { vehicleId, views: ["Rear seat"] });
+    f.as("seller"); await f.mutate(requests.reply, { requestId, content: "Here is the rear seat." });
+    f.as("buyer");
+    if (unavailableState === "withdrawn") f.rows("vehicles")[0].status = "withdrawn";
+    else f.rows("vehicles")[0].availabilityDueAt = Date.now() - 1;
+    await assert.rejects(f.mutate(requests.followUp, { requestId, content: "Show the other seat." }), /unavailable/);
+    await assert.rejects(f.mutate(requests.open, { vehicleId, views: ["Other seat"] }), /unavailable/);
+  }
 });

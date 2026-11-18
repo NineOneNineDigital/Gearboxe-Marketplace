@@ -7,9 +7,28 @@ import { syncDiscovery } from "./lib/discoveryIndex";
 import { onOfferListingTransition } from "./lib/offerListing";
 import { removeMedia } from "./mediaRecords";
 
-const phases = ["vehicles", "wanted", "photoPublicSelections", "ownershipUploadLeases", "vinDecodeLimits", "trustRateLimits", "userBlocks", "photoRequestUploads", "wantedReplyUploads", "favorites", "savedSearches", "recentViews", "notifications", "listingNotifications", "emailOutbox", "vehicleMedia", "done"] as const;
+const phases = ["vehicles", "wanted", "photoPublicSelections", "ownershipUploadLeases", "vinDecodeLimits", "trustRateLimits", "userBlocks", "photoRequestUploads", "wantedReplyUploads", "comparisons", "favorites", "savedSearches", "recentViews", "notifications", "listingNotifications", "emailOutbox", "vehicleMedia", "done"] as const;
 type Phase = typeof phases[number];
 const phaseValidator = v.union(...phases.map(phase => v.literal(phase)));
+
+// Recovery entry point for deployment operators when a scheduled page fails.
+// Starting at the first phase is safe because every phase is repeatable and
+// public reads already hide content owned by the tombstone.
+export const restart = internalMutation({
+  args: { clerkUserId: v.string(), reason: v.string() },
+  handler: async (ctx, { clerkUserId, reason }) => {
+    const detail = reason.trim();
+    if (detail.length < 10 || detail.length > 500) throw new Error("A recovery reason of 10–500 characters is required");
+    const user = await ctx.db.query("users").withIndex("byExternalId", q => q.eq("externalId", clerkUserId)).unique();
+    if (!user || user.deletedAt === undefined) throw new Error("Deleted account not found");
+    await ctx.db.insert("adminAuditLog", {
+      action: "account_deletion_cleanup_restarted", targetUserId: user._id,
+      source: "operator_cli", reason: detail, createdAt: Date.now(),
+    });
+    await ctx.scheduler.runAfter(0, internal.accountDeletion.cleanup, { userId: user._id, phase: "vehicles", cursor: null });
+    return { scheduled: true };
+  },
+});
 
 async function continueAt(ctx: MutationCtx, userId: Id<"users">, phase: Phase, isDone: boolean, cursor: string) {
   if (!isDone) {
@@ -116,6 +135,12 @@ export const cleanup = internalMutation({
       for (const row of page.page) await ctx.db.patch(row._id, { status: ["pending", "sending"].includes(row.status) ? "skipped" : row.status,
         recipientEmail: undefined, unsubscribeToken: undefined, leaseToken: undefined, leaseExpiresAt: undefined,
         updatedAt: Date.now() });
+      await continueAt(ctx, userId, phase, page.isDone, page.continueCursor);
+      return;
+    }
+    if (phase === "comparisons") {
+      const page = await ctx.db.query("comparisons").withIndex("by_user", q => q.eq("userId", userId)).paginate({ cursor, numItems: 50 });
+      for (const row of page.page) await ctx.db.delete(row._id);
       await continueAt(ctx, userId, phase, page.isDone, page.continueCursor);
       return;
     }

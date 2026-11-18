@@ -6,9 +6,8 @@ import { Button } from "@/components/ui/button";
 import { api } from "@/convex/_generated/api";
 import type { Id } from "@/convex/_generated/dataModel";
 import { useCurrentUser } from "@/hooks/useCurrentUser";
-import { wantedAreaForZip } from "@/lib/wanted-location";
 import { useAuth } from "@clerk/nextjs";
-import { useMutation, useQuery } from "convex/react";
+import { useAction, useMutation, useQuery } from "convex/react";
 import Link from "next/link";
 import { useState } from "react";
 
@@ -18,8 +17,8 @@ export default function MyRequestsPage() {
   const { user, isLoading } = useCurrentUser();
   const { isLoaded, isSignedIn } = useAuth();
   const requests = useQuery(api.wanted.mine, user ? {} : "skip");
-  const create = useMutation(api.wanted.create);
-  const edit = useMutation(api.wanted.edit);
+  const create = useAction(api.wanted.create);
+  const edit = useAction(api.wanted.edit);
   const stillLooking = useMutation(api.wanted.stillLooking);
   const close = useMutation(api.wanted.close);
   const remove = useMutation(api.wanted.remove);
@@ -31,8 +30,7 @@ export default function MyRequestsPage() {
   async function submit(event: React.FormEvent) {
     event.preventDefault(); setBusy(true); setFeedback("");
     try {
-      const area = await wantedAreaForZip(form.zip);
-      const values = { title: form.title, maxBudget: Number(form.maxBudget), zip: form.zip, area,
+      const values = { title: form.title, maxBudget: Number(form.maxBudget), zip: form.zip,
         radiusMiles: form.radiusMiles === "nationwide" ? undefined : Number(form.radiusMiles),
         make: form.make || undefined, model: form.model || undefined,
         yearMin: form.yearMin ? Number(form.yearMin) : undefined, yearMax: form.yearMax ? Number(form.yearMax) : undefined,

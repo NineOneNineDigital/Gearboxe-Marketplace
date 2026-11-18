@@ -16,6 +16,7 @@ import type {
 import type * as admin from "../admin.js";
 import type * as accountDeletion from "../accountDeletion.js";
 import type * as cities from "../cities.js";
+import type * as comparisons from "../comparisons.js";
 import type * as conversations from "../conversations.js";
 import type * as crons from "../crons.js";
 import type * as discovery from "../discovery.js";
@@ -97,6 +98,7 @@ declare const fullApi: ApiFromModules<{
   admin: typeof admin;
   accountDeletion: typeof accountDeletion;
   cities: typeof cities;
+  comparisons: typeof comparisons;
   conversations: typeof conversations;
   crons: typeof crons;
   discovery: typeof discovery;

@@ -8,7 +8,7 @@ import type { Id } from "@/convex/_generated/dataModel";
 import { useCurrentUser } from "@/hooks/useCurrentUser";
 import { useMutation, usePaginatedQuery, useQuery } from "convex/react";
 import Link from "next/link";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { WantedResponseForm } from "./wanted-response-form";
 
 const money = (value: number) => new Intl.NumberFormat("en-US", { style: "currency", currency: "USD", maximumFractionDigits: 0 }).format(value);
@@ -26,6 +26,12 @@ export default function WantedPage() {
   const [feedback, setFeedback] = useState("");
   const [busy, setBusy] = useState(false);
 
+  // Deleting an account hides its requests before the bounded cleanup updates
+  // their indexed status. Keep paging past temporarily empty public pages.
+  useEffect(() => {
+    if (requests.length === 0 && pageStatus === "CanLoadMore") loadMore(24);
+  }, [requests.length, pageStatus, loadMore]);
+
   async function submitReport(event: React.FormEvent) {
     event.preventDefault();
     if (!reportId) return;
@@ -38,7 +44,7 @@ export default function WantedPage() {
   return <div className="market-page min-h-screen flex flex-col"><Navbar /><main className="market-shell flex-1 py-10 space-y-8">
     <div className="flex flex-wrap items-start justify-between gap-4"><div><h1 className="text-3xl font-bold">Wanted vehicles</h1><p className="mt-2 text-muted-foreground">See what buyers are looking for across the country. Locations show a general area only.</p></div><Button asChild><Link href="/myAccount/my-requests">Post a request</Link></Button></div>
     {feedback && <p role="status" className="rounded-md border p-3">{feedback}</p>}
-    {pageStatus === "LoadingFirstPage" ? <p role="status">Loading wanted requests…</p> : requests.length === 0 ? <p>No active requests yet.</p> : <div className="grid gap-4 md:grid-cols-2">{requests.map(request => <article id={`request-${request._id}`} key={request._id} className="rounded-xl border bg-white p-5 shadow-sm space-y-3">
+    {pageStatus === "LoadingFirstPage" || (requests.length === 0 && pageStatus !== "Exhausted") ? <p role="status">Loading wanted requests…</p> : requests.length === 0 ? <p>No active requests yet.</p> : <div className="grid gap-4 md:grid-cols-2">{requests.map(request => <article id={`request-${request._id}`} key={request._id} className="rounded-xl border bg-white p-5 shadow-sm space-y-3">
       <div><h2 className="text-xl font-semibold">{request.title}</h2><p className="text-sm text-muted-foreground">{request.area} · {request.radiusMiles ? `${request.radiusMiles} mile radius` : "Nationwide"}</p></div>
       <p>Maximum budget <strong>{money(request.maxBudget)}</strong></p>
       {(request.make || request.model || request.yearMin || request.yearMax || request.maxMileage || request.transmission) && <p className="text-sm">{[request.make, request.model, request.yearMin && request.yearMax ? `${request.yearMin}–${request.yearMax}` : request.yearMin ?? request.yearMax, request.maxMileage !== undefined ? `Up to ${request.maxMileage.toLocaleString()} miles` : undefined, request.transmission].filter(Boolean).join(" · ")}</p>}

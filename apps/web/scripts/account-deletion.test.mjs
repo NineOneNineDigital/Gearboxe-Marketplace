@@ -29,7 +29,7 @@ function fixture() {
   const owner = { _id: "owner", externalId: "clerk-owner", name: "Private Seller", email: "seller@example.com", phone: "919-555-0100", emailVerified: true, phoneVerified: true, role: "user", createdAt: 1 };
   const vehicle = { _id: "vehicle", userId: "owner", status: "active", title: "Private car", make: "Honda", model: "Pilot", year: 2019, mileage: 100, price: 1000, photos: ["https://example.com/car.jpg"], media: [], description: "Private description", contactInfo: "private phone", vin: "PRIVATEVIN", location: { city: "Raleigh", state: "NC" }, createdAt: 1 };
   const wanted = { _id: "wanted", userId: "owner", status: "active", title: "Wanted family SUV", maxBudget: 28000, zip: "27601", area: "Raleigh, NC", make: "Honda", createdAt: 1 };
-  const tables = { users: [owner, { _id: "buyer", externalId: "clerk-buyer", name: "Buyer", email: "buyer@example.com", role: "user" }], vehicles: [vehicle], wantedRequests: [wanted], photoPublicSelections: [], offerCycles: [], offerThreads: [], offerActions: [], offerNoticeRefs: [], vehicleCatalog: [], vehicleSearchTerms: [], favorites: [], savedSearches: [], recentViews: [], notifications: [], listingNotifications: [], emailOutbox: [], vehicleMedia: [], ownershipUploadLeases: [], vinDecodeLimits: [], trustRateLimits: [], userBlocks: [], photoRequestPhotos: [], wantedReplyPhotos: [] };
+  const tables = { users: [owner, { _id: "buyer", externalId: "clerk-buyer", name: "Buyer", email: "buyer@example.com", role: "user" }], vehicles: [vehicle], wantedRequests: [wanted], photoPublicSelections: [], offerCycles: [], offerThreads: [], offerActions: [], offerNoticeRefs: [], vehicleCatalog: [], vehicleSearchTerms: [], favorites: [], savedSearches: [], recentViews: [], notifications: [], listingNotifications: [], emailOutbox: [], vehicleMedia: [], ownershipUploadLeases: [], vinDecodeLimits: [], trustRateLimits: [], userBlocks: [], photoRequestPhotos: [], wantedReplyPhotos: [], adminAuditLog: [] };
   const scheduled = [];
   const deletedStorage = [];
   const query = table => {
@@ -202,4 +202,17 @@ test("in-flight private photo processing cannot complete after account deletion"
   await assert.rejects(wantedMedia.complete._handler(f.ctx, { photoId: "wanted-upload", detailId: "wanted-detail" }), /Upload unavailable/);
   assert.equal(f.tables.photoRequestPhotos[0].detailId, undefined);
   assert.equal(f.tables.wantedReplyPhotos[0].detailId, undefined);
+});
+
+test("operator recovery restarts only a tombstoned account and records the reason", async () => {
+  const f = fixture();
+  await assert.rejects(deletion.restart._handler(f.ctx, { clerkUserId: "clerk-owner", reason: "Scheduled page failed" }), /Deleted account not found/);
+  await users.deleteFromClerk._handler(f.ctx, { clerkUserId: "clerk-owner" });
+  await assert.rejects(deletion.restart._handler(f.ctx, { clerkUserId: "clerk-owner", reason: "short" }), /recovery reason/);
+  const result = await deletion.restart._handler(f.ctx, { clerkUserId: "clerk-owner", reason: "Scheduled cleanup page failed; restarting from first phase" });
+  assert.deepEqual(result, { scheduled: true });
+  assert.deepEqual(f.scheduled.at(-1)[2], { userId: "owner", phase: "vehicles", cursor: null });
+  assert.equal(f.tables.adminAuditLog.length, 1);
+  assert.equal(f.tables.adminAuditLog[0].targetUserId, "owner");
+  assert.equal(f.tables.adminAuditLog[0].action, "account_deletion_cleanup_restarted");
 });

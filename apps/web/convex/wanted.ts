@@ -1,17 +1,18 @@
 import { v } from "convex/values";
 import { paginationOptsValidator } from "convex/server";
-import { internalMutation, mutation, query } from "./_generated/server";
+import { action, internalMutation, mutation, query } from "./_generated/server";
 import { internal } from "./_generated/api";
-import type { Doc } from "./_generated/dataModel";
+import type { Doc, Id } from "./_generated/dataModel";
 import type { MutationCtx } from "./_generated/server";
 import { requireAdmin, requireCurrentUser } from "./lib/authorization";
 import { consumeRateLimit } from "./lib/trustGuards";
 import { trustReason, trustText } from "./lib/trustPolicy";
 import { enqueueNotification } from "./notifications";
 import { WANTED_REMINDER_LEAD_MS, wantedExpiry, wantedInteger, wantedIsPublic, wantedOptionalPublicText, wantedPublicProjection, wantedPublicText, wantedReminderDue, wantedText } from "./lib/wantedPolicy";
+import { wantedAreaForZip } from "../lib/wanted-location";
 
 const requestFields = {
-  title: v.string(), maxBudget: v.number(), zip: v.string(), area: v.string(),
+  title: v.string(), maxBudget: v.number(), zip: v.string(),
   radiusMiles: v.optional(v.number()), make: v.optional(v.string()), model: v.optional(v.string()),
   yearMin: v.optional(v.number()), yearMax: v.optional(v.number()), maxMileage: v.optional(v.number()),
   transmission: v.optional(v.string()), details: v.optional(v.string()),
@@ -57,8 +58,17 @@ export const mine = query({
   },
 });
 
-export const create = mutation({
+export const create = action({
   args: requestFields,
+  handler: async (ctx, args): Promise<Id<"wantedRequests">> => {
+    if (!await ctx.auth.getUserIdentity()) throw new Error("Authentication required");
+    const area = await wantedAreaForZip(args.zip);
+    return ctx.runMutation(internal.wanted.createResolved, { ...args, area });
+  },
+});
+
+export const createResolved = internalMutation({
+  args: { ...requestFields, area: v.string() },
   handler: async (ctx, args) => {
     const user = await requireCurrentUser(ctx);
     if (!user.emailVerified) throw new Error("Verify your email before posting a wanted request.");
@@ -73,8 +83,17 @@ export const create = mutation({
   },
 });
 
-export const edit = mutation({
+export const edit = action({
   args: { id: v.id("wantedRequests"), ...requestFields },
+  handler: async (ctx, args): Promise<void> => {
+    if (!await ctx.auth.getUserIdentity()) throw new Error("Authentication required");
+    const area = await wantedAreaForZip(args.zip);
+    await ctx.runMutation(internal.wanted.editResolved, { ...args, area });
+  },
+});
+
+export const editResolved = internalMutation({
+  args: { id: v.id("wantedRequests"), ...requestFields, area: v.string() },
   handler: async (ctx, args) => {
     const row = await owned(ctx, args.id);
     if (row.status === "removed") throw new Error("This request was removed by the safety team.");

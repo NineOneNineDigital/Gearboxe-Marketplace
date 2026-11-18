@@ -331,4 +331,11 @@ export default defineSchema({
     .index("by_user", ["userId"])
     .index("by_vehicle", ["vehicleId"])
     .index("by_user_vehicle", ["userId", "vehicleId"]),
+
+  comparisons: defineTable({
+    userId: v.id("users"),
+    token: v.string(),
+    vehicleIds: v.array(v.id("vehicles")),
+    createdAt: v.number(),
+  }).index("by_user", ["userId"]).index("by_token", ["token"]),
 });

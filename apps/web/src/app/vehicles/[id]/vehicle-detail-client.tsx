@@ -35,7 +35,6 @@ import {
 } from "lucide-react";
 import Image from "next/image";
 import Link from "next/link";
-import { notFound } from "next/navigation";
 import { useEffect, useMemo, useState } from "react";
 
 interface VehiclePageProps {
@@ -43,6 +42,17 @@ interface VehiclePageProps {
 }
 
 const sharedListingQuery = makeFunctionReference<"query", { id: string }, SharedListing>("discovery:sharedListing");
+
+function UnavailableListing() {
+  return <div className="market-page min-h-screen flex flex-col">
+    <Navbar />
+    <main className="market-shell flex-1 py-16 sm:py-24 text-center">
+      <h1 className="text-3xl font-semibold">Listing unavailable</h1>
+      <Button asChild className="mt-8"><Link href="/vehicles">Browse cars</Link></Button>
+    </main>
+    <Footer />
+  </div>;
+}
 
 export default function VehicleDetailClient({ id }: VehiclePageProps) {
   const { isAuthenticated, isLoading: isAuthLoading } = useConvexAuth();
@@ -135,16 +145,7 @@ export default function VehicleDetailClient({ id }: VehiclePageProps) {
     </div>;
   }
 
-  if (sharedListing?.kind === "unavailable") {
-    return <div className="market-page min-h-screen flex flex-col">
-      <Navbar />
-      <main className="market-shell flex-1 py-16 sm:py-24 text-center">
-        <h1 className="text-3xl font-semibold">Listing unavailable</h1>
-        <Button asChild className="mt-8"><Link href="/vehicles">Browse cars</Link></Button>
-      </main>
-      <Footer />
-    </div>;
-  }
+  if (sharedListing?.kind === "unavailable") return <UnavailableListing />;
 
   if (sharedListing === undefined || vehicle === undefined) {
     return (
@@ -174,9 +175,7 @@ export default function VehicleDetailClient({ id }: VehiclePageProps) {
     );
   }
 
-  if (!vehicle || !isAvailableNow(vehicle, availabilityNow)) {
-    return notFound();
-  }
+  if (!vehicle || !isAvailableNow(vehicle, availabilityNow)) return <UnavailableListing />;
 
   const formatPrice = (price: number) => {
     return new Intl.NumberFormat("en-US", {
@@ -288,10 +287,6 @@ export default function VehicleDetailClient({ id }: VehiclePageProps) {
         <Footer />
       </div>
     );
-  }
-
-  if (!vehicle) {
-    return notFound();
   }
 
   return (

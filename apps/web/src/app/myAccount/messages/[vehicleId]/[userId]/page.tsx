@@ -208,6 +208,7 @@ export default function ConversationPage({ params }: ConversationPageProps) {
             />
             {currentUser?._id && <PhotoRequestPanel
               vehicleId={vehicleId as Id<"vehicles">}
+              recipientId={userId as Id<"users">}
               conversationId={conversation?._id}
               conversationLoading={conversation === undefined}
               readOnly={Boolean(conversation && !otherUser)}

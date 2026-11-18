@@ -25,12 +25,12 @@ const listing = {
   availabilityDueAt: Date.now() + 86_400_000,
 };
 
-function context(actor = "seller", row = listing) {
+function context(actor = "seller", row = listing, userOverrides = {}) {
   return {
     auth: { getUserIdentity: async () => actor ? { subject: `clerk-${actor}` } : null },
     db: {
       get: async id => id === row._id ? row : null,
-      query: () => ({ withIndex: () => ({ unique: async () => ({ _id: actor, externalId: `clerk-${actor}` }) }) }),
+      query: () => ({ withIndex: () => ({ unique: async () => ({ _id: actor, externalId: `clerk-${actor}`, ...userOverrides }) }) }),
     },
     storage: { getUrl: async () => null },
   };
@@ -58,4 +58,12 @@ test("seller share projection rejects another account and any private or expired
   }
   assert.equal(await vehicles.getSellerShareListing._handler(context("seller", { ...listing, availabilityDueAt: Date.now() - 1 }), { id: "listing" }), null);
   assert.equal(await vehicles.getSellerShareListing._handler(context("seller", { ...listing, moderationRemovedAt: Date.now() }), { id: "listing" }), null);
+});
+
+test("reserved public sharing omits availability, and seller deletion disables new share content", async () => {
+  const reserved = await vehicles.getSellerShareListing._handler(context("seller", { ...listing, status: "reserved" }), { id: "listing" });
+  assert.ok(reserved);
+  assert.equal("status" in reserved, false);
+  assert.doesNotMatch(sellerSharePost(reserved, "https://gearboxemarket.com/vehicles/listing"), /reserved|available/i);
+  await assert.rejects(vehicles.getSellerShareListing._handler(context("seller", listing, { deletedAt: Date.now() }), { id: "listing" }), /Authentication required/);
 });

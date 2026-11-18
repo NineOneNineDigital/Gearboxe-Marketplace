@@ -17,10 +17,12 @@ registerHooks({ resolve(specifier, context, nextResolve) {
 const wanted = await import("../convex/wanted.ts");
 const policy = await import("../convex/lib/wantedPolicy.ts");
 const { wantedAreaForZip } = await import("../lib/wanted-location.ts");
-const request = { title: "Family SUV", maxBudget: 28000, zip: "27601", area: "Raleigh, NC", radiusMiles: 50, make: "Honda", model: "Pilot" };
+const request = { title: "Family SUV", maxBudget: 28000, zip: "27601", radiusMiles: 50, make: "Honda", model: "Pilot" };
 
 function fixture() {
   let actor = "buyer", seq = 0;
+  let beforeRunMutation = () => {};
+  globalThis.fetch = async () => new Response(JSON.stringify({ places: [{ "place name": "Raleigh", "state abbreviation": "NC" }] }), { status: 200 });
   let tables = { users: [
     { _id: "buyer", externalId: "clerk-buyer", emailVerified: true, role: "user", email: "buyer@example.com" },
     { _id: "other", externalId: "clerk-other", emailVerified: true, role: "user", email: "other@example.com" },
@@ -61,7 +63,11 @@ function fixture() {
     try { return await fn._handler(ctx, args); }
     catch (error) { tables = before; throw error; }
   };
-  return { ctx, mutate, rows: name => tables[name], as: who => { actor = who; } };
+  ctx.runMutation = async (_reference, args) => {
+    beforeRunMutation();
+    return mutate(args.id ? wanted.editResolved : wanted.createResolved, args);
+  };
+  return { ctx, mutate, rows: name => tables[name], as: who => { actor = who; }, beforeRunMutation: fn => { beforeRunMutation = fn; } };
 }
 
 test("anonymous browsing excludes ZIP, owner identity, and expired or closed requests", async () => {
@@ -85,8 +91,8 @@ test("verified buyer can create five per day; rejected attempts and renewals do 
   f.as(null); await assert.rejects(f.mutate(wanted.create, request), /Authentication/);
   f.as("unverified"); await assert.rejects(f.mutate(wanted.create, request), /Verify your email/);
   f.as("buyer"); await assert.rejects(f.mutate(wanted.create, { ...request, zip: "2760" }), /five-digit ZIP/);
-  await assert.rejects(f.mutate(wanted.create, { ...request, area: "123 Main Street, NC" }), /general area/);
-  await assert.rejects(f.mutate(wanted.create, { ...request, area: "27601" }), /general area/);
+  const spoofed = await f.mutate(wanted.create, { ...request, area: "Fake City, CA" });
+  assert.equal(f.rows("wantedRequests").find(row => row._id === spoofed).area, "Raleigh, NC");
   await assert.rejects(f.mutate(wanted.create, { ...request, details: "Email me at buyer@example.com" }), /contact information/);
   await assert.rejects(f.mutate(wanted.create, { ...request, title: "Family SUV in 27601" }), /ZIP/);
   for (const field of ["make", "model", "transmission"]) {
@@ -94,7 +100,7 @@ test("verified buyer can create five per day; rejected attempts and renewals do 
     await assert.rejects(f.mutate(wanted.create, { ...request, [field]: "27601" }), /ZIP/);
   }
   const ids = [];
-  for (let i = 0; i < 5; i++) ids.push(await f.mutate(wanted.create, { ...request, title: `Family SUV ${i}` }));
+  for (let i = 0; i < 4; i++) ids.push(await f.mutate(wanted.create, { ...request, title: `Family SUV ${i}` }));
   await assert.rejects(f.mutate(wanted.create, request), /Too many requests/);
   assert.equal(f.rows("wantedRequests").length, 5);
   assert.equal(f.rows("trustRateLimits")[0].count, 5);
@@ -108,12 +114,41 @@ test("only owner can edit; edits preserve expiry and do not consume creation quo
   const id = await f.mutate(wanted.create, request);
   const expiry = f.rows("wantedRequests")[0].expiresAt;
   f.as("other"); await assert.rejects(f.mutate(wanted.edit, { id, ...request, title: "Changed" }), /unavailable/);
-  f.as("buyer"); await f.mutate(wanted.edit, { id, ...request, title: "Updated family SUV", radiusMiles: undefined });
+  globalThis.fetch = async () => new Response(JSON.stringify({ places: [{ "place name": "Durham", "state abbreviation": "NC" }] }), { status: 200 });
+  f.as("buyer"); await f.mutate(wanted.edit, { id, ...request, zip: "27701", area: "Fake City, CA", title: "Updated family SUV", radiusMiles: undefined });
   assert.equal(f.rows("wantedRequests")[0].title, "Updated family SUV");
+  assert.equal(f.rows("wantedRequests")[0].zip, "27701");
+  assert.equal(f.rows("wantedRequests")[0].area, "Durham, NC");
   assert.equal(f.rows("wantedRequests")[0].radiusMiles, undefined);
   assert.equal(f.rows("wantedRequests")[0].expiresAt, expiry);
   assert.equal(f.rows("trustRateLimits")[0].count, 1);
   await assert.rejects(f.mutate(wanted.edit, { id, ...request, details: "Call 919-555-1234" }), /contact information/);
+});
+
+test("lookup failure prevents create and edit writes", async () => {
+  const f = fixture();
+  globalThis.fetch = async () => new Response(null, { status: 404 });
+  await assert.rejects(f.mutate(wanted.create, request), /ZIP code not found/);
+  assert.equal(f.rows("wantedRequests").length, 0);
+  assert.equal(f.rows("trustRateLimits").length, 0);
+  globalThis.fetch = async () => new Response(JSON.stringify({ places: [{ "place name": "Raleigh", "state abbreviation": "NC" }] }), { status: 200 });
+  const id = await f.mutate(wanted.create, request);
+  globalThis.fetch = async () => new Response(null, { status: 404 });
+  await assert.rejects(f.mutate(wanted.edit, { id, ...request, title: "Should not persist" }), /ZIP code not found/);
+  assert.equal(f.rows("wantedRequests")[0].title, request.title);
+});
+
+test("create and edit recheck authorization after ZIP lookup", async () => {
+  const f = fixture();
+  f.beforeRunMutation(() => f.as(null));
+  await assert.rejects(f.mutate(wanted.create, request), /Authentication/);
+  assert.equal(f.rows("wantedRequests").length, 0);
+  f.beforeRunMutation(() => {});
+  f.as("buyer");
+  const id = await f.mutate(wanted.create, request);
+  f.beforeRunMutation(() => f.as("other"));
+  await assert.rejects(f.mutate(wanted.edit, { id, ...request, title: "Unauthorized" }), /unavailable/);
+  assert.equal(f.rows("wantedRequests")[0].title, request.title);
 });
 
 test("expired and closed requests remain private Past until deleted; renewal starts a new 30 days", async () => {
