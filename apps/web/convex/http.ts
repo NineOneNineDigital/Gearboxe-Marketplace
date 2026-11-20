@@ -6,6 +6,8 @@ import { httpAction } from "./_generated/server";
 import { documentDownload, documentUpload } from "./trustDocuments";
 import { autosendWebhook, unsubscribe } from "./notificationHttp";
 import { upload } from "./mediaUpload";
+import { upload as wantedPhotoUpload, download as wantedPhotoDownload } from "./wantedMediaHttp";
+import { upload as requestedPhotoUpload, download as requestedPhotoDownload } from "./photoRequestMediaHttp";
 
 const http = httpRouter();
 http.route({ path: "/notifications/unsubscribe", method: "GET", handler: unsubscribe });
@@ -14,6 +16,14 @@ http.route({ path: "/autosend-webhook", method: "POST", handler: autosendWebhook
 http.route({ path: "/trust/document", method: "POST", handler: documentUpload });
 http.route({ path: "/trust/document", method: "OPTIONS", handler: documentUpload });
 http.route({ path: "/trust/document", method: "GET", handler: documentDownload });
+http.route({ path: "/wanted-media/upload", method: "POST", handler: wantedPhotoUpload });
+http.route({ path: "/wanted-media/upload", method: "OPTIONS", handler: wantedPhotoUpload });
+http.route({ path: "/wanted-media/photo", method: "GET", handler: wantedPhotoDownload });
+http.route({ path: "/wanted-media/photo", method: "OPTIONS", handler: wantedPhotoDownload });
+http.route({ path: "/photo-request-media/upload", method: "POST", handler: requestedPhotoUpload });
+http.route({ path: "/photo-request-media/upload", method: "OPTIONS", handler: requestedPhotoUpload });
+http.route({ path: "/photo-request-media/photo", method: "GET", handler: requestedPhotoDownload });
+http.route({ path: "/photo-request-media/photo", method: "OPTIONS", handler: requestedPhotoDownload });
 http.route({ path: "/vehicle-media/upload", method: "POST", handler: upload });
 http.route({ path: "/vehicle-media/upload", method: "OPTIONS", handler: upload });
 

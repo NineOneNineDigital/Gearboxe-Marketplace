@@ -20,6 +20,7 @@ async function supportUser(ctx: QueryCtx | MutationCtx) {
 async function audit(ctx: MutationCtx, actorId: Id<"users">, action: string, reason: string, target: {
   targetUserId?: Id<"users">;
   vehicleId?: Id<"vehicles">;
+  wantedRequestId?: Id<"wantedRequests">;
   reportId?: Id<"trustReports">;
 } = {}) {
   await ctx.db.insert("adminAuditLog", {
@@ -253,12 +254,14 @@ export const adminQueue = query({
     ]);
     const reports = await Promise.all(reportGroups.flat().map(async report => {
       const user = await ctx.db.get(report.targetUserId);
+      const wanted = report.wantedRequestId ? await ctx.db.get(report.wantedRequestId) : null;
       // Three matching records suffice for the indicator; never load a target
       // account's entire reporting history for each queue row.
       const targetReports = await Promise.all((["open", "reviewing", "escalated"] as const).map(status =>
         ctx.db.query("trustReports").withIndex("by_target_status", q => q.eq("targetUserId", report.targetUserId).eq("status", status)).take(3)));
       return {
         ...report,
+        wantedContext: wanted ? { title: wanted.title, status: wanted.status, area: wanted.area, maxBudget: wanted.maxBudget } : null,
         indicators: suspiciousIndicators({
           accountAgeMs: Date.now() - (user?.createdAt ?? Date.now()),
           openReports: targetReports.flat().length,
@@ -325,6 +328,13 @@ export const setSuspension = mutation({
         if (["active", "approved", "pending", "reserved"].includes(vehicle.status)) {
           await changeListingStatus(ctx, vehicle, admin._id, "archived", reason);
           await audit(ctx, admin._id, "suspension_listing_takedown", reason, { targetUserId: target._id, vehicleId: vehicle._id });
+        }
+    if (args.suspended)
+      for (const request of await ctx.db.query("wantedRequests").withIndex("by_user_created", q => q.eq("userId", target._id)).collect())
+        if (request.status === "active") {
+          const now = Date.now();
+          await ctx.db.patch(request._id, { status: "removed", removedAt: now, moderationReason: reason, updatedAt: now });
+          await audit(ctx, admin._id, "suspension_wanted_takedown", reason, { targetUserId: target._id, wantedRequestId: request._id });
         }
     await audit(ctx, admin._id, args.suspended ? "user_suspended" : "user_reinstated", reason, { targetUserId: target._id });
   }

@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { listingReturnPath } from "../lib/auth-return.ts";
+import { listingReturnPath, policyConsentPath } from "../lib/auth-return.ts";
 
 test("sign-in return path accepts public listings and exact seller editor destinations", () => {
   assert.equal(listingReturnPath("?next=%2Fvehicles%2Fabc123"), "/vehicles/abc123");
@@ -13,6 +13,14 @@ test("sign-in return path accepts public listings and exact seller editor destin
   for (const next of ["//outside.example", "https://outside.example", "/myAccount", "/vehicles/id?admin=1", "/vehicles/id?offer=1&next=https://outside.example", "/vehicles/id?offer=%2Foutside.example", "/vehicles/id/extra", "/vehicles/%2foutside.example", "/myAccount/new-listing?edit=abc&next=https://example.test", "/myAccount/new-listing?edit=%2Foutside.example", "/myAccount/messages/vehicle/seller?next=https://example.test", "/myAccount/messages/vehicle/%2Foutside.example"]) {
     assert.equal(listingReturnPath(`?next=${encodeURIComponent(next)}`), "/myAccount");
   }
+});
+
+test("policy consent handoff preserves only validated local return paths", () => {
+  const listing = "/vehicles/abc123?offer=1";
+  const handoff = policyConsentPath(`?next=${encodeURIComponent(listing)}`);
+  assert.equal(handoff, `/accept-policies?next=${encodeURIComponent(listing)}`);
+  assert.equal(listingReturnPath(new URL(handoff, "https://gearboxe.test").search), listing);
+  assert.equal(policyConsentPath("?next=https%3A%2F%2Foutside.example"), "/accept-policies?next=%2FmyAccount");
 });
 
 

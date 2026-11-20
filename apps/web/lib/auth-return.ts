@@ -6,3 +6,7 @@ export function listingReturnPath(search: string): string {
   if (path && /^\/myAccount\/messages\?offer=[a-z0-9]+$/i.test(path)) return path;
   return "/myAccount";
 }
+
+export function policyConsentPath(search: string): string {
+  return `/accept-policies?next=${encodeURIComponent(listingReturnPath(search))}`;
+}

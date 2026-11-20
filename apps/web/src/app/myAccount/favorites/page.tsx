@@ -15,7 +15,7 @@ import Link from "next/link";
 import Image from "next/image";
 import { isTrustedImageUrl } from "@/lib/trusted-images";
 import { redirect } from "next/navigation";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 
 export default function FavoritesPage() {
   const { isLoading, user } = useCurrentUser();
@@ -24,6 +24,9 @@ export default function FavoritesPage() {
     "newest" | "oldest" | "price-low" | "price-high"
   >("newest");
   const { toast } = useToast();
+  const [selectedIds, setSelectedIds] = useState<Id<"vehicles">[]>([]);
+  const [comparisonBusy, setComparisonBusy] = useState(false);
+  const [comparisonMessage, setComparisonMessage] = useState("");
 
   // Always call hooks to maintain hook order
   const favorites = useQuery(
@@ -31,6 +34,17 @@ export default function FavoritesPage() {
     user?._id ? {} : "skip"
   );
   const removeFavorite = useMutation(api.favorites.removeFavorite);
+  const createComparison = useMutation(api.comparisons.create);
+  const revokeComparison = useMutation(api.comparisons.revoke);
+  const comparisons = useQuery(api.comparisons.listMine, user?._id ? {} : "skip");
+
+  useEffect(() => {
+    if (!favorites) return;
+    setSelectedIds(previous => {
+      const visible = previous.filter(id => favorites.some((vehicle: { _id: Id<"vehicles"> }) => vehicle._id === id));
+      return visible.length === previous.length ? previous : visible;
+    });
+  }, [favorites]);
 
   // Show loading while auth is being determined
   if (!authLoaded || isLoading) {
@@ -63,10 +77,11 @@ export default function FavoritesPage() {
 
   const handleRemoveFavorite = async (vehicleId: string) => {
     try {
-      const vehicle = favorites?.find((v) => v._id === vehicleId);
+      const vehicle = favorites?.find((v: { _id: Id<"vehicles">; title: string }) => v._id === vehicleId);
       await removeFavorite({
         vehicleId: vehicleId as Id<"vehicles">,
       });
+      setSelectedIds(previous => previous.filter(id => id !== vehicleId));
       toast({
         title: "Removed from favorites",
         description: vehicle
@@ -114,6 +129,45 @@ export default function FavoritesPage() {
       })
     : [];
 
+  function toggleComparison(id: Id<"vehicles">) {
+    setComparisonMessage("");
+    setSelectedIds(previous => previous.includes(id) ? previous.filter(value => value !== id)
+      : previous.length < 4 ? [...previous, id] : previous);
+  }
+
+  async function makeComparison() {
+    if (selectedIds.length < 2 || selectedIds.length > 4) return;
+    setComparisonBusy(true); setComparisonMessage("");
+    try {
+      const result = await createComparison({ vehicleIds: selectedIds });
+      setSelectedIds([]);
+      try {
+        await navigator.clipboard.writeText(new URL(`/compare/${result.token}`, window.location.origin).href);
+        setComparisonMessage("Comparison link created and copied. Its car selection stays fixed even if your favorites change.");
+      } catch {
+        setComparisonMessage("Comparison link created. Copy it from your links below. Its car selection stays fixed even if your favorites change.");
+      }
+    } catch (error) {
+      setComparisonMessage(error instanceof Error ? error.message : "Could not create the comparison link.");
+    } finally { setComparisonBusy(false); }
+  }
+
+  async function deleteComparison(id: Id<"comparisons">) {
+    setComparisonBusy(true); setComparisonMessage("");
+    try { await revokeComparison({ id }); setComparisonMessage("Comparison link deleted. Its public URL no longer works."); }
+    catch (error) { setComparisonMessage(error instanceof Error ? error.message : "Could not delete the comparison link."); }
+    finally { setComparisonBusy(false); }
+  }
+
+  async function copyComparison(token: string) {
+    try {
+      await navigator.clipboard.writeText(new URL(`/compare/${token}`, window.location.origin).href);
+      setComparisonMessage("Comparison link copied.");
+    } catch {
+      setComparisonMessage("Could not copy the link. Open the comparison and copy its address from your browser.");
+    }
+  }
+
   return (
     <div className="market-page min-h-screen flex flex-col">
       <Navbar />
@@ -153,6 +207,27 @@ export default function FavoritesPage() {
           </div>
         </div>
 
+        <section className="mb-8 rounded-xl border bg-white p-5" aria-labelledby="compare-favorites-title">
+          <h2 id="compare-favorites-title" className="text-xl font-semibold">Compare and share cars</h2>
+          <p className="mt-2 text-sm text-gray-600">Choose two to four saved cars. A link keeps exactly those cars; prices and availability update when someone opens it. Private listings will be hidden.</p>
+          <div className="mt-4 flex flex-wrap items-center gap-3">
+            <Button type="button" disabled={comparisonBusy || selectedIds.length < 2 || selectedIds.length > 4} onClick={() => void makeComparison()}>{comparisonBusy ? "Working…" : `Create link for ${selectedIds.length} cars`}</Button>
+            {selectedIds.length > 0 && <Button type="button" variant="outline" disabled={comparisonBusy} onClick={() => setSelectedIds([])}>Clear selection</Button>}
+          </div>
+          {selectedIds.length === 4 && <p className="mt-2 text-sm text-gray-600">Four cars selected. Remove one to choose another.</p>}
+          {comparisonMessage && <p role="status" className="mt-3 text-sm">{comparisonMessage}</p>}
+          {comparisons === undefined ? <p role="status" className="mt-4 text-sm">Loading your comparison links…</p> : comparisons.length > 0 && <div className="mt-5">
+            <h3 className="font-medium">Your links</h3>
+            <ul className="mt-2 space-y-2">{comparisons.map((comparison: { id: Id<"comparisons">; token: string; vehicleIds: Id<"vehicles">[]; createdAt: number }) => <li key={comparison.id} className="flex flex-wrap items-center justify-between gap-3 rounded-lg border p-3 text-sm">
+              <div><Link className="font-medium underline" href={`/compare/${comparison.token}`}>View comparison</Link><p className="text-gray-600">{comparison.vehicleIds.length} cars · Created {new Date(comparison.createdAt).toLocaleDateString()}</p></div>
+              <div className="flex gap-2">
+                <Button type="button" size="sm" variant="outline" onClick={() => void copyComparison(comparison.token)}>Copy link</Button>
+                <Button type="button" size="sm" variant="outline" disabled={comparisonBusy} onClick={() => void deleteComparison(comparison.id)}>Delete link</Button>
+              </div>
+            </li>)}</ul>
+          </div>}
+        </section>
+
         {/* Favorites Grid */}
         {sortedFavorites && sortedFavorites.length > 0 ? (
           <div className="grid gap-6 grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
@@ -189,6 +264,7 @@ export default function FavoritesPage() {
                 </div>
 
                 <CardContent className="p-4">
+                  <label className="mb-3 flex items-center gap-2 text-sm font-medium"><input type="checkbox" checked={selectedIds.includes(vehicle._id)} disabled={!selectedIds.includes(vehicle._id) && selectedIds.length >= 4} onChange={() => toggleComparison(vehicle._id)} aria-label={`Select ${vehicle.title} for comparison`} />Compare this car</label>
                   <div>
                     <h3 className="font-semibold text-lg line-clamp-1 mb-2">
                       {vehicle.title}

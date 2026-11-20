@@ -14,7 +14,7 @@ registerHooks({ resolve(specifier, context, nextResolve) {
   return nextResolve(specifier, context);
 } });
 const users = await import("../convex/users.ts");
-const { recordPolicyAcceptance, PUBLISHED_POLICY_PAIR } = await import("../convex/lib/policyConsent.ts");
+const { recordPolicyAcceptance, currentPolicyStatus, PUBLISHED_POLICY_PAIR } = await import("../convex/lib/policyConsent.ts");
 // Synthetic release fixtures are never a published registry or policy approval.
 const first = { termsVersion: "test-terms-1", privacyVersion: "test-privacy-1", termsEffectiveAt: 1, privacyEffectiveAt: 1,
   termsUrl: "/terms/test-terms-1", privacyUrl: "/privacy/test-privacy-1" };
@@ -64,8 +64,22 @@ test("no approved policies means public acceptance is disabled without writes", 
   const f = fixture(t);
   assert.equal(PUBLISHED_POLICY_PAIR, null);
   assert.equal(await f.call(users.publishedPolicies), null);
+  assert.deepEqual(await f.call(users.currentPolicyStatus), { published: null, provisioned: true, accepted: false });
   await assert.rejects(f.call(users.acceptPolicies, acceptance(first)), /not available/);
   assert.equal(f.rows("policyAcceptances").length, 0);
+});
+
+test("current acceptance status is private, provision-aware and version-specific", async t => {
+  const f = fixture(t);
+  assert.deepEqual(await currentPolicyStatus(f.ctx, first), { published: first, provisioned: true, accepted: false });
+  await f.record();
+  assert.deepEqual(await currentPolicyStatus(f.ctx, first), { published: first, provisioned: true, accepted: true });
+  const next = { ...first, privacyVersion: "test-privacy-2", privacyUrl: "/privacy/test-privacy-2" };
+  assert.deepEqual(await currentPolicyStatus(f.ctx, next), { published: next, provisioned: true, accepted: false });
+  f.as("other");
+  assert.equal((await currentPolicyStatus(f.ctx, first)).accepted, false);
+  f.as("new-clerk-account");
+  assert.deepEqual(await currentPolicyStatus(f.ctx, first), { published: first, provisioned: false, accepted: false });
 });
 
 test("explicit consent, exact current pair and effective dates are required", async t => {

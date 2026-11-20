@@ -1,7 +1,7 @@
 import type { Doc, Id } from "../_generated/dataModel";
 import type { MutationCtx } from "../_generated/server";
 import { key, words, geoScopes } from "./discoveryPolicy";
-import { isPublicVehicle } from "./vehicleVisibility";
+import { isPublicVehicleFromActiveSeller } from "./vehicleVisibility";
 
 // Public identity terms only. No VIN, contact details, disclosures or draft text.
 export async function syncDiscovery(ctx: MutationCtx, id: Id<"vehicles">) {
@@ -11,7 +11,7 @@ export async function syncDiscovery(ctx: MutationCtx, id: Id<"vehicles">) {
     ctx.db.get(id),
   ]);
   for (const posting of postings) await ctx.db.delete(posting._id);
-  if (!vehicle || !isPublicVehicle(vehicle)) {
+  if (!vehicle || !await isPublicVehicleFromActiveSeller(ctx, vehicle)) {
     if (old) await ctx.db.delete(old._id);
     return;
   }

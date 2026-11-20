@@ -4,6 +4,7 @@ export const RATE_LIMITS = {
   message: { count: 30, windowMs: 60000 },
     conversation: { count: 10, windowMs: 3600000 },
     listing: { count: 5, windowMs: 86400000 },
+    wantedCreation: { count: 5, windowMs: 86400000 },
     report: { count: 10, windowMs: 3600000 },
     support: { count: 5, windowMs: 86400000 },
     document: { count: 5, windowMs: 86400000 },

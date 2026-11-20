@@ -6,8 +6,11 @@ import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { GoogleIcon } from "@/components/ui/google-icon";
-import { listingReturnPath } from "@/lib/auth-return";
+import { api } from "@/convex/_generated/api";
+import { listingReturnPath, policyConsentPath } from "@/lib/auth-return";
+import { clearSignupPolicyIntent, saveSignupPolicyIntent } from "@/lib/signup-policy-intent";
 import { useAuth, useSignUp } from "@clerk/nextjs";
+import { useQuery } from "convex/react";
 import { Eye, EyeOff, Lock, Mail, User } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
@@ -16,6 +19,7 @@ import { useEffect, useState } from "react";
 export default function SignUpPage() {
   const { isLoaded, signUp, setActive } = useSignUp();
   const { isSignedIn, isLoaded: authLoaded } = useAuth();
+  const publishedPolicies = useQuery(api.users.publishedPolicies, {});
   const [emailAddress, setEmailAddress] = useState("");
   const [password, setPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
@@ -27,9 +31,24 @@ export default function SignUpPage() {
   const [error, setError] = useState("");
   const [pendingVerification, setPendingVerification] = useState(false);
   const [code, setCode] = useState("");
+  const [signupReturn, setSignupReturn] = useState<string | null>(null);
   const router = useRouter();
   const [returnTo, setReturnTo] = useState("/myAccount");
   useEffect(() => { setReturnTo(listingReturnPath(window.location.search)); }, []);
+
+  function beginSignup() {
+    const path = policyConsentPath(window.location.search);
+    if (!publishedPolicies) return path;
+    const token = crypto.randomUUID();
+    try {
+      return saveSignupPolicyIntent(window.sessionStorage, publishedPolicies, token)
+        ? `${path}&policyIntent=${encodeURIComponent(token)}` : path;
+    } catch { return path; }
+  }
+
+  function clearIntent() {
+    try { clearSignupPolicyIntent(window.sessionStorage); } catch { /* storage unavailable */ }
+  }
 
   // Redirect if user is already signed in (only once)
   useEffect(() => {
@@ -37,17 +56,17 @@ export default function SignUpPage() {
       // Use setTimeout to avoid race conditions with Next.js router
       const timer = setTimeout(() => {
         try {
-          router.replace(listingReturnPath(window.location.search));
+          router.replace(pendingVerification && signupReturn ? signupReturn : listingReturnPath(window.location.search));
         } catch (error) {
           console.warn("Router navigation failed:", error);
           // Fallback to window.location if router fails
-          window.location.href = listingReturnPath(window.location.search);
+          window.location.href = pendingVerification && signupReturn ? signupReturn : listingReturnPath(window.location.search);
         }
       }, 100);
 
       return () => clearTimeout(timer);
     }
-  }, [authLoaded, isSignedIn, router]);
+  }, [authLoaded, isSignedIn, pendingVerification, router, signupReturn]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -66,6 +85,8 @@ export default function SignUpPage() {
 
     setIsLoading(true);
     setError("");
+    const afterSignup = beginSignup();
+    setSignupReturn(afterSignup);
 
     try {
       await signUp.create({
@@ -78,6 +99,7 @@ export default function SignUpPage() {
       await signUp.prepareEmailAddressVerification({ strategy: "email_code" });
       setPendingVerification(true);
     } catch (err: unknown) {
+      clearIntent();
       const errorMessage =
         isClerkAPIResponseError(err)
           ? err.errors[0]?.message || "An error occurred during sign up"
@@ -118,10 +140,10 @@ export default function SignUpPage() {
       if (completeSignUp.status === "complete") {
         await setActive({ session: completeSignUp.createdSessionId });
         try {
-          router.push(listingReturnPath(window.location.search));
+          router.push(signupReturn ?? policyConsentPath(window.location.search));
         } catch (error) {
           console.warn("Router navigation failed:", error);
-          window.location.href = listingReturnPath(window.location.search);
+          window.location.href = signupReturn ?? policyConsentPath(window.location.search);
         }
       } else {
         setError("Verification failed. Please check your code.");
@@ -212,6 +234,13 @@ export default function SignUpPage() {
       </div>
     );
   }
+
+  const policyNotice = publishedPolicies && <p className="text-sm text-gray-600">
+    By signing up, you accept the{" "}
+    <a href={publishedPolicies.termsUrl} target="_blank" rel="noopener noreferrer" className="font-medium text-primary underline">Marketplace Terms (version {publishedPolicies.termsVersion})</a>{" "}
+    and{" "}
+    <a href={publishedPolicies.privacyUrl} target="_blank" rel="noopener noreferrer" className="font-medium text-primary underline">Privacy Policy (version {publishedPolicies.privacyVersion})</a>.
+  </p>;
 
   return (
     <div className="w-full space-y-8">
@@ -362,35 +391,7 @@ export default function SignUpPage() {
               </div>
             </div>
 
-            <div className="flex items-center">
-              <input
-                id="terms"
-                name="terms"
-                type="checkbox"
-                className="h-4 w-4 text-primary focus:ring-primary border-gray-300 rounded"
-                required
-              />
-              <label
-                htmlFor="terms"
-                className="ml-2 block text-sm text-gray-700"
-              >
-                I agree to the{" "}
-                <Link
-                  href="/terms"
-                  className="text-primary hover:text-primary/80"
-                >
-                  Terms of Service
-                </Link>{" "}
-                and{" "}
-                <Link
-                  href="/privacy"
-                  className="text-primary hover:text-primary/80"
-                >
-                  Privacy Policy
-                </Link>
-              </label>
-            </div>
-
+            {policyNotice}
             <Button
               type="submit"
               className="w-full bg-primary hover:bg-primary/90 text-white py-3 text-base font-medium"
@@ -412,6 +413,7 @@ export default function SignUpPage() {
               </div>
             </div>
 
+            {policyNotice}
             <Button
               type="button"
               variant="outline"
@@ -420,11 +422,13 @@ export default function SignUpPage() {
               onClick={() => {
                 setIsLoading(true);
                 setError("");
+                const afterSignup = beginSignup();
                 void signUp?.authenticateWithRedirect({
                   strategy: "oauth_google",
                   redirectUrl: "/sso-callback",
-                  redirectUrlComplete: listingReturnPath(window.location.search),
+                  redirectUrlComplete: afterSignup,
                 }).catch((err: unknown) => {
+                  clearIntent();
                   setError(isClerkAPIResponseError(err) ? err.errors[0]?.message || "Google sign-up could not start" : "Google sign-up could not start");
                   setIsLoading(false);
                 });

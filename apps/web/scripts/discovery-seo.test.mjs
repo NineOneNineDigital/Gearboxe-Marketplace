@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { absoluteUrl, appOrigin, serializeJsonLd, vehicleBrowseMetadata } from '../lib/seo.ts';
+import { absoluteUrl, appOrigin, serializeJsonLd, soldListingMetadata, vehicleBrowseMetadata } from '../lib/seo.ts';
 
 const originalUrl = process.env.NEXT_PUBLIC_APP_URL;
 const originalMode = process.env.MARKETPLACE_ENV;
@@ -45,4 +45,14 @@ test('listing structured data cannot terminate its script element', () => {
   const serialized = serializeJsonLd(value);
   assert.equal(serialized.includes('<'), false);
   assert.deepEqual(JSON.parse(serialized), value);
+});
+
+test('Sold metadata is noindex and contains no former image, VIN or price', () => {
+  const metadata = soldListingMetadata({ year: 2020, make: 'Toyota', model: 'Camry' }, 'https://market.example/vehicles/sold');
+  assert.deepEqual(metadata.robots, { index: false, follow: true });
+  assert.equal(metadata.alternates.canonical, 'https://market.example/vehicles/sold');
+  assert.equal(metadata.openGraph.images.length, 0);
+  assert.equal(metadata.twitter.images.length, 0);
+  assert.equal(JSON.stringify(metadata).includes('vin'), false);
+  assert.equal(JSON.stringify(metadata).includes('price'), false);
 });

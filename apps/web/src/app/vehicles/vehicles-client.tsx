@@ -229,6 +229,9 @@ function Inventory({
                 <Button variant="outline" onClick={onNationwide}>View nationwide</Button>
               </>
             )}
+            {state.filters.state && state.filters.latitude === undefined && (
+              <Button variant="outline" onClick={onNationwide}>View nationwide</Button>
+            )}
             <Button variant="outline" onClick={clear}>Clear filters</Button>
           </div>
         </div>

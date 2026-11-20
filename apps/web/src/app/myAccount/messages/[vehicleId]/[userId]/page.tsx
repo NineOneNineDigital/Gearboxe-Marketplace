@@ -4,6 +4,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Footer } from "@/components/ui/footer";
 import { MessageThread } from "@/components/ui/message-thread";
+import { PhotoRequestPanel } from "@/components/ui/photo-request-panel";
 import { SafetyControls } from "@/components/ui/safety-controls";
 import { Navbar } from "@/components/ui/navbar";
 import { api } from "@/convex/_generated/api";
@@ -102,7 +103,7 @@ export default function ConversationPage({ params }: ConversationPageProps) {
           <div className="flex items-center justify-between">
             <div>
               <h1 className="text-3xl font-bold text-gray-900">
-                Conversation {otherUser && `with ${otherUser.name}`}
+                Conversation {(otherUser || conversation) && `with ${otherUser?.name ?? "Deleted account"}`}
               </h1>
             </div>
             {vehicle && ["active", "approved", "reserved"].includes(vehicle.status) && (
@@ -202,9 +203,16 @@ export default function ConversationPage({ params }: ConversationPageProps) {
             <MessageThread
               vehicleId={vehicleId as Id<"vehicles">}
               recipientId={userId as Id<"users">}
-              recipientName={otherUser?.name || "User"}
+              recipientName={otherUser?.name ?? (conversation ? "Deleted account" : "User")}
               conversationId={conversation?._id}
             />
+            {currentUser?._id && <PhotoRequestPanel
+              vehicleId={vehicleId as Id<"vehicles">}
+              recipientId={userId as Id<"users">}
+              conversationId={conversation?._id}
+              conversationLoading={conversation === undefined}
+              readOnly={Boolean(conversation && !otherUser)}
+            />}
             <SafetyControls vehicleId={vehicleId as Id<"vehicles">} targetUserId={userId as Id<"users">} />
           </div>
         </div>

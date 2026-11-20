@@ -1,6 +1,7 @@
 "use client";
 
 import { AuthShell } from "@/components/ui/auth-shell";
+import { policyConsentPath } from "@/lib/auth-return";
 import { useClerk } from "@clerk/nextjs";
 import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
@@ -18,7 +19,7 @@ export default function SsoCallbackPage() {
       signUpUrl: "/sign-up",
       secondFactorUrl: "/sign-in",
       signInFallbackRedirectUrl: "/myAccount",
-      signUpFallbackRedirectUrl: "/myAccount",
+      signUpFallbackRedirectUrl: policyConsentPath(""),
     }).catch(() => setError(true));
   }, [clerk]);
 

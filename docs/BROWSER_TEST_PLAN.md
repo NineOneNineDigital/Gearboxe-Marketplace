@@ -107,6 +107,35 @@ test. No staging credentials or target values belong in this document.
    verify public search and detail update while existing conversation remains
    accessible under privacy rules.
 
+## Additional MVP flow checks on isolated staging
+
+After the core GBXMRKT-3 journey is running, use the same isolated identities
+and tagged records to verify the later MVP features:
+
+6. Buyer requests private listing photos; seller replies. Confirm another buyer
+   and an anonymous visitor cannot open the private images. Seller selects one
+   reply image for public review; verify it remains private until a moderator
+   approves it. Test request permissions while the listing is Reserved, then
+   verify the seller's share post/card preview and download. A Sold shared URL
+   must show only its approved summary; other inactive URLs must be generic.
+7. Buyer saves two to four approved listings, creates a comparison link, and
+   opens it signed out. Changing favorites must not change the link's members;
+   current price and availability must update. Hide a member by withdrawing or
+   removing it, then revoke the link and confirm direct URL denial. Delete the
+   creator account in the isolated environment and confirm immediate denial of
+   its remaining comparison links.
+8. Buyer posts a wanted request with private ZIP and public general area; seller
+   replies without a listing and attaches private photos. Confirm anonymous
+   browsing omits ZIP and identity, unrelated accounts cannot read the thread or
+   photos, and buyer dismiss/reopen controls messaging. Close or delete the
+   request and confirm the participant still sees the original criteria. Delete
+   either participant and confirm the survivor sees read-only history labeled
+   “Deleted account,” while public wanted content disappears.
+
+These checks require the same staging isolation, real provider wiring and safe
+cleanup as the core journey. The daily inventory email digest is post-launch and
+is not part of this release gate.
+
 ## Cleanup, evidence and execution
 
 Use staging-only authorized test tooling, scoped by the unique run namespace,

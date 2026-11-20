@@ -14,7 +14,9 @@ import type {
   FunctionReference,
 } from "convex/server";
 import type * as admin from "../admin.js";
+import type * as accountDeletion from "../accountDeletion.js";
 import type * as cities from "../cities.js";
+import type * as comparisons from "../comparisons.js";
 import type * as conversations from "../conversations.js";
 import type * as crons from "../crons.js";
 import type * as discovery from "../discovery.js";
@@ -50,6 +52,7 @@ import type * as lib_vehicleValidation from "../lib/vehicleValidation.js";
 import type * as lib_vehicleVisibility from "../lib/vehicleVisibility.js";
 import type * as lib_vinDecoder from "../lib/vinDecoder.js";
 import type * as lib_vpic from "../lib/vpic.js";
+import type * as lib_wantedPolicy from "../lib/wantedPolicy.js";
 import type * as media from "../media.js";
 import type * as mediaProcessing from "../mediaProcessing.js";
 import type * as mediaRecords from "../mediaRecords.js";
@@ -59,6 +62,12 @@ import type * as notificationHttp from "../notificationHttp.js";
 import type * as notifications from "../notifications.js";
 import type * as offers from "../offers.js";
 import type * as paymentWebhookRecords from "../paymentWebhookRecords.js";
+import type * as photoRequestMedia from "../photoRequestMedia.js";
+import type * as photoRequestMediaHttp from "../photoRequestMediaHttp.js";
+import type * as photoRequestMediaProcessing from "../photoRequestMediaProcessing.js";
+import type * as photoRequestModeration from "../photoRequestModeration.js";
+import type * as photoRequestModerationProcessing from "../photoRequestModerationProcessing.js";
+import type * as photoRequests from "../photoRequests.js";
 import type * as privacy from "../privacy.js";
 import type * as recentViews from "../recentViews.js";
 import type * as registrationPayments from "../registrationPayments.js";
@@ -71,6 +80,11 @@ import type * as trustDocuments from "../trustDocuments.js";
 import type * as users from "../users.js";
 import type * as vehicles from "../vehicles.js";
 import type * as vin from "../vin.js";
+import type * as wanted from "../wanted.js";
+import type * as wantedConversations from "../wantedConversations.js";
+import type * as wantedMedia from "../wantedMedia.js";
+import type * as wantedMediaHttp from "../wantedMediaHttp.js";
+import type * as wantedMediaProcessing from "../wantedMediaProcessing.js";
 
 /**
  * A utility for referencing Convex functions in your app's API.
@@ -82,7 +96,9 @@ import type * as vin from "../vin.js";
  */
 declare const fullApi: ApiFromModules<{
   admin: typeof admin;
+  accountDeletion: typeof accountDeletion;
   cities: typeof cities;
+  comparisons: typeof comparisons;
   conversations: typeof conversations;
   crons: typeof crons;
   discovery: typeof discovery;
@@ -118,6 +134,7 @@ declare const fullApi: ApiFromModules<{
   "lib/vehicleVisibility": typeof lib_vehicleVisibility;
   "lib/vinDecoder": typeof lib_vinDecoder;
   "lib/vpic": typeof lib_vpic;
+  "lib/wantedPolicy": typeof lib_wantedPolicy;
   media: typeof media;
   mediaProcessing: typeof mediaProcessing;
   mediaRecords: typeof mediaRecords;
@@ -127,6 +144,12 @@ declare const fullApi: ApiFromModules<{
   notifications: typeof notifications;
   offers: typeof offers;
   paymentWebhookRecords: typeof paymentWebhookRecords;
+  photoRequestMedia: typeof photoRequestMedia;
+  photoRequestMediaHttp: typeof photoRequestMediaHttp;
+  photoRequestMediaProcessing: typeof photoRequestMediaProcessing;
+  photoRequestModeration: typeof photoRequestModeration;
+  photoRequestModerationProcessing: typeof photoRequestModerationProcessing;
+  photoRequests: typeof photoRequests;
   privacy: typeof privacy;
   recentViews: typeof recentViews;
   registrationPayments: typeof registrationPayments;
@@ -139,6 +162,11 @@ declare const fullApi: ApiFromModules<{
   users: typeof users;
   vehicles: typeof vehicles;
   vin: typeof vin;
+  wanted: typeof wanted;
+  wantedConversations: typeof wantedConversations;
+  wantedMedia: typeof wantedMedia;
+  wantedMediaHttp: typeof wantedMediaHttp;
+  wantedMediaProcessing: typeof wantedMediaProcessing;
 }>;
 export declare const api: FilterApi<
   typeof fullApi,

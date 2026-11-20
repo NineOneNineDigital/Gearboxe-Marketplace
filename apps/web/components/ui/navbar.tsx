@@ -13,6 +13,7 @@ import { useState } from "react";
 
 const navigation = [
   { href: "/vehicles", label: "Vehicles" },
+  { href: "/wanted", label: "Wanted" },
   ...(popupPaymentsEnabled() ? [{ href: "/events", label: "Events" }] : []),
 ];
 
