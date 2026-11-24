@@ -1,8 +1,9 @@
 # Isolated seller-to-buyer browser test plan
 
 **Browser foundation implemented; hosted seller-to-buyer journey not yet passed.**
-The workspace now pins Playwright Test and provides two read-only Chromium public
-smokes: seller entry/inventory navigation and ZIP-to-nationwide search. The ZIP
+The workspace now pins Playwright Test and provides three read-only Chromium public
+smokes: seller entry/inventory navigation, ZIP-to-nationwide search with keyword
+filter preservation, and signed-out wanted-board navigation. The ZIP
 lookup response is deterministic; the inventory backend is not mocked. The
 runner requires an explicit loopback or exact-allowlisted staging target before
 opening a browser. Current CI still runs lint, types, Node tests and builds with
@@ -33,13 +34,25 @@ Convex and Clerk targets; environment values supplied to a test command alone
 cannot prove a deployed build's configuration. The guard is covered by a Node
 test. No staging credentials or target values belong in this document.
 
-## Isolation and prerequisites
+The first staging Vercel project shares the existing development Convex and
+Clerk resources. It is a build and public-browsing preview only. It may run the
+read-only public smokes after the operator confirms the deployed target IDs and
+allowlists, but it does not satisfy the signed-in seller-to-buyer journey below.
+The development backend currently permits one `APP_URL` origin for several
+uploads, and a local backend push can change the shared test data/functions.
+Keep the full-journey gate open until multi-origin support and safe test-data
+ownership are implemented and verified, or a separate isolated test environment
+is provisioned.
 
-- Provision a dedicated staging frontend, Convex deployment and separate Clerk
-  app per [deployment runbook](DEPLOYMENT.md); record their identifiers and the
-  candidate SHA. Never use production accounts, tokens, domains, purchase funds,
-  or databases. A staging Convex deployment can have deployment type `prod`;
-  check project identity and `MARKETPLACE_ENV=staging`, not type alone.
+## Full-journey isolation and prerequisites
+
+- Before running this full journey, provide verified multi-origin upload support
+  and isolated test-data ownership on the chosen shared development resources,
+  or provision separate staging Convex and Clerk resources. Record the frontend,
+  backend and Clerk identifiers and the candidate SHA. Never use production
+  accounts, tokens, domains, purchase funds, or databases. If separate staging
+  Convex is later provisioned, check project identity and
+  `MARKETPLACE_ENV=staging`, not deployment type alone.
 - Before seeding or deletion, the runner must compare frontend origin, Convex
   URL/site URL and Clerk issuer against an explicit staging allowlist and refuse
   absent, mismatched or production targets. Verify webhook sync and real
@@ -164,8 +177,9 @@ runs this browser journey. `pnpm --filter @gearboxe/web dev` and
 configuring isolated providers; they do not create staging accounts or data.
 
 **Next browser implementation:** extend the public foundation to a protected
-seller/moderator/buyer suite after an isolated staging frontend, Convex project,
-Clerk app and synthetic accounts exist. Add a protected CI job only for trusted
+seller/moderator/buyer suite after the shared environment can safely support
+both web origins and isolated synthetic test records, or separate staging resources
+exist. Add a protected CI job only for trusted
 code with staging-scoped secrets, its managed Chromium and explicit target
 guards; untrusted pull requests must not receive those secrets. A separate
 post-deploy staging invocation must test the candidate's deployed origin and

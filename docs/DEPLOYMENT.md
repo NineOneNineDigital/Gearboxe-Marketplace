@@ -12,9 +12,11 @@ environment-by-environment verification under [GBXMRKT-1](https://linear.app/mxn
 The observed `main` merge triggered that Production attempt; recheck the project's
 current production-branch mapping before any future merge or release.
 The marketplace's intended canonical origin is `https://gearboxemarket.com`;
-DNS and successful domain assignment have not been verified here. Later local
-changes in this checkout remain uncommitted and undeployed. Never treat a green
-build as proof that auth, notifications, or deployment wiring works.
+DNS and successful domain assignment have not been verified here. The current
+follow-on work is pushed as [draft PR #9](https://github.com/NineOneNineDigital/Gearboxe-Marketplace/pull/9)
+into `dev`; it has not been merged or deployed to a verified staging environment.
+GitHub CI passed on PR #9 head `5d05bb8c`, while Vercel Preview reported failure.
+Never treat a green build as proof that auth, notifications, or deployment wiring works.
 
 ## Environment isolation
 
@@ -22,15 +24,76 @@ build as proof that auth, notifications, or deployment wiring works.
 | --- | --- | --- | --- | --- |
 | Development | Local app | Developer deployment in non-production project | Development app/test instance | Disabled for marketplace; sandbox keys only for later event work |
 | Preview | PR/branch preview of non-production project | Isolated branch preview in non-production project | Dedicated preview app/test instance | Disabled; test keys only when later enabled |
-| Staging | Separate staging project, Production environment | Dedicated staging project's production-type deployment | Separate staging Clerk app | Disabled; test keys only when later enabled |
+| Staging web (shared dev backend) | Separate Vercel project, Production environment | Existing non-production `dev:` deployment, shared with local development | Existing development Clerk app/test accounts | Disabled; test keys only when later enabled |
 | Production | Linked production project, Production environment | Production project's production deployment | Production app/live instance | Disabled; live keys only for a separately approved event rollout |
 
-Convex's deployment **type** `prod` is distinct from the marketplace environment:
-the dedicated staging project's `prod` deployment still has `MARKETPLACE_ENV=staging`.
+The founder chose to share the existing non-production Convex development deployment
+and Clerk development app with the staging web project. This keeps production data
+and accounts out of staging, but staging and local development will see the same
+test accounts and backend data. `dev` is also the source-code branch; distinguish
+that branch name from the Convex `dev:` deployment type. The Vercel project's
+Production deployment slot is an infrastructure label, not Gearboxe production.
 Do not copy production users, listings, payment records, or secrets into non-production.
 Use synthetic test accounts/data. Never use the sample-data seeder in staging or production.
 
-Clerk recommends a separate application for staging, not shared production data:
+## Staging source and first build
+
+Use a separate staging Vercel project whose **Production branch tracks `dev`**.
+That project's Production environment then supplies `VERCEL_ENV=production`,
+while `MARKETPLACE_ENV=staging` identifies the application environment. Vercel's
+word “Production” here names that separate project's deployment slot; it does
+not connect Gearboxe production accounts, data, domains, or secrets. A merge
+to `dev` would deploy staging, never the marketplace production project, which
+is intended to track `main`. The founder selected this branch mapping on November
+20, 2026; verify both projects' actual Git settings and domain assignments
+before merging a candidate. PR #9 remains a draft.
+
+1. Inventory the existing development Convex deployment and Clerk application
+   identities without copying or printing their keys. Confirm that both contain
+   only suitable non-production accounts/data. Create a separate Vercel web
+   project (and admin project if needed), with stable staging origins away from
+   public production domains.
+2. Treat the shared backend as a deliberate coupling: local development and the
+   staging web app use the same functions, data, Clerk users and webhooks. A
+   backend push from either workflow can affect the other. Record the exact
+   backend version and coordinate updates before each browser run.
+3. The committed `vercel.json` calls `build:deploy`. Set
+   `STAGING_SHARED_DEV_BACKEND=true` only in this project's Production scope to
+   select its guarded **frontend-only** path. The guard requires the `dev` Git
+   branch, `MARKETPLACE_ENV=staging`, `VERCEL_ENV=production`, a `dev:`
+   `CONVEX_DEPLOYMENT` matching `NEXT_PUBLIC_CONVEX_URL`, test Clerk keys, and a
+   separate staging web origin. Do not set `CONVEX_DEPLOY_KEY` or
+   `EXPECTED_CONVEX_DEPLOYMENT` in that scope. This path builds the web app but
+   does not deploy or validate the backend. Do not bypass the production/preview
+   target guard by changing its environment values.
+4. Configure the staging Vercel web project's Production scope with the shared
+   dev Convex URL/site URL, development Clerk keys, exact staging web origin,
+   disabled popup/offer switches as appropriate, and no production secrets.
+   Set Node 22, root directory `apps/web`, and workspace file access. The
+   backend's `APP_URL` currently names one allowed web origin for several upload
+   flows. The founder selected a build and browsing preview first; do not claim
+   full auth/upload journey coverage from this site.
+5. Verify Git branch tracking and review/merge the candidate into `dev` only
+   under the project's merge approval process. Separately update the shared
+   backend from the reviewed code with `pnpm --filter @gearboxe/web exec convex dev --once` only after verifying
+   the CLI targets the intended `dev:` deployment; this affects local development
+   immediately. Capture the staging deployment URL, frontend commit SHA,
+   backend code reference and shared Convex deployment identity. A passing
+   GitHub CI build alone is insufficient.
+6. Verify the existing development Clerk webhook targets that same Convex site
+   URL. Use synthetic test accounts and run only browser checks supported by the
+   shared-origin configuration in [the browser test plan](BROWSER_TEST_PLAN.md).
+   Keep destructive cleanup scoped to tagged fixtures so ordinary dev work is
+   preserved. Record both frontend and backend versions and test results.
+
+PR Preview is a separate lane: it requires `MARKETPLACE_ENV=preview`, a
+Preview-scoped `preview:` Convex deploy key from a non-production project, and a
+dedicated preview Clerk app/webhook if authenticated flows are to work there.
+Do not put staging or production deploy keys in the existing project's Preview
+scope just to clear a failed PR check.
+
+Clerk recommends a separate application for staging; the chosen shared development
+application accepts coupling with local development while excluding production data:
 [Clerk environments](https://clerk.com/docs/guides/development/managing-environments).
 A staging production instance with its own custom domain is supported (live Clerk keys,
 **test Stripe keys**); development and previews require test Clerk keys.
@@ -41,18 +104,18 @@ Prefer isolated [Stripe sandboxes](https://docs.stripe.com/sandboxes) when the l
 1. Review, commit, and push changes to the linked GitHub repository. Protect `main`:
    require PR review and the `Lint, types, tests, and builds` CI check, restrict
    direct pushes and bypasses. CI must run successfully on an actual PR.
-2. Verify the existing development Convex resource and create or verify distinct
-   staging and production resources as above.
+2. Verify the shared development Convex resource and the distinct production resource.
    Record project/deployment IDs, region, owner, and URLs in the private operations inventory.
    Enable appropriate backups and confirm export access. Do not run `convex deploy`
    relying on a developer's default target: it defaults to that project's production deployment.
-3. Verify the Clerk applications/instances and create missing isolated instances.
+3. Verify the shared development Clerk application and the distinct production instance.
    Configure a Clerk JWT template named `convex`, matching each backend's issuer.
    Configure custom domains for production Clerk and the marketplace.
-4. Verify the linked Vercel production project and create an isolated staging project rooted at `apps/web`. Use Node 22,
+4. Verify the linked Vercel production project and create a separate staging project rooted at `apps/web`. Use Node 22,
    include workspace files outside the root directory, and retain the committed
-   `vercel.json` build/install commands. Deploy the unified administration portal
-   as a separate project rooted at `apps/admin`, using the same environment's
+   `vercel.json` build/install commands with the guarded shared-dev mode above.
+   Deploy the unified administration portal
+   as a separate project rooted at `apps/admin`, using the same backend's
    Clerk and Convex configuration from `apps/admin/.env.example`. Set
    `NEXT_PUBLIC_APP_URL` to that environment's public web origin and set
    `NEXT_PUBLIC_ADMIN_PORTAL_URL` on the web project to the portal origin. Portal
@@ -89,7 +152,10 @@ Prefer isolated [Stripe sandboxes](https://docs.stripe.com/sandboxes) when the l
 Start from `apps/web/.env.example`; it contains placeholders, not working credentials.
 Offers default to disabled. Set `NEXT_PUBLIC_OFFERS_ENABLED=true` on the web build and `OFFERS_ENABLED=true` on its matching Convex deployment only after the approved Terms and Privacy Policy and six-month offer-history deletion have been verified. Leave both disabled until those launch gates are met. Configure `OFFER_REVIEWER_USER_IDS` in Convex as a comma-separated list of active administrator Convex user IDs for founder/backup day-seven escalation. Without a roster, the durable admin queue remains available but no direct reviewer notice is sent.
 
-Set `MARKETPLACE_ENV` explicitly on every hosted frontend/backend. Local `next dev`
+Set `MARKETPLACE_ENV` explicitly on every hosted frontend/backend. The shared
+development Convex backend remains `MARKETPLACE_ENV=development` while the
+staging Vercel web project uses `MARKETPLACE_ENV=staging`; the frontend-only build
+does not run a matched backend readiness check. Local `next dev`
 defaults to development; local `next start` requires an explicit mode and runtime secrets.
 Set `NEXT_PUBLIC_POPUP_PAYMENTS_ENABLED=false` on both the web and matching Convex
 deployment for the marketplace release. Omitted or literal `false` disables new
@@ -128,11 +194,13 @@ integer USD-cent amount and match between web and backend. Key prefixes do not
 prove a key is valid or belongs to
 the intended account; verify account IDs and modes during provisioning and smoke tests.
 
-Vercel deploy credentials: `CONVEX_DEPLOY_KEY` and, for staging/production,
+Vercel deploy credentials for backend-deploying projects: `CONVEX_DEPLOY_KEY` and, for dedicated staging/production,
 `EXPECTED_CONVEX_DEPLOYMENT` (exact deployment name). Scope the key to the minimum
 permissions needed for deploy and internal readiness execution. Preview scope
-uses a `preview:` key from the non-production project. Staging/production use
-`prod:DEPLOYMENT|...` keys belonging to their respective projects. Legacy unscoped
+uses a `preview:` key from the non-production project. Dedicated staging/production use
+`prod:DEPLOYMENT|...` keys belonging to their respective projects. The selected
+shared-dev staging web project uses no Convex deploy key and cannot update the backend.
+Legacy unscoped
 keys are intentionally rejected by the wrapper. Never put deploy keys in browser variables.
 The old global `@secret` references in `vercel.json` have been replaced with
 environment-scoped Vercel settings; re-enter the appropriate per-environment values
