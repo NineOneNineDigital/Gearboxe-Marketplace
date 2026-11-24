@@ -50,9 +50,12 @@ before merging a candidate. PR #9 remains a draft.
 
 1. Inventory the existing development Convex deployment and Clerk application
    identities without copying or printing their keys. Confirm that both contain
-   only suitable non-production accounts/data. Create a separate Vercel web
+   only synthetic non-production accounts/data. Create a separate Vercel web
    project (and admin project if needed), with stable staging origins away from
-   public production domains.
+   public production domains. Enable project deployment protection before any
+   successful build exposes the shared development backend; allow only approved
+   testers. A public staging URL would permit outsiders to sign up and mutate
+   development data even though some uploads are blocked by `APP_URL`.
 2. Treat the shared backend as a deliberate coupling: local development and the
    staging web app use the same functions, data, Clerk users and webhooks. A
    backend push from either workflow can affect the other. Record the exact
@@ -73,16 +76,20 @@ before merging a candidate. PR #9 remains a draft.
    backend's `APP_URL` currently names one allowed web origin for several upload
    flows. The founder selected a build and browsing preview first; do not claim
    full auth/upload journey coverage from this site.
-5. Verify Git branch tracking and review/merge the candidate into `dev` only
-   under the project's merge approval process. Separately update the shared
-   backend from the reviewed code with `pnpm --filter @gearboxe/web exec convex dev --once` only after verifying
-   the CLI targets the intended `dev:` deployment; this affects local development
-   immediately. Capture the staging deployment URL, frontend commit SHA,
-   backend code reference and shared Convex deployment identity. A passing
-   GitHub CI build alone is insufficient.
+5. Before merging into `dev`, review backend compatibility with the currently
+   serving development frontends and update the shared backend from the reviewed
+   candidate with `pnpm --filter @gearboxe/web exec convex dev --once` only after
+   verifying the CLI targets the intended `dev:` deployment. This affects local
+   development immediately. Record the backend code reference and verify its
+   required functions. Then merge the candidate into `dev` under the project's
+   approval process so the auto-tracking Vercel frontend builds against that
+   backend version. Capture the staging deployment URL, frontend commit SHA and
+   shared Convex deployment identity. A passing GitHub CI build alone is
+   insufficient.
 6. Verify the existing development Clerk webhook targets that same Convex site
    URL. Use synthetic test accounts and run only browser checks supported by the
    shared-origin configuration in [the browser test plan](BROWSER_TEST_PLAN.md).
+   Confirm access protection is active before sharing the staging URL.
    Keep destructive cleanup scoped to tagged fixtures so ordinary dev work is
    preserved. Record both frontend and backend versions and test results.
 

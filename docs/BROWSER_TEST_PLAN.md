@@ -35,9 +35,10 @@ cannot prove a deployed build's configuration. The guard is covered by a Node
 test. No staging credentials or target values belong in this document.
 
 The first staging Vercel project shares the existing development Convex and
-Clerk resources. It is a build and public-browsing preview only. It may run the
-read-only public smokes after the operator confirms the deployed target IDs and
-allowlists, but it does not satisfy the signed-in seller-to-buyer journey below.
+Clerk resources. It is an access-protected build and browsing preview only.
+Only approved testers should reach it. It may run the read-only public smokes
+after the operator confirms the deployed target IDs, allowlists and authorized
+test access, but it does not satisfy the signed-in seller-to-buyer journey below.
 The development backend currently permits one `APP_URL` origin for several
 uploads, and a local backend push can change the shared test data/functions.
 Keep the full-journey gate open until multi-origin support and safe test-data
