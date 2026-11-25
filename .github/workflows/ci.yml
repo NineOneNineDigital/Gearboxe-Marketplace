@@ -23,7 +23,7 @@ jobs:
       MARKETPLACE_ENV: ci
       NEXT_TELEMETRY_DISABLED: 1
       # Public, nonfunctional build fixtures. No production secrets or deployments.
-      NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY: pk_test_ZXhhbXBsZS5jbGVyay5hY2NvdW50cy5kZXYk
+      NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY: pk_test_Zm9vLWJhci0xMi5jbGVyay5hY2NvdW50cy5kZXYk
       NEXT_PUBLIC_CONVEX_URL: https://ci-build-only.convex.cloud
       NEXT_PUBLIC_CONVEX_SITE_URL: https://ci-build-only.convex.site
       NEXT_PUBLIC_APP_URL: http://localhost:3000
