@@ -1,8 +1,9 @@
 export function validateDeploymentTarget(env) {
   if (env.STAGING_SHARED_DEV_BACKEND === "true") {
-    if (env.VERCEL !== "1" || env.VERCEL_ENV !== "production" ||
-        env.MARKETPLACE_ENV !== "staging" || env.VERCEL_GIT_COMMIT_REF !== "dev") {
-      throw new Error("Shared development backend builds require the staging Vercel project on dev");
+    if (env.VERCEL !== "1" || env.VERCEL_ENV !== "preview" ||
+        env.MARKETPLACE_ENV !== "preview" || env.VERCEL_GIT_COMMIT_REF !== "dev" ||
+        !env.VERCEL_URL || /^(?:www\.)?gearboxemarket\.com$/i.test(env.VERCEL_URL)) {
+      throw new Error("Shared development backend builds require a Vercel Preview on dev");
     }
     if (env.CONVEX_DEPLOY_KEY || env.EXPECTED_CONVEX_DEPLOYMENT) {
       throw new Error("Shared development backend builds must not contain Convex deploy credentials");
@@ -19,9 +20,9 @@ export function validateDeploymentTarget(env) {
     }
     const appUrl = env.NEXT_PUBLIC_APP_URL;
     if (!appUrl || /^https:\/\/(?:www\.)?gearboxemarket\.com\/?$/i.test(appUrl)) {
-      throw new Error("Shared development backend builds require a separate staging web origin");
+      throw new Error("Shared development backend builds require a separate Preview web origin");
     }
-    return { mode: "staging", frontendOnly: true, targetArgs: [] };
+    return { mode: "preview", frontendOnly: true, targetArgs: [] };
   }
   const mode = env.MARKETPLACE_ENV;
   if (env.VERCEL !== "1" || !["preview", "staging", "production"].includes(mode)) {
