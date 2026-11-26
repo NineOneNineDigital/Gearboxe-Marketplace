@@ -11,17 +11,17 @@ registerHooks({ resolve(specifier, context, nextResolve) {
   return nextResolve(specifier, context);
 } });
 const { recordEngagementInquiry, recordEngagementResponse, engagementPurgeAt } = await import("../convex/lib/engagement.ts");
-const { weekly, purge } = await import("../convex/engagement.ts");
+const { weekly, reviewPairs, setExcluded, purge } = await import("../convex/engagement.ts");
 const { getAdminStats } = await import("../convex/admin.ts");
 function fixture() {
   let actor = "admin", sequence = 0;
-  const tables = { engagementPairs: [], engagementTracking: [], users: [{ _id: "admin", externalId: "admin", role: "admin" }, { _id: "buyer", externalId: "buyer", role: "user", emailVerified: true }] };
+  const tables = { engagementPairs: [], engagementTracking: [], adminAuditLog: [], users: [{ _id: "admin", externalId: "admin", role: "admin" }, { _id: "buyer", externalId: "buyer", role: "user", emailVerified: true }] };
   const query = table => {
     const checks = [];
     const q = { withIndex(_name, cb) { const b = { eq(field, v) { checks.push(x => x[field] === v); return b; }, gte(field, v) { checks.push(x => x[field] >= v); return b; }, lte(field, v) { checks.push(x => x[field] <= v); return b; } }; cb(b); return q; }, unique: async () => tables[table].find(x => checks.every(f => f(x))) ?? null, take: async n => tables[table].filter(x => checks.every(f => f(x))).slice(0, n) };
     return q;
   };
-  const ctx = { auth: { getUserIdentity: async () => actor ? { subject: actor } : null }, db: { query, insert: async (table, row) => { const id = `id-${++sequence}`; tables[table].push({ _id: id, ...row }); return id; }, patch: async (id, value) => { const row = Object.values(tables).flat().find(x => x._id === id); Object.assign(row, value); }, delete: async id => { for (const rows of Object.values(tables)) { const i = rows.findIndex(row => row._id === id); if (i >= 0) rows.splice(i, 1); } } } };
+  const ctx = { auth: { getUserIdentity: async () => actor ? { subject: actor } : null }, db: { query, get: async id => Object.values(tables).flat().find(x => x._id === id) ?? null, insert: async (table, row) => { const id = `id-${++sequence}`; tables[table].push({ _id: id, ...row }); return id; }, patch: async (id, value) => { const row = Object.values(tables).flat().find(x => x._id === id); Object.assign(row, value); }, delete: async id => { for (const rows of Object.values(tables)) { const i = rows.findIndex(row => row._id === id); if (i >= 0) rows.splice(i, 1); } } } };
   return { ctx, tables, as: value => { actor = value; } };
 }
 test("inquiries deduplicate across sources and seller responses remain separate from reserved", async () => {
@@ -41,6 +41,30 @@ test("inquiries deduplicate across sources and seller responses remain separate 
   assert.doesNotMatch(JSON.stringify(report), /buyer|seller|vehicle|price|content/);
   f.as("buyer"); await assert.rejects(weekly._handler(f.ctx, {}), /Administrator/);
   f.as(null); await assert.rejects(weekly._handler(f.ctx, {}), /Authentication/);
+});
+test("admins can audit exclusion and restoration without exposing private content in reports", async () => {
+  const f = fixture(), now = Date.now(), vehicle = { _id: "vehicle", userId: "seller" }, buyer = f.tables.users[1];
+  await recordEngagementInquiry(f.ctx, vehicle, buyer, "active", "offer", now - 1000);
+  await recordEngagementResponse(f.ctx, "vehicle", "buyer", "seller", now - 500, "active");
+  const pairId = f.tables.engagementPairs[0]._id;
+  const review = await reviewPairs._handler(f.ctx, {});
+  assert.equal(review.pairs.length, 1);
+  assert.doesNotMatch(JSON.stringify(review), /price|messageText|contact|email/);
+  await assert.rejects(setExcluded._handler(f.ctx, { pairId, excluded: true, reason: "short" }), /Reason/);
+  await setExcluded._handler(f.ctx, { pairId, excluded: true, reason: "Known internal test account" });
+  assert.equal((await weekly._handler(f.ctx, {})).active.inquiries, 0);
+  assert.equal((await weekly._handler(f.ctx, {})).excludedPairs, 1);
+  assert.equal(f.tables.adminAuditLog[0].action, "engagement_pair_excluded");
+  assert.match(f.tables.adminAuditLog[0].reason, /Known internal test account/);
+  await setExcluded._handler(f.ctx, { pairId, excluded: true, reason: "Known internal test account" });
+  assert.equal(f.tables.adminAuditLog.length, 1);
+  f.as("buyer");
+  await assert.rejects(reviewPairs._handler(f.ctx, {}), /Administrator/);
+  await assert.rejects(setExcluded._handler(f.ctx, { pairId, excluded: false, reason: "Restore after investigation" }), /Administrator/);
+  f.as("admin");
+  await setExcluded._handler(f.ctx, { pairId, excluded: false, reason: "Restored after investigation" });
+  assert.equal((await weekly._handler(f.ctx, {})).active.responses, 1);
+  assert.equal(f.tables.adminAuditLog[1].action, "engagement_pair_restored");
 });
 test("unverified, suspended, and self inquiries are not captured", async () => {
   const f = fixture(), vehicle = { _id: "vehicle", userId: "seller" };

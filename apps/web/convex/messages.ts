@@ -3,7 +3,7 @@ import { isPublicVehicle } from "./lib/vehicleVisibility";
 import { recordEngagementInquiry, recordEngagementResponse } from "./lib/engagement";
 import { paginationOptsValidator } from "convex/server";
 import { enqueueNotification } from "./notifications";
-import { assertBuyerEmailVerified, assertCanContact, consumeRateLimit } from "./lib/trustGuards";
+import { assertBuyerEmailVerified, assertCanContact, assertNoRecentDuplicateMessage, consumeRateLimit } from "./lib/trustGuards";
 import { mutation, query } from "./_generated/server";
 import {
   isConversationParticipant,
@@ -27,8 +27,7 @@ export const sendMessage = mutation({
     if (currentUser._id === args.recipientId) {
       throw new Error("You cannot message yourself");
     }
-    const recent = await ctx.db.query("messages").withIndex("by_sender", q => q.eq("senderId", currentUser._id)).order("desc").take(30);
-    if (recent.some(message => message.content === content && message.createdAt > Date.now() - 60_000)) throw new Error("Wait before sending the same message again");
+    await assertNoRecentDuplicateMessage(ctx, currentUser._id, content);
     const vehicle = await ctx.db.get(args.vehicleId);
     if (!vehicle) {
       throw new Error("Vehicle is not available");

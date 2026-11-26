@@ -1,13 +1,13 @@
 import { httpAction } from "./_generated/server";
 import { internal } from "./_generated/api";
 import { assertUploadMetadata, MAX_UPLOAD_BYTES } from "./lib/mediaPolicy";
+import { allowedHttpOrigin } from "./lib/httpOrigin";
 import type { Id } from "./_generated/dataModel";
 
 export const upload = httpAction(async (ctx, request) => {
   const origin = request.headers.get("Origin");
-  let allowed: string | undefined;
-  try { if (process.env.APP_URL) allowed = new URL(process.env.APP_URL).origin; }
-  catch { /* Missing/invalid configuration fails closed below. */ }
+  const allowed = allowedHttpOrigin(origin, { APP_URL: process.env.APP_URL,
+    DEV_PREVIEW_APP_URL: process.env.DEV_PREVIEW_APP_URL, MARKETPLACE_ENV: process.env.MARKETPLACE_ENV });
   const headers = { "Access-Control-Allow-Origin": allowed ?? "", "Vary": "Origin", "Cache-Control": "no-store", "Referrer-Policy": "no-referrer" };
   if (!allowed || origin !== allowed) return new Response("Upload origin not allowed", { status: 403 });
   if (request.method === "OPTIONS") return new Response(null, { status: 204, headers: { ...headers, "Access-Control-Allow-Methods": "POST, OPTIONS", "Access-Control-Allow-Headers": "Content-Type", "Access-Control-Max-Age": "600" } });

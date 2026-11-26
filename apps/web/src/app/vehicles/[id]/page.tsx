@@ -1,6 +1,6 @@
 import type { Metadata } from "next";
-import { absoluteUrl, serializeJsonLd } from "@/lib/seo";
-import { getPublicListingMetadata } from "@/lib/public-listing-seo";
+import { absoluteUrl, serializeJsonLd, soldListingMetadata } from "@/lib/seo";
+import { getSharedListing } from "@/lib/public-listing-seo";
 import { isTrustedImageUrl } from "@/lib/trusted-images";
 import VehicleDetailClient from "./vehicle-detail-client";
 
@@ -9,12 +9,14 @@ export const dynamic = "force-dynamic";
 
 export async function generateMetadata({ params }: Props): Promise<Metadata> {
   const { id } = await params;
-  const { vehicle } = await getPublicListingMetadata(id);
+  const listing = await getSharedListing(id);
   const url = absoluteUrl(`/vehicles/${encodeURIComponent(id)}`);
-  if (!vehicle) return {
+  if (listing.kind === "sold") return soldListingMetadata(listing, url);
+  if (listing.kind !== "available") return {
     title: "Vehicle listing | Gearboxe", alternates: { canonical: url },
     robots: { index: false, follow: true },
   };
+  const vehicle = listing.vehicle;
   const title = `${vehicle.title} | Gearboxe`;
   const price = new Intl.NumberFormat("en-US", { style: "currency", currency: "USD", maximumFractionDigits: 0 }).format(vehicle.price);
   const description = vehicle.status === "reserved"
@@ -30,7 +32,8 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
 
 export default async function VehiclePage({ params }: Props) {
   const { id } = await params;
-  const { vehicle } = await getPublicListingMetadata(id);
+  const listing = await getSharedListing(id);
+  const vehicle = listing.kind === "available" ? listing.vehicle : null;
   const jsonLd = vehicle ? {
     "@context": "https://schema.org", "@type": "Car", name: vehicle.title,
     brand: { "@type": "Brand", name: vehicle.make }, model: vehicle.model,

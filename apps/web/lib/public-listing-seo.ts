@@ -19,16 +19,21 @@ export interface PublicListingMetadata {
   updatedAt?: number;
 }
 
-const metadataVehicle = makeFunctionReference<"query", { id: string }, PublicListingMetadata | null>("discovery:metadataVehicle");
+export type SharedListing =
+  | { kind: "unavailable" }
+  | { kind: "sold"; year: number; make: string; model: string; location?: { city: string; state: string } }
+  | { kind: "available"; vehicle: PublicListingMetadata };
+
+const sharedListing = makeFunctionReference<"query", { id: string }, SharedListing>("discovery:sharedListing");
 
 // Request-scoped deduplication prevents separate metadata and JSON-LD requests.
 // No persistent cache: withdrawing a listing also withdraws its public metadata.
-export const getPublicListingMetadata = cache(async (id: string) => {
+export const getSharedListing = cache(async (id: string): Promise<SharedListing> => {
   try {
-    return { available: true as const, vehicle: await fetchQuery(metadataVehicle, { id }) };
+    return await fetchQuery(sharedListing, { id });
   } catch {
     // Avoid printing request payloads or credentials while preserving an operational signal.
-    console.warn("Public listing metadata could not be loaded from Convex");
-    return { available: false as const, vehicle: null };
+    console.warn("Shared listing could not be loaded from Convex");
+    return { kind: "unavailable" };
   }
 });

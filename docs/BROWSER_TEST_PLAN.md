@@ -1,8 +1,9 @@
 # Isolated seller-to-buyer browser test plan
 
 **Browser foundation implemented; hosted seller-to-buyer journey not yet passed.**
-The workspace now pins Playwright Test and provides two read-only Chromium public
-smokes: seller entry/inventory navigation and ZIP-to-nationwide search. The ZIP
+The workspace now pins Playwright Test and provides three read-only Chromium public
+smokes: seller entry/inventory navigation, ZIP-to-nationwide search with keyword
+filter preservation, and signed-out wanted-board navigation. The ZIP
 lookup response is deterministic; the inventory backend is not mocked. The
 runner requires an explicit loopback or exact-allowlisted staging target before
 opening a browser. Current CI still runs lint, types, Node tests and builds with
@@ -33,13 +34,29 @@ Convex and Clerk targets; environment values supplied to a test command alone
 cannot prove a deployed build's configuration. The guard is covered by a Node
 test. No staging credentials or target values belong in this document.
 
-## Isolation and prerequisites
+The `dev` Vercel Preview shares the existing development Convex and Clerk
+resources. It is an access-protected build and browsing preview. On November 25, Vercel
+Authentication showed Require Log In enabled and a cookie-free request redirected
+to Vercel sign-in. Marketplace-signed-out browser checks used a Vercel-authenticated
+Chrome session; only approved Vercel team members should reach the shared data. It may run the read-only public smokes
+after the operator confirms the deployed target IDs, allowlists and authorized
+test access, but it does not satisfy the signed-in seller-to-buyer journey below.
+The development backend currently permits one `APP_URL` origin for several
+uploads, and a local backend push can change the shared test data/functions.
+The exact-origin Preview upload guard is prepared in draft PR #9 but is not
+yet deployed to the shared development backend. Keep the full-journey gate open
+until it is deployed, configured and verified with disposable accounts, or a
+separate isolated test environment is provisioned.
 
-- Provision a dedicated staging frontend, Convex deployment and separate Clerk
-  app per [deployment runbook](DEPLOYMENT.md); record their identifiers and the
-  candidate SHA. Never use production accounts, tokens, domains, purchase funds,
-  or databases. A staging Convex deployment can have deployment type `prod`;
-  check project identity and `MARKETPLACE_ENV=staging`, not type alone.
+## Full-journey isolation and prerequisites
+
+- Before running this full journey, provide verified multi-origin upload support
+  and isolated test-data ownership on the chosen shared development resources,
+  or provision separate staging Convex and Clerk resources. Record the frontend,
+  backend and Clerk identifiers and the candidate SHA. Never use production
+  accounts, tokens, domains, purchase funds, or databases. If separate staging
+  Convex is later provisioned, check project identity and
+  `MARKETPLACE_ENV=staging`, not deployment type alone.
 - Before seeding or deletion, the runner must compare frontend origin, Convex
   URL/site URL and Clerk issuer against an explicit staging allowlist and refuse
   absent, mismatched or production targets. Verify webhook sync and real
@@ -107,6 +124,35 @@ test. No staging credentials or target values belong in this document.
    verify public search and detail update while existing conversation remains
    accessible under privacy rules.
 
+## Additional MVP flow checks on isolated staging
+
+After the core GBXMRKT-3 journey is running, use the same isolated identities
+and tagged records to verify the later MVP features:
+
+6. Buyer requests private listing photos; seller replies. Confirm another buyer
+   and an anonymous visitor cannot open the private images. Seller selects one
+   reply image for public review; verify it remains private until a moderator
+   approves it. Test request permissions while the listing is Reserved, then
+   verify the seller's share post/card preview and download. A Sold shared URL
+   must show only its approved summary; other inactive URLs must be generic.
+7. Buyer saves two to four approved listings, creates a comparison link, and
+   opens it signed out. Changing favorites must not change the link's members;
+   current price and availability must update. Hide a member by withdrawing or
+   removing it, then revoke the link and confirm direct URL denial. Delete the
+   creator account in the isolated environment and confirm immediate denial of
+   its remaining comparison links.
+8. Buyer posts a wanted request with private ZIP and public general area; seller
+   replies without a listing and attaches private photos. Confirm anonymous
+   browsing omits ZIP and identity, unrelated accounts cannot read the thread or
+   photos, and buyer dismiss/reopen controls messaging. Close or delete the
+   request and confirm the participant still sees the original criteria. Delete
+   either participant and confirm the survivor sees read-only history labeled
+   “Deleted account,” while public wanted content disappears.
+
+These checks require the same staging isolation, real provider wiring and safe
+cleanup as the core journey. The daily inventory email digest is post-launch and
+is not part of this release gate.
+
 ## Cleanup, evidence and execution
 
 Use staging-only authorized test tooling, scoped by the unique run namespace,
@@ -135,8 +181,9 @@ runs this browser journey. `pnpm --filter @gearboxe/web dev` and
 configuring isolated providers; they do not create staging accounts or data.
 
 **Next browser implementation:** extend the public foundation to a protected
-seller/moderator/buyer suite after an isolated staging frontend, Convex project,
-Clerk app and synthetic accounts exist. Add a protected CI job only for trusted
+seller/moderator/buyer suite after the shared environment can safely support
+both web origins and isolated synthetic test records, or separate staging resources
+exist. Add a protected CI job only for trusted
 code with staging-scoped secrets, its managed Chromium and explicit target
 guards; untrusted pull requests must not receive those secrets. A separate
 post-deploy staging invocation must test the candidate's deployed origin and

@@ -37,7 +37,7 @@ export async function enqueueNotification(ctx: MutationCtx, input: NotificationI
   if (existing) return existing._id;
   if (!safeNotificationPath(input.link) || !categories.includes(input.category)) throw new Error("Invalid notification link or category");
   const user = await ctx.db.get(input.userId);
-  if (!user) return null;
+  if (!user || user.deletedAt !== undefined) return null;
   const { email, sourceUserId, ...fields } = input;
   const now = Date.now();
   const id = await ctx.db.insert("notifications", { ...fields, createdAt: now });
@@ -57,7 +57,10 @@ export async function enqueueNotification(ctx: MutationCtx, input: NotificationI
   return id;
 }
 function subject(kind: string) {
+  if (kind === "wanted_expiry_reminder") return "Your Gearboxe wanted request expires soon";
+  if (kind === "wanted_removed") return "Your Gearboxe wanted request was removed";
   if (kind === "new_message") return "You have a new Gearboxe message";
+  if (kind === "wanted_passed") return "A Gearboxe wanted response was closed";
   if (kind === "offer_review_alert") return "A Gearboxe reservation needs support review";
   if (kind.startsWith("offer_")) return "Your Gearboxe offer has an update";
   if (kind === "availability_reminder") return "Confirm your Gearboxe listing availability";
@@ -71,9 +74,12 @@ function subject(kind: string) {
   return "A Gearboxe listing update";
 }
 function emailMessage(kind: string) {
+  if (kind === "wanted_expiry_reminder") return "Your wanted request expires in three days. Sign in to My Requests and choose Still looking to keep it active.";
+  if (kind === "wanted_removed") return "Your wanted request was removed by the safety team. Sign in to My Requests or Safety & support for help.";
   // Email deliberately excludes message content, VIN, contact details, private
   // moderator reasons and event admission/QR credentials.
   if (kind === "new_message") return "You received a new message. Sign in to read it and reply.";
+  if (kind === "wanted_passed") return "The buyer passed on your wanted-request response. Sign in to view the conversation.";
   if (kind === "offer_review_alert") return "A reservation needs support follow-up. Sign in to the private review queue.";
   if (kind.startsWith("offer_")) return "A private offer has an update. Sign in to Gearboxe to review the current terms and respond if needed.";
   if (kind === "availability_reminder") return "Confirm your listing is still available before its 45-day deadline. Sign in to My Listings to confirm.";

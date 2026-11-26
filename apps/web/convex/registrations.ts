@@ -1,6 +1,6 @@
 import { popupPaymentsEnabled } from "./lib/environment";
 import { eventForViewer } from "./lib/eventVisibility";
-import { isPublicVehicle, publicVehicle } from "./lib/vehicleVisibility";
+import { isPublicVehicleFromActiveSeller, publicVehicle } from "./lib/vehicleVisibility";
 import { resolveVehicleMedia } from "./lib/vehicleMedia";
 import { checkIn } from "./eventOperations";
 import { requireEventStaff, rosterRow } from "./lib/eventStaff";
@@ -33,9 +33,9 @@ export const getVehiclesByEvent = query({
         .filter((registration) => registration.paymentStatus === "completed")
         .map((registration) => ctx.db.get(registration.vehicleId))
     );
-    const visible = vehicles.flatMap((vehicle) =>
-      vehicle && isPublicVehicle(vehicle) ? [publicVehicle(vehicle)] : []
-    );
+    const visible = (await Promise.all(vehicles.map(async vehicle =>
+      vehicle && await isPublicVehicleFromActiveSeller(ctx, vehicle) ? publicVehicle(vehicle) : null
+    ))).filter(vehicle => vehicle !== null);
     return Promise.all(visible.map(vehicle => resolveVehicleMedia(ctx, vehicle)));
   },
 });

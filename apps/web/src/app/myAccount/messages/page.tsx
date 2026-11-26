@@ -135,6 +135,7 @@ export default function MessagesPage() {
               <p className="text-gray-600 text-lg">
                 Connect with potential buyers and sellers
               </p>
+              <Link className="mt-2 inline-block text-sm font-medium text-primary underline" href="/myAccount/wanted-messages">Wanted-request conversations</Link>
             </div>
             <div className="flex items-center space-x-3">
               <div className="relative">

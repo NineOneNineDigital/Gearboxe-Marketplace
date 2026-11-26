@@ -86,6 +86,11 @@ pnpm dev
 - Marketplace: http://localhost:3000
 - Administration portal: http://localhost:3002
 
+For local browser tests and uploads, set the web app's `NEXT_PUBLIC_APP_URL`
+and the development Convex deployment's `APP_URL` to the actual marketplace
+origin (normally `http://localhost:3000`). The admin portal's default origin is
+different; using it as the marketplace origin breaks web upload checks and links.
+
 Run one app at a time:
 
 ```bash
@@ -137,5 +142,9 @@ after the `dev` → `main` merge failed on missing `MARKETPLACE_ENV`; a healthy
 public deployment and the canonical `gearboxemarket.com` domain remain unverified.
 See [GBXMRKT-1](https://linear.app/mxndev/issue/GBXMRKT-1/configure-marketplace-hosted-environments-and-recover-failed-main)
 for the separate environment recovery work.
-The marketplace's Vercel build command deploys the explicitly targeted Convex
-backend and builds the frontend against its URL; production releases require review.
+The marketplace's Vercel build command invokes a guarded Convex deploy for
+backend-deploying targets and builds the frontend with the resulting backend URL;
+production releases require review. The `dev` branch uses a guarded Preview build in the existing
+Vercel project with `STAGING_SHARED_DEV_BACKEND=true`. It builds against the shared
+development backend without deploying it. Update that backend from a reviewed branch before
+merging into `dev`; see the [staging procedure](docs/DEPLOYMENT.md).

@@ -13,11 +13,15 @@ import type {
   FilterApi,
   FunctionReference,
 } from "convex/server";
+import type * as accountDeletion from "../accountDeletion.js";
 import type * as admin from "../admin.js";
 import type * as cities from "../cities.js";
+import type * as comparisons from "../comparisons.js";
 import type * as conversations from "../conversations.js";
 import type * as crons from "../crons.js";
+import type * as dealerRisk from "../dealerRisk.js";
 import type * as discovery from "../discovery.js";
+import type * as discoveryAnalytics from "../discoveryAnalytics.js";
 import type * as emailDelivery from "../emailDelivery.js";
 import type * as emailRecords from "../emailRecords.js";
 import type * as engagement from "../engagement.js";
@@ -30,9 +34,11 @@ import type * as http from "../http.js";
 import type * as lib_authorization from "../lib/authorization.js";
 import type * as lib_autoDev from "../lib/autoDev.js";
 import type * as lib_autosend from "../lib/autosend.js";
+import type * as lib_dealerRiskPolicy from "../lib/dealerRiskPolicy.js";
 import type * as lib_discoveryIndex from "../lib/discoveryIndex.js";
 import type * as lib_discoveryPolicy from "../lib/discoveryPolicy.js";
 import type * as lib_emailPolicy from "../lib/emailPolicy.js";
+import type * as lib_engagement from "../lib/engagement.js";
 import type * as lib_environment from "../lib/environment.js";
 import type * as lib_eventOperationsPolicy from "../lib/eventOperationsPolicy.js";
 import type * as lib_eventPaymentPolicy from "../lib/eventPaymentPolicy.js";
@@ -41,6 +47,12 @@ import type * as lib_eventVisibility from "../lib/eventVisibility.js";
 import type * as lib_imageProcessing from "../lib/imageProcessing.js";
 import type * as lib_listingLifecycle from "../lib/listingLifecycle.js";
 import type * as lib_mediaPolicy from "../lib/mediaPolicy.js";
+import type * as lib_offerListing from "../lib/offerListing.js";
+import type * as lib_offerPolicy from "../lib/offerPolicy.js";
+import type * as lib_offerRecords from "../lib/offerRecords.js";
+import type * as lib_offerSchema from "../lib/offerSchema.js";
+import type * as lib_ownershipReview from "../lib/ownershipReview.js";
+import type * as lib_policyConsent from "../lib/policyConsent.js";
 import type * as lib_provisioning from "../lib/provisioning.js";
 import type * as lib_trustGuards from "../lib/trustGuards.js";
 import type * as lib_trustPolicy from "../lib/trustPolicy.js";
@@ -50,6 +62,7 @@ import type * as lib_vehicleValidation from "../lib/vehicleValidation.js";
 import type * as lib_vehicleVisibility from "../lib/vehicleVisibility.js";
 import type * as lib_vinDecoder from "../lib/vinDecoder.js";
 import type * as lib_vpic from "../lib/vpic.js";
+import type * as lib_wantedPolicy from "../lib/wantedPolicy.js";
 import type * as media from "../media.js";
 import type * as mediaProcessing from "../mediaProcessing.js";
 import type * as mediaRecords from "../mediaRecords.js";
@@ -59,6 +72,12 @@ import type * as notificationHttp from "../notificationHttp.js";
 import type * as notifications from "../notifications.js";
 import type * as offers from "../offers.js";
 import type * as paymentWebhookRecords from "../paymentWebhookRecords.js";
+import type * as photoRequestMedia from "../photoRequestMedia.js";
+import type * as photoRequestMediaHttp from "../photoRequestMediaHttp.js";
+import type * as photoRequestMediaProcessing from "../photoRequestMediaProcessing.js";
+import type * as photoRequestModeration from "../photoRequestModeration.js";
+import type * as photoRequestModerationProcessing from "../photoRequestModerationProcessing.js";
+import type * as photoRequests from "../photoRequests.js";
 import type * as privacy from "../privacy.js";
 import type * as recentViews from "../recentViews.js";
 import type * as registrationPayments from "../registrationPayments.js";
@@ -71,6 +90,11 @@ import type * as trustDocuments from "../trustDocuments.js";
 import type * as users from "../users.js";
 import type * as vehicles from "../vehicles.js";
 import type * as vin from "../vin.js";
+import type * as wanted from "../wanted.js";
+import type * as wantedConversations from "../wantedConversations.js";
+import type * as wantedMedia from "../wantedMedia.js";
+import type * as wantedMediaHttp from "../wantedMediaHttp.js";
+import type * as wantedMediaProcessing from "../wantedMediaProcessing.js";
 
 /**
  * A utility for referencing Convex functions in your app's API.
@@ -81,11 +105,15 @@ import type * as vin from "../vin.js";
  * ```
  */
 declare const fullApi: ApiFromModules<{
+  accountDeletion: typeof accountDeletion;
   admin: typeof admin;
   cities: typeof cities;
+  comparisons: typeof comparisons;
   conversations: typeof conversations;
   crons: typeof crons;
+  dealerRisk: typeof dealerRisk;
   discovery: typeof discovery;
+  discoveryAnalytics: typeof discoveryAnalytics;
   emailDelivery: typeof emailDelivery;
   emailRecords: typeof emailRecords;
   engagement: typeof engagement;
@@ -98,9 +126,11 @@ declare const fullApi: ApiFromModules<{
   "lib/authorization": typeof lib_authorization;
   "lib/autoDev": typeof lib_autoDev;
   "lib/autosend": typeof lib_autosend;
+  "lib/dealerRiskPolicy": typeof lib_dealerRiskPolicy;
   "lib/discoveryIndex": typeof lib_discoveryIndex;
   "lib/discoveryPolicy": typeof lib_discoveryPolicy;
   "lib/emailPolicy": typeof lib_emailPolicy;
+  "lib/engagement": typeof lib_engagement;
   "lib/environment": typeof lib_environment;
   "lib/eventOperationsPolicy": typeof lib_eventOperationsPolicy;
   "lib/eventPaymentPolicy": typeof lib_eventPaymentPolicy;
@@ -109,6 +139,12 @@ declare const fullApi: ApiFromModules<{
   "lib/imageProcessing": typeof lib_imageProcessing;
   "lib/listingLifecycle": typeof lib_listingLifecycle;
   "lib/mediaPolicy": typeof lib_mediaPolicy;
+  "lib/offerListing": typeof lib_offerListing;
+  "lib/offerPolicy": typeof lib_offerPolicy;
+  "lib/offerRecords": typeof lib_offerRecords;
+  "lib/offerSchema": typeof lib_offerSchema;
+  "lib/ownershipReview": typeof lib_ownershipReview;
+  "lib/policyConsent": typeof lib_policyConsent;
   "lib/provisioning": typeof lib_provisioning;
   "lib/trustGuards": typeof lib_trustGuards;
   "lib/trustPolicy": typeof lib_trustPolicy;
@@ -118,6 +154,7 @@ declare const fullApi: ApiFromModules<{
   "lib/vehicleVisibility": typeof lib_vehicleVisibility;
   "lib/vinDecoder": typeof lib_vinDecoder;
   "lib/vpic": typeof lib_vpic;
+  "lib/wantedPolicy": typeof lib_wantedPolicy;
   media: typeof media;
   mediaProcessing: typeof mediaProcessing;
   mediaRecords: typeof mediaRecords;
@@ -127,6 +164,12 @@ declare const fullApi: ApiFromModules<{
   notifications: typeof notifications;
   offers: typeof offers;
   paymentWebhookRecords: typeof paymentWebhookRecords;
+  photoRequestMedia: typeof photoRequestMedia;
+  photoRequestMediaHttp: typeof photoRequestMediaHttp;
+  photoRequestMediaProcessing: typeof photoRequestMediaProcessing;
+  photoRequestModeration: typeof photoRequestModeration;
+  photoRequestModerationProcessing: typeof photoRequestModerationProcessing;
+  photoRequests: typeof photoRequests;
   privacy: typeof privacy;
   recentViews: typeof recentViews;
   registrationPayments: typeof registrationPayments;
@@ -139,6 +182,11 @@ declare const fullApi: ApiFromModules<{
   users: typeof users;
   vehicles: typeof vehicles;
   vin: typeof vin;
+  wanted: typeof wanted;
+  wantedConversations: typeof wantedConversations;
+  wantedMedia: typeof wantedMedia;
+  wantedMediaHttp: typeof wantedMediaHttp;
+  wantedMediaProcessing: typeof wantedMediaProcessing;
 }>;
 export declare const api: FilterApi<
   typeof fullApi,
