@@ -1,15 +1,19 @@
 import { httpAction } from "./_generated/server";
 import { internal } from "./_generated/api";
 import { assertUploadMetadata, MAX_UPLOAD_BYTES } from "./lib/mediaPolicy";
+import { allowedHttpOrigin } from "./lib/httpOrigin";
 import type { Id } from "./_generated/dataModel";
 
 function headersFor(request: Request) {
-  const allowed = [process.env.APP_URL, process.env.ADMIN_PORTAL_URL].flatMap(value => {
-    try { return value ? [new URL(value).origin] : []; } catch { return []; }
-  });
   const origin = request.headers.get("Origin");
-  if (!allowed.length || (origin !== null && !allowed.includes(origin))) throw new Error("Origin unavailable");
-  return { "Access-Control-Allow-Origin": origin ?? allowed[0], Vary: "Origin", "Cache-Control": "private, no-store", "Referrer-Policy": "no-referrer", "X-Content-Type-Options": "nosniff" };
+  let allowed = allowedHttpOrigin(origin, { APP_URL: process.env.APP_URL,
+    DEV_PREVIEW_APP_URL: process.env.DEV_PREVIEW_APP_URL, MARKETPLACE_ENV: process.env.MARKETPLACE_ENV }, true);
+  if (!allowed && origin && process.env.ADMIN_PORTAL_URL) {
+    try { if (new URL(process.env.ADMIN_PORTAL_URL).origin === origin) allowed = origin; }
+    catch { /* Invalid administrator origin fails closed. */ }
+  }
+  if (!allowed) throw new Error("Origin unavailable");
+  return { "Access-Control-Allow-Origin": allowed, Vary: "Origin", "Cache-Control": "private, no-store", "Referrer-Policy": "no-referrer", "X-Content-Type-Options": "nosniff" };
 }
 
 export const upload = httpAction(async (ctx, request) => {

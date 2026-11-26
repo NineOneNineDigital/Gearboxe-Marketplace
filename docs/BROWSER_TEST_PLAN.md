@@ -43,9 +43,10 @@ after the operator confirms the deployed target IDs, allowlists and authorized
 test access, but it does not satisfy the signed-in seller-to-buyer journey below.
 The development backend currently permits one `APP_URL` origin for several
 uploads, and a local backend push can change the shared test data/functions.
-Keep the full-journey gate open until multi-origin support and safe test-data
-ownership are implemented and verified, or a separate isolated test environment
-is provisioned.
+The exact-origin Preview upload guard is prepared in draft PR #9 but is not
+yet deployed to the shared development backend. Keep the full-journey gate open
+until it is deployed, configured and verified with disposable accounts, or a
+separate isolated test environment is provisioned.
 
 ## Full-journey isolation and prerequisites
 

@@ -96,6 +96,17 @@ this path. PR #9 remains a draft.
    Keep destructive cleanup scoped to tagged fixtures so ordinary dev work is
    preserved. Record both frontend and backend versions and test results.
 
+For approved upload tests on the shared development backend, correct its
+currently observed `APP_URL=http://localhost:3002` to the documented web origin
+`APP_URL=http://localhost:3000`, then set `DEV_PREVIEW_APP_URL` on that Convex
+development deployment only to the exact origin
+`https://dev-gearboxe-marketplace.vercel.app`. Deploy the reviewed origin guard
+before setting the value. This adds one HTTPS origin for vehicle media, private
+ownership documents, wanted-reply photos, and photo-request replies without
+changing email-link origins or creating another backend. Malformed, wildcard,
+foreign, and production-domain values fail closed. Vercel Authentication is
+required; use disposable development accounts for upload tests.
+
 Other PR Previews are a separate lane: they require `MARKETPLACE_ENV=preview`, a
 Preview-scoped `preview:` Convex deploy key from a non-production project, and a
 dedicated preview Clerk app/webhook if authenticated flows are to work there.

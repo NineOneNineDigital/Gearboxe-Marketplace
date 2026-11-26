@@ -77,6 +77,26 @@ test("private documents require ownership/admin authorization; moderator reads a
  assert.equal(f.tables.adminAuditLog[0].action,"ownership_document_accessed");
  f.tables.ownershipDocuments[0].expiresAt=0;await assert.rejects(records.authorizeDownload._handler(f.ctx,{documentId:"document"}),/unavailable/);
 });
+test("authenticated document download still works without a browser Origin header", async () => {
+  const previous = Object.fromEntries(["APP_URL", "DEV_PREVIEW_APP_URL", "MARKETPLACE_ENV"].map(key => [key, process.env[key]]));
+  process.env.APP_URL = "http://localhost:3002";
+  process.env.DEV_PREVIEW_APP_URL = "https://dev-gearboxe-marketplace.vercel.app";
+  process.env.MARKETPLACE_ENV = "development";
+  try {
+    const f = fixture();
+    const storageId = await f.ctx.storage.store(new Blob(["private document"], { type: "application/pdf" }));
+    f.tables.ownershipDocuments = [{ _id: "document", userId: "owner", storageId, expiresAt: Date.now() + 10000 }];
+    const response = await records.documentDownload._handler(f.ctx,
+      new Request("https://deployment.convex.site/trust/document?id=document"));
+    assert.equal(response.status, 200);
+    assert.equal(response.headers.get("Access-Control-Allow-Origin"), "http://localhost:3002");
+    assert.equal(await response.text(), "private document");
+  } finally {
+    for (const [key, value] of Object.entries(previous)) {
+      if (value === undefined) delete process.env[key]; else process.env[key] = value;
+    }
+  }
+});
 test("document HTTP uploads reject fake MIME signatures and oversized streamed bodies",async()=>{
  process.env.APP_URL="https://gearboxe.test";
  for(const body of ["not-a-pdf",new Uint8Array(10*1024*1024+1)]){

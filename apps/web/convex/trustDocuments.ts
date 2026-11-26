@@ -3,6 +3,7 @@ import { httpAction, internalMutation, internalQuery } from "./_generated/server
 import { internal } from "./_generated/api";
 import { getCurrentUser, isAdmin, requireCurrentUser } from "./lib/authorization";
 import { DOCUMENT_RETENTION_MS, MAX_DOCUMENT_BYTES } from "./lib/trustPolicy";
+import { allowedHttpOrigin } from "./lib/httpOrigin";
 
 export const claimUpload = internalMutation({
   args: { token: v.string() },
@@ -52,14 +53,10 @@ export const authorizeDownload = internalMutation({
 export const authenticate = internalQuery({ args: {},
   handler: async (ctx) => { await requireCurrentUser(ctx); return true; } });
 function responseHeaders(request: Request) {
-  let allowed = "";
-  try {
-    if (process.env.APP_URL)
-      allowed = new URL(process.env.APP_URL).origin;
-  }
-  catch { /* fail closed */ }
   const origin = request.headers.get("Origin");
-  if (!allowed || (origin !== null && origin !== allowed))
+  const allowed = allowedHttpOrigin(origin, { APP_URL: process.env.APP_URL,
+    DEV_PREVIEW_APP_URL: process.env.DEV_PREVIEW_APP_URL, MARKETPLACE_ENV: process.env.MARKETPLACE_ENV }, true);
+  if (!allowed)
     throw new Error("Origin unavailable");
   return {
     "Access-Control-Allow-Origin": allowed, "Vary": "Origin", "Cache-Control": "private, no-store", "Referrer-Policy": "no-referrer", "X-Content-Type-Options": "nosniff"
