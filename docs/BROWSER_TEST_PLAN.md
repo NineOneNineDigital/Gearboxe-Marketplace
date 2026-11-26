@@ -35,9 +35,10 @@ cannot prove a deployed build's configuration. The guard is covered by a Node
 test. No staging credentials or target values belong in this document.
 
 The `dev` Vercel Preview shares the existing development Convex and Clerk
-resources. It is currently a build and browsing preview, and anonymous access was observed
-on November 25. Enable and verify Vercel Deployment Protection before claiming
-that only approved testers can reach the shared development data. It may run the read-only public smokes
+resources. It is an access-protected build and browsing preview. On November 25, Vercel
+Authentication showed Require Log In enabled and a cookie-free request redirected
+to Vercel sign-in. Marketplace-signed-out browser checks used a Vercel-authenticated
+Chrome session; only approved Vercel team members should reach the shared data. It may run the read-only public smokes
 after the operator confirms the deployed target IDs, allowlists and authorized
 test access, but it does not satisfy the signed-in seller-to-buyer journey below.
 The development backend currently permits one `APP_URL` origin for several

@@ -19,8 +19,8 @@ while its branch Preview is not the guarded `dev` Preview. The existing Vercel
 project's `dev` Preview deployed successfully at `faf33d94` on November 25, 2026
 and serves the public browsing flows against the shared development backend.
 Sign-in and read-only member listing access were verified on November 25. Buyer/seller
-write flows, uploads, and moderator access remain unverified. The Preview was anonymously reachable on November 25; deployment protection
-is still a pending configuration decision. The separate staging Vercel project
+write flows, uploads, and moderator access remain unverified. Vercel Authentication required login on November 25; a cookie-free request
+redirected to Vercel sign-in. The separate staging Vercel project
 should not auto-deploy `dev`.
 Never treat a green build as proof that auth, notifications, or deployment wiring works.
 
