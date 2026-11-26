@@ -35,18 +35,19 @@ cannot prove a deployed build's configuration. The guard is covered by a Node
 test. No staging credentials or target values belong in this document.
 
 The `dev` Vercel Preview shares the existing development Convex and Clerk
-resources. It is an access-protected build and browsing preview. On November 25, Vercel
+resources. It is an access-protected preview. On November 25, Vercel
 Authentication showed Require Log In enabled and a cookie-free request redirected
 to Vercel sign-in. Marketplace-signed-out browser checks used a Vercel-authenticated
 Chrome session; only approved Vercel team members should reach the shared data. It may run the read-only public smokes
 after the operator confirms the deployed target IDs, allowlists and authorized
 test access, but it does not satisfy the signed-in seller-to-buyer journey below.
-The development backend currently permits one `APP_URL` origin for several
-uploads, and a local backend push can change the shared test data/functions.
-The exact-origin Preview upload guard is prepared in draft PR #9 but is not
-yet deployed to the shared development backend. Keep the full-journey gate open
-until it is deployed, configured and verified with disposable accounts, or a
-separate isolated test environment is provisioned.
+The shared development backend was updated from PR #9 at `ea5d600b`, with
+`APP_URL=http://localhost:3000` and the exact
+`DEV_PREVIEW_APP_URL=https://dev-gearboxe-marketplace.vercel.app`. The vehicle
+upload preflight allowed that origin and rejected an unrelated origin. A local
+backend push can still change shared test data and functions. Keep the
+full-journey gate open until authenticated upload and seller-to-buyer flows pass
+with disposable accounts, or a separate isolated test environment is provisioned.
 
 ## Full-journey isolation and prerequisites
 

@@ -12,14 +12,15 @@ environment-by-environment verification under [GBXMRKT-1](https://linear.app/mxn
 The observed `main` merge triggered that Production attempt; recheck the project's
 current production-branch mapping before any future merge or release.
 The marketplace's intended canonical origin is `https://gearboxemarket.com`;
-DNS and successful domain assignment have not been verified here. The current
-follow-on work remains in [draft PR #9](https://github.com/NineOneNineDigital/Gearboxe-Marketplace/pull/9)
-into `dev`; it has not been merged. GitHub CI passed on its last pushed head,
-while its branch Preview is not the guarded `dev` Preview. The existing Vercel
-project's `dev` Preview deployed successfully at `faf33d94` on November 25, 2026
-and serves the public browsing flows against the shared development backend.
-Sign-in and read-only member listing access were verified on November 25. Buyer/seller
-write flows, uploads, and moderator access remain unverified. Vercel Authentication required login on November 25; a cookie-free request
+DNS and successful domain assignment have not been verified here. The follow-on
+work was merged into `dev` through [PR #9](https://github.com/NineOneNineDigital/Gearboxe-Marketplace/pull/9)
+at `0599e55c` on November 25, 2026. GitHub CI passed on head `ea5d600b`;
+the PR branch Preview failed the intentional `dev`-only build guard. The existing
+Vercel project's `dev` Preview deployed successfully at `0599e55c` and serves
+inventory and the Wanted board against shared development Convex `dev:intent-setter-978`.
+Signed-in buyer favorite and synthetic-seller message writes passed on the earlier
+`faf33d94` Preview; full new-feature, upload, seller, and moderator journeys remain
+unverified. Vercel Authentication required login on November 25; a cookie-free request
 redirected to Vercel sign-in. The separate staging Vercel project
 should not auto-deploy `dev`.
 Never treat a green build as proof that auth, notifications, or deployment wiring works.
@@ -48,7 +49,7 @@ Production branch; `dev` must be a Preview deployment with `VERCEL_ENV=preview`
 and `MARKETPLACE_ENV=preview`. Scope shared-development variables to the `dev`
 Preview branch only. Vercel supports [branch-specific Preview variables](https://vercel.com/docs/environment-variables#preview-environment-variables).
 Disable the separate staging project's `dev` auto-deployment before relying on
-this path. PR #9 remains a draft.
+this path. PR #9 was merged into `dev` at `0599e55c`.
 
 1. Inventory the existing development Convex deployment and Clerk application
    identities without copying or printing their keys. Confirm that both contain
@@ -96,13 +97,12 @@ this path. PR #9 remains a draft.
    Keep destructive cleanup scoped to tagged fixtures so ordinary dev work is
    preserved. Record both frontend and backend versions and test results.
 
-For approved upload tests on the shared development backend, correct its
-currently observed `APP_URL=http://localhost:3002` to the documented web origin
-`APP_URL=http://localhost:3000`, then set `DEV_PREVIEW_APP_URL` on that Convex
-development deployment only to the exact origin
-`https://dev-gearboxe-marketplace.vercel.app`. Deploy the reviewed origin guard
-before setting the value. This adds one HTTPS origin for vehicle media, private
-ownership documents, wanted-reply photos, and photo-request replies without
+The shared development backend now has `APP_URL=http://localhost:3000` and
+`DEV_PREVIEW_APP_URL=https://dev-gearboxe-marketplace.vercel.app` after the
+reviewed PR #9 backend update. The vehicle upload preflight returned 204 for
+the exact Preview origin and 403 for an unrelated origin. This adds one HTTPS
+origin for vehicle media, private ownership documents, wanted-reply photos,
+and photo-request replies without
 changing email-link origins or creating another backend. Malformed, wildcard,
 foreign, and production-domain values fail closed. Vercel Authentication is
 required; use disposable development accounts for upload tests.
