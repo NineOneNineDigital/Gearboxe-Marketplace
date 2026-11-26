@@ -23,6 +23,9 @@ Signed-in buyer favorite and synthetic-seller message writes passed on the earli
 unverified. Vercel Authentication required login on November 25; a cookie-free request
 redirected to Vercel sign-in. The separate staging Vercel project
 should not auto-deploy `dev`.
+For the shared-dev Preview, set `NEXT_PUBLIC_APP_URL` to its stable protected
+origin; hosted builds preserve that origin for share links and metadata even
+when Vercel assigns a one-off deployment hostname.
 Never treat a green build as proof that auth, notifications, or deployment wiring works.
 
 ## Environment isolation

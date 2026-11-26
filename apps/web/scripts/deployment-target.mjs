@@ -42,3 +42,16 @@ export function validateDeploymentTarget(env) {
   }
   return { mode, targetArgs: ["--deployment-name", target] };
 }
+
+export function hostedAppUrl(env) {
+  if (env.MARKETPLACE_ENV !== "preview") return env.NEXT_PUBLIC_APP_URL;
+  if (!env.VERCEL_URL) throw new Error("Preview deployment URL is required");
+  if (env.STAGING_SHARED_DEV_BACKEND === "true") {
+    const appUrl = env.NEXT_PUBLIC_APP_URL;
+    if (!appUrl || /^https:\/\/(?:www\.)?gearboxemarket\.com\/?$/i.test(appUrl)) {
+      throw new Error("Shared development backend builds require a separate Preview web origin");
+    }
+    return appUrl;
+  }
+  return `https://${env.VERCEL_URL}`;
+}

@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { validateDeploymentTarget } from "./deployment-target.mjs";
+import { hostedAppUrl, validateDeploymentTarget } from "./deployment-target.mjs";
 
 const release = { VERCEL: "1", VERCEL_ENV: "production", MARKETPLACE_ENV: "staging",
   CONVEX_DEPLOY_KEY: "prod:staging-backend|synthetic", EXPECTED_CONVEX_DEPLOYMENT: "staging-backend" };
@@ -40,4 +40,13 @@ test("dev Preview with shared development backend only builds the frontend", () 
   ]) {
     assert.throws(() => validateDeploymentTarget({ ...shared, ...override }));
   }
+});
+
+test("shared dev Preview keeps its stable origin for share links while other Previews use deployment URLs", () => {
+  const env = { MARKETPLACE_ENV: "preview", VERCEL_URL: "one-off-preview.vercel.app",
+    NEXT_PUBLIC_APP_URL: "https://dev-gearboxe-marketplace.vercel.app" };
+  assert.equal(hostedAppUrl({ ...env, STAGING_SHARED_DEV_BACKEND: "true" }), env.NEXT_PUBLIC_APP_URL);
+  assert.equal(hostedAppUrl(env), "https://one-off-preview.vercel.app");
+  assert.throws(() => hostedAppUrl({ ...env, STAGING_SHARED_DEV_BACKEND: "true", NEXT_PUBLIC_APP_URL: "https://gearboxemarket.com" }), /separate Preview web origin/);
+  assert.throws(() => hostedAppUrl({ ...env, VERCEL_URL: undefined }), /Preview deployment URL/);
 });
