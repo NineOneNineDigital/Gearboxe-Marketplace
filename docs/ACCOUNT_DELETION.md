@@ -8,6 +8,20 @@ Email delivery checks the user's tombstone once when claiming an outbox row and 
 
 The founder directed us to preserve consent records, payment records, safety reports, and administrator audit logs pending Privacy Policy review. The approved six-month closed-offer action purge remains independent of account deletion. No final retention period is asserted for the preserved records here.
 
+## Account-linked record inventory
+
+| Record class | Current deletion behavior | Remaining decision or check |
+| --- | --- | --- |
+| Public listings, wanted requests, comparison links, and listing media | Tombstone hides public reads immediately; bounded cleanup removes public content and media. | Verify direct links and search indexes against the isolated backend. |
+| Private conversation text and attached photo replies | Retained for the surviving participant as read-only history; unrelated accounts stay denied. | Confirm final Privacy wording and hosted participant access. |
+| Favorites, saved searches, recent views, notifications, outbound email recipient details, upload leases, rate limits, and blocks created by the deleted account | Removed or scrubbed in bounded cleanup. | Rehearse interruption and restart on an isolated backend. |
+| Blocks created by other users against the deleted account | Currently retained; these rows may represent another user's safety preference. | Decide whether and when to remove the now-inert reference in the Privacy retention review. |
+| Ownership documents and identity reviews | Existing evidence expiry and access rules continue; deletion cleanup does not purge them. | Decide record and storage retention with the final Privacy policy. |
+| Consent records, payment/event records, safety reports, and administrator audit logs | Preserved under the founder's interim direction. | Set final retention and access rules; inspect provider exports and backups. |
+| Closed structured-offer action history | Existing six-calendar-month purge remains separate from account deletion. | Verify the scheduled purge on isolated staging. |
+
+This inventory describes the current implementation; it is not a published retention promise. Do not delete the unresolved record classes merely to make a cleanup run appear complete.
+
 ## Work still required before closing GBXMRKT-46
 
 - Audit and remove or anonymize other account-linked records, including ownership evidence, identity reviews, blocks created by other users against the deleted account, event records, and other users' references to removed listings. The current cleanup covers the primary public surfaces and transient account data but is not a full personal-data inventory. Ownership evidence retains its existing 30-day expiry pending the final privacy review.

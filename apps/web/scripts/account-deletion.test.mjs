@@ -29,7 +29,7 @@ function fixture() {
   const owner = { _id: "owner", externalId: "clerk-owner", name: "Private Seller", email: "seller@example.com", phone: "919-555-0100", emailVerified: true, phoneVerified: true, role: "user", createdAt: 1 };
   const vehicle = { _id: "vehicle", userId: "owner", status: "active", title: "Private car", make: "Honda", model: "Pilot", year: 2019, mileage: 100, price: 1000, photos: ["https://example.com/car.jpg"], media: [], description: "Private description", contactInfo: "private phone", vin: "PRIVATEVIN", location: { city: "Raleigh", state: "NC" }, createdAt: 1 };
   const wanted = { _id: "wanted", userId: "owner", status: "active", title: "Wanted family SUV", maxBudget: 28000, zip: "27601", area: "Raleigh, NC", make: "Honda", createdAt: 1 };
-  const tables = { users: [owner, { _id: "buyer", externalId: "clerk-buyer", name: "Buyer", email: "buyer@example.com", role: "user" }], vehicles: [vehicle], wantedRequests: [wanted], photoPublicSelections: [], offerCycles: [], offerThreads: [], offerActions: [], offerNoticeRefs: [], vehicleCatalog: [], vehicleSearchTerms: [], favorites: [], savedSearches: [], recentViews: [], notifications: [], listingNotifications: [], emailOutbox: [], vehicleMedia: [], ownershipUploadLeases: [], vinDecodeLimits: [], trustRateLimits: [], userBlocks: [], photoRequestPhotos: [], wantedReplyPhotos: [], adminAuditLog: [] };
+  const tables = { users: [owner, { _id: "buyer", externalId: "clerk-buyer", name: "Buyer", email: "buyer@example.com", role: "user" }], vehicles: [vehicle], wantedRequests: [wanted], photoPublicSelections: [], offerCycles: [], offerThreads: [], offerActions: [], offerNoticeRefs: [], vehicleCatalog: [], vehicleSearchTerms: [], favorites: [], savedSearches: [], recentViews: [], notifications: [], listingNotifications: [], emailOutbox: [], vehicleMedia: [], ownershipUploadLeases: [], vinDecodeLimits: [], trustRateLimits: [], userBlocks: [], photoRequestPhotos: [], wantedReplyPhotos: [], policyAcceptances: [], eventPayments: [], trustReports: [], adminAuditLog: [] };
   const scheduled = [];
   const deletedStorage = [];
   const query = table => {
@@ -191,6 +191,22 @@ test("deletion removes transient account data and unattached uploads but retains
   assert.deepEqual(f.tables.photoRequestPhotos.map(row => row._id), ["attached-request"]);
   assert.deepEqual(f.tables.wantedReplyPhotos.map(row => row._id), ["attached-wanted"]);
   assert.deepEqual(f.deletedStorage.sort(), ["detail-1", "source-1", "source-3"]);
+});
+
+test("cleanup preserves consent, payment, safety, and audit evidence pending privacy review", async () => {
+  const f = fixture();
+  const records = {
+    policyAcceptances: { _id: "consent", userId: "owner", termsVersion: "test-version" },
+    eventPayments: { _id: "payment", userId: "owner", status: "paid" },
+    trustReports: { _id: "safety", targetUserId: "owner", status: "open" },
+    adminAuditLog: { _id: "audit", targetUserId: "owner", action: "reviewed" },
+  };
+  const expected = structuredClone(records);
+  for (const [table, row] of Object.entries(records)) f.tables[table].push(row);
+  await users.deleteFromClerk._handler(f.ctx, { clerkUserId: "clerk-owner" });
+  for (const phase of ["vehicles", "wanted", "photoPublicSelections", "ownershipUploadLeases", "vinDecodeLimits", "trustRateLimits", "userBlocks", "photoRequestUploads", "wantedReplyUploads", "comparisons", "favorites", "savedSearches", "recentViews", "notifications", "listingNotifications", "emailOutbox", "vehicleMedia"])
+    await deletion.cleanup._handler(f.ctx, { userId: "owner", phase, cursor: null });
+  for (const [table, row] of Object.entries(expected)) assert.deepEqual(f.tables[table], [row]);
 });
 
 test("in-flight private photo processing cannot complete after account deletion", async () => {

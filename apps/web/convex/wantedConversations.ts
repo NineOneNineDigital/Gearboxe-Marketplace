@@ -9,6 +9,7 @@ import { enqueueNotification } from "./notifications";
 import { trustReason, trustText } from "./lib/trustPolicy";
 import { wantedIsPublic } from "./lib/wantedPolicy";
 import { attachPhotos } from "./wantedMedia";
+import { isUsStateCode } from "../lib/us-states";
 
 const photoIds = v.optional(v.array(v.id("wantedReplyPhotos")));
 const messageText = (value: string) => {
@@ -55,7 +56,7 @@ export const replyToRequest = mutation({
     const vehicle = { year: integer(args.year, "Year", 1900, 2100), make: label(args.make, "Make"), model: label(args.model, "Model"),
       askingPrice: integer(args.askingPrice, "Asking price", 1, 100_000_000), mileage: integer(args.mileage, "Mileage", 0, 1_000_000),
       city: label(args.city, "City"), state: label(args.state, "State", 2).toUpperCase() };
-    if (!/^[A-Z]{2}$/.test(vehicle.state)) throw new Error("Enter a two-letter state");
+    if (!isUsStateCode(vehicle.state)) throw new Error("Choose a valid U.S. state or DC code");
     await consumeRateLimit(ctx, seller._id, "message");
     await consumeRateLimit(ctx, seller._id, "conversation");
     const now = Date.now();

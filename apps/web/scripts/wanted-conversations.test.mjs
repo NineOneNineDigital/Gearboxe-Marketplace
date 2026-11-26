@@ -80,6 +80,15 @@ test("seller replies without a listing and buyer identity stays private", async 
   await assert.rejects(wanted.listMessages._handler(f.ctx, { conversationId, paginationOpts: { numItems: 10, cursor: null } }), /unavailable/);
 });
 
+test("seller reply rejects an invalid state before creating private history", async () => {
+  const f = fixture();
+  await assert.rejects(f.mutate(wanted.replyToRequest, { ...reply, state: "ZZ" }), /valid U\.S\. state or DC/);
+  assert.equal(f.rows("wantedConversations").length, 0);
+  assert.equal(f.rows("wantedMessages").length, 0);
+  const conversationId = await f.mutate(wanted.replyToRequest, { ...reply, state: "dc" });
+  assert.equal(f.rows("wantedConversations").find(row => row._id === conversationId)?.sellerVehicle.state, "DC");
+});
+
 test("closed request keeps participant history while shared duplicate and block controls apply", async () => {
   const f = fixture();
   const conversationId = await f.mutate(wanted.replyToRequest, reply);

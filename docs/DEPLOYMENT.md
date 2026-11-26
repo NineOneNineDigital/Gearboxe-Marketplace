@@ -18,8 +18,10 @@ into `dev`; it has not been merged. GitHub CI passed on its last pushed head,
 while its branch Preview is not the guarded `dev` Preview. The existing Vercel
 project's `dev` Preview deployed successfully at `faf33d94` on November 25, 2026
 and serves the public browsing flows against the shared development backend.
-Authenticated and upload journeys remain unverified. The separate staging Vercel
-project should not auto-deploy `dev`.
+Sign-in and read-only member listing access were verified on November 25. Buyer/seller
+write flows, uploads, and moderator access remain unverified. The Preview was anonymously reachable on November 25; deployment protection
+is still a pending configuration decision. The separate staging Vercel project
+should not auto-deploy `dev`.
 Never treat a green build as proof that auth, notifications, or deployment wiring works.
 
 ## Environment isolation

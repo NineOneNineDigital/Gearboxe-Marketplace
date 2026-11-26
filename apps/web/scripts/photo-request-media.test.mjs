@@ -94,6 +94,13 @@ test("seller selection is private until independent approval and stale listing e
   f.as("seller"); await assert.rejects(moderation.select._handler(f.ctx, { photoId: "photo", caption: "Again" }), /already public/);
 });
 
+test("seller cannot select a private photo for public review without a caption", async () => {
+  const f = fixture();
+  await assert.rejects(moderation.select._handler(f.ctx, { photoId: "photo", caption: "   " }), /Add a caption/);
+  assert.equal(f.rows("photoPublicSelections").length, 0);
+  assert.equal(f.rows("vehicles")[0].media.length, 0);
+});
+
 test("private browser download preflight includes bearer authorization and no-store", async () => {
   const old = process.env.APP_URL, oldAdmin = process.env.ADMIN_PORTAL_URL;
   process.env.APP_URL = "https://market.example"; process.env.ADMIN_PORTAL_URL = "https://admin.example";
@@ -131,6 +138,26 @@ test("seller deletion during approval prevents public photo publication", async 
     vehicleRevision: snapshot.vehicleRevision, detailId: "public-detail", thumbnailId: "public-thumb" }), false);
   assert.equal(f.rows("vehicles")[0].media.length, 0);
   await assert.rejects(moderation.approvalSnapshot._handler(f.ctx, { selectionId }), /Seller account unavailable|Selection changed/);
+});
+
+test("seller suspension before or during review prevents public photo publication", async () => {
+  for (const timing of ["before snapshot", "after snapshot"]) {
+    const f = fixture();
+    const selectionId = await moderation.select._handler(f.ctx, { photoId: "photo", caption: "Rear seats" });
+    f.as("admin");
+    if (timing === "before snapshot") {
+      f.rows("users").find(row => row._id === "seller").suspendedAt = Date.now();
+      await assert.rejects(moderation.approvalSnapshot._handler(f.ctx, { selectionId }), /Seller account unavailable/);
+    } else {
+      const snapshot = await moderation.approvalSnapshot._handler(f.ctx, { selectionId });
+      f.rows("users").find(row => row._id === "seller").suspendedAt = Date.now();
+      assert.equal(await moderation.completeApproval._handler(f.ctx, { selectionId, revision: snapshot.revision,
+        vehicleRevision: snapshot.vehicleRevision, detailId: "public-detail", thumbnailId: "public-thumb" }), false);
+      assert.equal(f.rows("photoPublicSelections")[0].status, "stale");
+    }
+    assert.equal(f.rows("vehicles")[0].media.length, 0);
+    assert.equal(f.rows("vehicleMedia").length, 0);
+  }
 });
 
 test("surviving buyer retains private photo access after seller deletion", async () => {

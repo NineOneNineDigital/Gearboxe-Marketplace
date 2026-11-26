@@ -9,6 +9,7 @@ import { MAX_PHOTOS } from "./lib/mediaPolicy";
 
 function captionText(value: string) {
   const text = value.trim();
+  if (!text) throw new Error("Add a caption before selecting a public photo");
   if (text.length > 200) throw new Error("Photo caption must be 200 characters or fewer");
   return text;
 }
@@ -73,7 +74,7 @@ export const approvalSnapshot = internalQuery({ args: { selectionId: v.id("photo
   if (!row || row.status !== "pending") throw new Error("Selection changed; refresh the queue");
   if (row.sellerId === admin._id) throw new Error("Another moderator must approve your photo");
   const seller = await ctx.db.get(row.sellerId);
-  if (!seller || seller.deletedAt !== undefined) throw new Error("Seller account unavailable");
+  if (!seller || seller.deletedAt !== undefined || seller.suspendedAt !== undefined) throw new Error("Seller account unavailable");
   const photo = await ctx.db.get(row.photoId);
   if (!photo?.detailId || !photo.entryId || photo.status !== "ready" || photo.requestId !== row.requestId) throw new Error("Private photo unavailable");
   return { detailId: photo.detailId, revision: row.revision, vehicleRevision: row.vehicleRevision };
@@ -90,7 +91,7 @@ export const completeApproval = internalMutation({ args: { selectionId: v.id("ph
   const seller = await ctx.db.get(row.sellerId);
   const valid = !!photo?.detailId && !!photo.entryId && photo.status === "ready" && photo.requestId === row.requestId &&
     !!request && request.sellerId === row.sellerId && request.vehicleId === row.vehicleId &&
-    !!seller && seller.deletedAt === undefined &&
+    !!seller && seller.deletedAt === undefined && seller.suspendedAt === undefined &&
     !!vehicle && vehicle.userId === row.sellerId && isPublicVehicle(vehicle) && listingRevision(vehicle) === row.vehicleRevision &&
     vehicle.photos.length + (vehicle.media?.length ?? 0) < MAX_PHOTOS;
   if (!valid) {

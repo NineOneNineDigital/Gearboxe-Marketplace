@@ -34,9 +34,10 @@ Convex and Clerk targets; environment values supplied to a test command alone
 cannot prove a deployed build's configuration. The guard is covered by a Node
 test. No staging credentials or target values belong in this document.
 
-The first staging Vercel project shares the existing development Convex and
-Clerk resources. It is an access-protected build and browsing preview only.
-Only approved testers should reach it. It may run the read-only public smokes
+The `dev` Vercel Preview shares the existing development Convex and Clerk
+resources. It is currently a build and browsing preview, and anonymous access was observed
+on November 25. Enable and verify Vercel Deployment Protection before claiming
+that only approved testers can reach the shared development data. It may run the read-only public smokes
 after the operator confirms the deployed target IDs, allowlists and authorized
 test access, but it does not satisfy the signed-in seller-to-buyer journey below.
 The development backend currently permits one `APP_URL` origin for several

@@ -6,6 +6,7 @@ import { api } from "@/convex/_generated/api";
 import type { Id } from "@/convex/_generated/dataModel";
 import { useCurrentUser } from "@/hooks/useCurrentUser";
 import { mileageAsMiles, wantedResponseDifferences } from "@/lib/wanted-response";
+import { isUsStateCode } from "@/lib/us-states";
 import { useMutation, useQuery } from "convex/react";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
@@ -51,10 +52,12 @@ export function WantedResponseForm({ request, onCancel }: { request: RequestCrit
     event.preventDefault(); setBusy(true); setError("");
     let photoIds: Id<"wantedReplyPhotos">[] = [];
     try {
+      const state = form.state.trim().toUpperCase();
+      if (!isUsStateCode(state)) throw new Error("Choose a valid U.S. state or DC code");
       photoIds = await photos.upload(files, request._id);
       const conversationId = await reply({ requestId: request._id, year: Number(form.year), make: form.make,
         model: form.model, askingPrice: Number(form.askingPrice), mileage: Number(form.mileage),
-        city: form.city, state: form.state.toUpperCase(), message: form.message, photoIds });
+        city: form.city, state, message: form.message, photoIds });
       router.push(`/myAccount/wanted-messages/${conversationId}`);
     } catch (cause) { if (photoIds.length) await photos.discard(photoIds); setError(cause instanceof Error ? cause.message : "Could not send your response."); }
     finally { setBusy(false); }
@@ -69,7 +72,7 @@ export function WantedResponseForm({ request, onCancel }: { request: RequestCrit
       <label className="text-sm">Model *<input required maxLength={60} className="mt-1 w-full rounded-md border p-2" value={form.model} onChange={e => setForm({ ...form, model: e.target.value })} /></label>
       <label className="text-sm">Asking price, USD *<input required type="number" min="1" max="100000000" step="1" className="mt-1 w-full rounded-md border p-2" value={form.askingPrice} onChange={e => setForm({ ...form, askingPrice: e.target.value })} /></label>
       <label className="text-sm">Approximate mileage *<input required type="number" min="0" max="1000000" step="1" className="mt-1 w-full rounded-md border p-2" value={form.mileage} onChange={e => setForm({ ...form, mileage: e.target.value })} /></label>
-      <label className="text-sm">City *<input required maxLength={80} className="mt-1 w-full rounded-md border p-2" value={form.city} onChange={e => setForm({ ...form, city: e.target.value })} /></label>
+      <label className="text-sm">City *<input required maxLength={60} className="mt-1 w-full rounded-md border p-2" value={form.city} onChange={e => setForm({ ...form, city: e.target.value })} /></label>
       <label className="text-sm">State *<input required pattern="[A-Za-z]{2}" maxLength={2} className="mt-1 w-full rounded-md border p-2 uppercase" value={form.state} onChange={e => setForm({ ...form, state: e.target.value })} placeholder="NC" /></label>
       <label className="text-sm sm:col-span-2">Short message *<textarea required minLength={1} maxLength={2000} rows={3} className="mt-1 w-full rounded-md border p-2" value={form.message} onChange={e => setForm({ ...form, message: e.target.value })} placeholder="Tell the buyer about your vehicle." /></label>
     </div>

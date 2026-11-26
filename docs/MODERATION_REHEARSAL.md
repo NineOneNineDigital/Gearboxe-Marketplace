@@ -95,6 +95,29 @@ gap and affected submissions, and do not represent the target as staffed.
   the designated safety lead. Record factual references, the issue, next owner,
   and a specific audited reason. Do not approve pending unresolved evidence.
 
+### Decision and handoff matrix
+
+Use the current listing revision when recording any enhanced-review decision;
+seller edits can invalidate an earlier clearance. A second authorized moderator
+must decide a moderator's own listing. Each case needs a named next owner and a
+seller-visible status or request where the workflow supports one.
+
+| Finding | Moderator action | Release condition / handoff |
+| --- | --- | --- |
+| Ordinary titled owner, complete and consistent listing | Complete the standard checks and approve or give a specific correction reason. | Approval is independent of the seller and recorded in moderation history. |
+| Seller acts for titled owner | Request vehicle-specific authority evidence privately and hold publication. | Independent, revision-bound evidence decision; escalate uncertain authority. |
+| Branded title | Verify the explicit buyer-facing title disclosure and complete enhanced review. | Independent, audited decision on the current revision; reject or request correction if facts conflict. |
+| Outstanding lien | Review the privately documented payoff/transfer path and public lien status. | Independent, audited enhanced decision on the current revision; keep private payoff details out of public fields. |
+| Uncertain lien or ownership mismatch | Ask for clarification or evidence; do not approve. | Resolved seller declaration and any required independent review. |
+| Street-legal specialty vehicle | Check the factual road-registration and transfer evidence; do not infer eligibility from category alone. | Independent, revision-bound specialty decision; escalate unresolved jurisdiction questions. |
+| Several listings or a report | Inspect the bounded repeat-pattern cues and case facts; do not auto-deny or label the seller a dealer. | Record the factual next step, evidence request, escalation, approval or rejection through normal controls. |
+| Potential fraud, threat, stolen vehicle or privacy incident | Hold the listing and use the trust-and-safety escalation path. | Designated safety owner records disposition before any approval. |
+
+For a requested correction or evidence hold, record the request timestamp,
+seller-facing reason, next reviewer, and the rule governing when the review
+clock resumes. Those clock rules are still awaiting approval; do not infer a
+pause from a pending status alone.
+
 ## Rehearsal template — not yet run
 
 Use synthetic accounts, vehicles and evidence in the isolated hosted staging
@@ -124,6 +147,24 @@ entries, and notification delivery or failure handling. Measure submission to
 first qualifying response and final decision separately using the approved clock
 rules. Record individual durations, median, range, missed targets and reasons;
 include all cases rather than excluding holds silently. Assign each gap an owner,
-due date and follow-up test. The founder signs off only after coverage, access,
-clock rules, rehearsal evidence and corrective actions are verified. A missed
-or blocked rehearsal stays open; this template does not establish readiness.
+due date and follow-up test. The moderation owner records a readiness
+recommendation only after coverage, access, clock rules, rehearsal evidence and
+corrective actions are verified. The founder's launch go/no-go is tracked
+separately. A missed or blocked rehearsal stays open; this template does not
+establish readiness.
+
+### Evidence packet and exit check
+
+Keep the private roster and synthetic case references in the approved access-
+controlled tracker. The shareable rehearsal packet should contain only the
+environment, frontend/backend versions, approved clock-rule version, date and
+time zone, case categories, response/deadline timestamps, aggregate turnaround,
+missed-target reasons, notification result, and corrective issue links. Redact
+seller contact, VIN, document content, message text and offer amounts.
+
+The rehearsal is complete only when the primary and trained backup each make
+an authorized audited decision, an unrelated account is denied reviewer access,
+the weekend/holiday and absence handoffs have named coverage, every case above
+has a recorded outcome or explicit failed check, and the owner has a dated plan
+to retest failures. A passing code test or a queued email is not a substitute
+for the hosted access, delivery and timing evidence.

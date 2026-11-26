@@ -21,7 +21,25 @@ Status: Founder product decisions recorded November 4–5, 2026. Operational rev
 2. Check vehicle category, location code, VIN, title and lien disclosures, photo coverage, and known condition information. Route branded titles, liens, unusual ownership, repeated listing patterns, or inconsistent data to enhanced review. Do not approve while ownership or a payoff path is unresolved.
 3. Record a factual decision basis and action in the admin audit/moderation workflow. Request missing information or reject with a reason when necessary. Do not copy sensitive document contents into notes.
 4. For a state-specific title, tax, registration, or transfer question, explain that Gearboxe does not supply state-specific instructions at launch. Direct the parties to the relevant state motor-vehicle agency or their own qualified adviser. Escalate suspected fraud, stolen vehicles, threats, or privacy incidents under `TRUST_SAFETY.md`.
-5. The founder is the primary moderation/support owner. Name and train a backup before public launch; staff coverage must meet the one-business-day review target, including the holiday period. Review unusual out-of-state cases with the founder before approval.
+5. The founder is the primary moderation/support owner. Name and train a backup before public launch; staff coverage must meet the one-business-day review target, including the holiday period. Escalate unusual out-of-state cases to the designated moderation or safety lead before approval.
+
+### Internal support answers to rehearse
+
+Use these as case-handling guidance, not approved public policy copy. Confirm the
+facts in the listing and current policy before answering; record the case owner
+and any promised follow-up in the private support record.
+
+| Seller question | Supported answer and next step |
+| --- | --- |
+| “Can I list from my state, or do I need an invitation?” | Eligible private sellers in all 50 states and DC may start a draft without an invitation. Submission still needs verified contact, required listing details, and manual review. Do not promise approval or nearby buyer demand. |
+| “I am selling for the titled owner. What do I upload?” | Explain that vehicle-specific authority evidence is reviewed privately before approval. Direct the seller to the private evidence request flow and ask them to cover unrelated sensitive details; do not accept documents in listing text or an ordinary message. A moderator decides whether the evidence is sufficient. |
+| “Can I list a branded title or vehicle with a loan?” | A disclosed branded title or outstanding lien may be reviewed, but publication needs enhanced moderator clearance. For a lien, ask for a credible payoff and transfer path through the private workflow. An uncertain lien status must be clarified before approval. Do not promise a transfer outcome. |
+| “How do I transfer title or pay tax in my state?” | Gearboxe does not give state-specific transfer or tax instructions. Point the parties to the relevant state motor-vehicle agency or their own qualified adviser, and escalate any suspected title-jumping or fraud signal to the safety lead. |
+
+If a question reveals new ownership, title, lien, location, or condition facts,
+return the listing to the applicable review path rather than answering around
+an unresolved hold. Do not turn a count-based repeat-listing cue into a dealer
+finding without a documented human decision.
 
 ## Implementation map and remaining gaps
 

@@ -121,3 +121,34 @@ onboarding help is available for participating sellers.”
 Review copy against actual product behavior and inventory immediately before
 publication. Do not imply Gearboxe verifies every seller claim or provides
 inspection, title, or payment services.
+
+## Draft launch assets and placement record
+
+These are proposed organic assets, not approved or published messages. Replace
+`[marketplace URL]` with the verified canonical public URL only after the
+go/no-go decision. Check the live inventory and current policy copy on the day
+each asset is used.
+
+| Asset | Proposed copy | Use and review |
+| --- | --- | --- |
+| National buyer post | “Looking for a private-party car? Browse Gearboxe listings across the U.S. or enter your ZIP to see what's nearby. Early inventory may be concentrated around Raleigh–Durham–Chapel Hill, so expand your search if your area is quiet. [marketplace URL]” | Owned organic social; confirm search, ZIP fallback and current coverage. |
+| Triangle buyer post | “Shopping for a car around Raleigh, Durham or Chapel Hill? Explore current private-party listings on Gearboxe. A verified-email account can message sellers through the marketplace. Browse what is available today: [marketplace URL]” | Local organic social; confirm at least one relevant approved listing before posting. |
+| Seller invitation post | “Eligible private sellers in any U.S. state or DC can create a free Gearboxe listing and submit it for review. No invitation is needed. Selected Triangle sellers may receive additional onboarding help. Get started: [marketplace URL]” | Owned channels; confirm signup, moderation capacity and support route. |
+| Community contribution | “For anyone comparing private-party vehicles, Gearboxe lets you search by ZIP or browse nationwide. Inventory varies by area, with early outreach focused on the Triangle. Here is the current public inventory if community rules allow a link: [marketplace URL]” | Use only after the named owner checks that community's rules and records permission where required. |
+
+Before publication, record each placement in an approved private campaign tracker:
+
+| Field | Entry required |
+| --- | --- |
+| Asset and version | Exact approved text/image version and link destination |
+| Channel and audience | Owned page or specific community; broad geographic audience only |
+| Rule check | Posting rule checked, permission contact if required, and date |
+| Approver and publisher | Named founder approver and named publishing owner |
+| Scheduled and actual time | Time zone, planned time, actual time, or cancellation reason |
+| Inventory check | Date checked, region claim supported, approved-listing count used internally |
+| First-week review | Reach/click context, inquiries, qualified exchanges, moderation/support load, pause decision |
+
+The tracker must not contain buyer ZIPs, private messages, seller documents, or
+contact details. A placement is ready only when the owner, rule check, approved
+asset, live URL and pause contact are filled in. Do not schedule publication
+until the release go/no-go is recorded.
