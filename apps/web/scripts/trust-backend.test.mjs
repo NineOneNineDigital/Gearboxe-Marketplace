@@ -79,7 +79,7 @@ test("private documents require ownership/admin authorization; moderator reads a
 });
 test("authenticated document download still works without a browser Origin header", async () => {
   const previous = Object.fromEntries(["APP_URL", "DEV_PREVIEW_APP_URL", "MARKETPLACE_ENV"].map(key => [key, process.env[key]]));
-  process.env.APP_URL = "http://localhost:3002";
+  process.env.APP_URL = "http://localhost:3000";
   process.env.DEV_PREVIEW_APP_URL = "https://dev-gearboxe-marketplace.vercel.app";
   process.env.MARKETPLACE_ENV = "development";
   try {
@@ -89,7 +89,7 @@ test("authenticated document download still works without a browser Origin heade
     const response = await records.documentDownload._handler(f.ctx,
       new Request("https://deployment.convex.site/trust/document?id=document"));
     assert.equal(response.status, 200);
-    assert.equal(response.headers.get("Access-Control-Allow-Origin"), "http://localhost:3002");
+    assert.equal(response.headers.get("Access-Control-Allow-Origin"), "http://localhost:3000");
     assert.equal(await response.text(), "private document");
   } finally {
     for (const [key, value] of Object.entries(previous)) {
