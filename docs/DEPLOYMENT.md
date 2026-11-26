@@ -84,8 +84,8 @@ this path. PR #9 remains a draft.
    candidate with `pnpm --filter @gearboxe/web exec convex dev --once` only after
    verifying the CLI targets the intended `dev:` deployment. This affects local
    development immediately. Record the backend code reference and verify its
-   required functions. Then merge the candidate into `dev` under the project's
-   approval process so the auto-tracking Vercel frontend builds against that
+   required functions. Then merge the candidate into `dev` after its technical
+   checks pass so the auto-tracking Vercel frontend builds against that
    backend version. Capture the `dev` Preview URL, frontend commit SHA and
    shared Convex deployment identity. A passing GitHub CI build alone is
    insufficient.
