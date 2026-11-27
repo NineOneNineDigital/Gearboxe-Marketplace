@@ -38,16 +38,20 @@ The `dev` Vercel Preview shares the existing development Convex and Clerk
 resources. It is an access-protected preview. On November 25, Vercel
 Authentication showed Require Log In enabled and a cookie-free request redirected
 to Vercel sign-in. Marketplace-signed-out browser checks used a Vercel-authenticated
-Chrome session; only approved Vercel team members should reach the shared data. It may run the read-only public smokes
+Chrome session; only approved Vercel team members should reach the shared data.
+A limited signed-in favorite/message check passed with a development account;
+the full seller-to-buyer journey has not. It may run the read-only public smokes
 after the operator confirms the deployed target IDs, allowlists and authorized
 test access, but it does not satisfy the signed-in seller-to-buyer journey below.
 The shared development backend was updated from PR #9 at `ea5d600b`, with
 `APP_URL=http://localhost:3000` and the exact
 `DEV_PREVIEW_APP_URL=https://dev-gearboxe-marketplace.vercel.app`. The vehicle
-upload preflight allowed that origin and rejected an unrelated origin. A local
-backend push can still change shared test data and functions. Keep the
-full-journey gate open until authenticated upload and seller-to-buyer flows pass
-with disposable accounts, or a separate isolated test environment is provisioned.
+upload preflight allowed that origin and rejected an unrelated origin. This
+does not establish safe fixture ownership, provider delivery or the complete
+browser journey. A local backend push can still change shared test data and
+functions. Keep the full-journey gate open until authenticated upload and
+seller-to-buyer flows pass with disposable accounts, or a separate isolated
+test environment is provisioned.
 
 ## Full-journey isolation and prerequisites
 

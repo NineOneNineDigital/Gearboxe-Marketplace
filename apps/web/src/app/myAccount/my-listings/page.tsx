@@ -87,7 +87,7 @@ function MyListingsContent() {
   const createdVehicleId = searchParams.get("created");
 
   const handleDeleteVehicle = async (vehicleId: Id<"vehicles">) => {
-    if (!confirm("Delete this listing permanently? Listings with conversations or event registrations must be withdrawn instead to preserve their history.")) return;
+    if (!confirm("Delete this listing permanently? Listings with conversations or other retained history must be withdrawn instead.")) return;
     setActionError("");
     setUpdatingId(vehicleId);
     try {
@@ -122,7 +122,7 @@ function MyListingsContent() {
         withdrawn: "Listing withdrawn",
         archived: "Listing archived",
       };
-      toast({ title: confirmations[status], description: status === "withdrawn" ? "Your conversations and event registrations are preserved." : undefined });
+      toast({ title: confirmations[status], description: status === "withdrawn" ? "Your conversations and retained history are preserved." : undefined });
     } catch (error) {
       setActionError(error instanceof Error ? error.message : "Unable to update listing.");
     } finally { setUpdatingId(null); }
@@ -329,7 +329,7 @@ function MyListingsContent() {
                       {!["archived"].includes(vehicle.status) && !expiredActive && <Button size="sm" variant="outline" disabled={updatingId !== null} onClick={() => handleStatus(vehicle._id, "archived")}>Archive</Button>}
                     </div>
                     {["active", "approved", "pending", "reserved"].includes(vehicle.status) && <p className="mb-3 text-xs text-gray-600">Editing specifications requires a new review before the listing can go live.</p>}
-                    <p className="mb-3 text-xs text-gray-600">Withdrawing keeps conversations and event registrations available.</p>
+                    <p className="mb-3 text-xs text-gray-600">Withdrawing keeps conversations and retained history available.</p>
                     {popupPaymentsEnabled() && ["active", "approved"].includes(vehicle.status) && <RegisterVehicle vehicleId={vehicle._id} />}
                     {/* Actions */}
                     <div className="flex space-x-2">

@@ -36,7 +36,10 @@ function fixture() {
   const clone = structuredClone;
   const query = table => {
     const tests = []; let descending = false;
-    const index = { eq(field, value) { tests.push(row => row[field] === value); return index; } };
+    const index = {
+      eq(field, value) { tests.push(row => row[field] === value); return index; },
+      gt(field, value) { tests.push(row => row[field] > value); return index; },
+    };
     const rows = () => { const result = (tables[table] ?? []).filter(row => tests.every(fn => fn(row))); return clone(descending ? [...result].reverse() : result); };
     const q = {
       withIndex(_name, filter) { filter(index); return q; }, order(value) { descending = value === "desc"; return q; },
@@ -103,6 +106,19 @@ test("closed request keeps participant history while shared duplicate and block 
   f.as("seller");
   await assert.rejects(f.mutate(wanted.send, { conversationId, content: "Here are more details." }), /unavailable between these accounts/);
   assert.equal((await wanted.getThread._handler(f.ctx, { conversationId })).canContact, false);
+});
+
+test("deleting a wanted request removes it from boards but retains participant context", async () => {
+  const f = fixture();
+  const conversationId = await f.mutate(wanted.replyToRequest, reply);
+  const original = (await wanted.getThread._handler(f.ctx, { conversationId })).conversation.requestSnapshot;
+  f.as("buyer");
+  await f.mutate(wantedBoard.remove, { id: requestId });
+  assert.deepEqual((await wantedBoard.browse._handler(f.ctx, { paginationOpts: { numItems: 10, cursor: null } })).page, []);
+  assert.deepEqual(await wantedBoard.mine._handler(f.ctx, {}), { current: [], past: [] });
+  assert.deepEqual((await wanted.getThread._handler(f.ctx, { conversationId })).conversation.requestSnapshot, original);
+  f.as("seller");
+  assert.deepEqual((await wanted.getThread._handler(f.ctx, { conversationId })).conversation.requestSnapshot, original);
 });
 
 test("one seller cannot start duplicate threads or bypass listing-path duplicate detection", async () => {
@@ -179,4 +195,34 @@ test("only buyer can pass and reopen; request renewal cannot revive a passed thr
   f.as("seller");
   await f.mutate(wanted.send, { conversationId, content: "Still available" });
   assert.equal(f.rows("wantedMessages").length, 2);
+});
+
+test("a stale seller composer cannot send after buyer passes, while another thread remains usable", async () => {
+  const f = fixture();
+  const firstId = await f.mutate(wanted.replyToRequest, reply);
+  f.rows("wantedRequests").push({ ...structuredClone(f.rows("wantedRequests")[0]), _id: "request-2", title: "Compact car" });
+  const secondId = await f.mutate(wanted.replyToRequest, { ...reply, requestId: "request-2", message: "I also have a compact car." });
+  assert.equal((await wanted.getThread._handler(f.ctx, { conversationId: firstId })).canContact, true);
+  f.as("buyer");
+  await f.mutate(wanted.dismiss, { conversationId: firstId });
+  f.as("seller");
+  await assert.rejects(f.mutate(wanted.send, { conversationId: firstId, content: "Stale composer send" }), /paused/);
+  await f.mutate(wanted.send, { conversationId: secondId, content: "The compact car is still available." });
+  assert.equal(f.rows("wantedMessages").filter(row => row.conversationId === firstId).length, 1);
+  assert.equal(f.rows("wantedMessages").filter(row => row.conversationId === secondId).length, 2);
+});
+
+test("deleting a participant leaves wanted history readable but permanently disables reopening", async () => {
+  const f = fixture();
+  const conversationId = await f.mutate(wanted.replyToRequest, reply);
+  f.as("buyer");
+  await f.mutate(wanted.dismiss, { conversationId });
+  f.rows("users").find(row => row._id === "seller").deletedAt = Date.now();
+  const thread = await wanted.getThread._handler(f.ctx, { conversationId });
+  assert.equal(thread.otherUserName, "Deleted account");
+  assert.equal(thread.canContact, false);
+  assert.equal((await wanted.listMessages._handler(f.ctx, { conversationId, paginationOpts: { numItems: 10, cursor: null } })).page.length, 1);
+  await assert.rejects(f.mutate(wanted.reopen, { conversationId }), /cannot receive messages/);
+  await assert.rejects(f.mutate(wanted.send, { conversationId, content: "Can you still reply?" }), /paused/);
+  assert.ok(f.rows("wantedConversations")[0].dismissedAt);
 });

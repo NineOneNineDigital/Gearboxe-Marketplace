@@ -26,6 +26,7 @@ function fixture() {
     users: [
       { _id: "buyer", externalId: "clerk-buyer", emailVerified: true, name: "Buyer", email: "buyer@example.com" },
       { _id: "other", externalId: "clerk-other", emailVerified: true, name: "Other", email: "other@example.com" },
+      { _id: "third", externalId: "clerk-third", emailVerified: true, name: "Third", email: "third@example.com" },
       { _id: "unverified", externalId: "clerk-unverified", emailVerified: false, name: "Unverified" },
       { _id: "seller", externalId: "clerk-seller", emailVerified: true, name: "Seller", email: "seller@example.com" },
     ],
@@ -245,6 +246,43 @@ test("manual reservation preserves seller replies and declines; reactivation sta
   await assert.rejects(f.mutate(requests.followUp, { requestId: first.requestId, content: "A second angle please." }), /unavailable/);
   const second = await f.mutate(requests.open, { vehicleId, views: ["Second angle"] });
   assert.notEqual(second.requestId, first.requestId);
+});
+
+test("stale buyer controls cannot open or follow up after a reservation transition", async () => {
+  for (const reservation of ["manual", "accepted for another buyer"]) {
+    const f = fixture();
+    const { requestId, conversationId } = await f.mutate(requests.open, { vehicleId, views: ["Front seats"] });
+    f.as("seller");
+    await f.mutate(requests.reply, { requestId, content: "Front seat photo is ready." });
+    f.as("third");
+    assert.equal((await requests.getEligibility._handler(f.ctx, { vehicleId })).canOpen, true);
+    f.as("buyer");
+    assert.equal((await requests.getForConversation._handler(f.ctx, { conversationId })).canFollowUp, true);
+    assert.equal((await requests.getEligibility._handler(f.ctx, { vehicleId })).openRequestId, requestId);
+
+    f.rows("vehicles")[0].status = "reserved";
+    if (reservation === "accepted for another buyer") {
+      f.rows("offerCycles").push({ _id: "cycle-1", vehicleId, winner: "offer-1" });
+      f.rows("offerThreads").push({ _id: "offer-1", vehicleId, buyerId: "other", status: "reserved" });
+    }
+    const entryCount = f.rows("photoRequestEntries").length;
+    await assert.rejects(f.mutate(requests.followUp, { requestId, content: "Please show another angle." }), /unavailable/);
+    assert.equal(f.rows("photoRequestEntries").length, entryCount);
+    assert.equal(f.rows("photoRequests")[0].status, "replied");
+
+    f.as("third");
+    await assert.rejects(f.mutate(requests.open, { vehicleId, views: ["Rear seats"] }), /unavailable/);
+    assert.equal(f.rows("photoRequests").length, 1);
+
+    f.as("other");
+    if (reservation === "manual") {
+      assert.equal((await requests.getEligibility._handler(f.ctx, { vehicleId })).canOpen, false);
+      await assert.rejects(f.mutate(requests.open, { vehicleId, views: ["Rear seats"] }), /unavailable/);
+    } else {
+      assert.equal((await requests.getEligibility._handler(f.ctx, { vehicleId })).canOpen, true);
+    }
+    assert.equal(f.rows("photoRequests").length, 1);
+  }
 });
 
 test("withdrawn and availability-expired listings deny new requests and follow-ups", async () => {

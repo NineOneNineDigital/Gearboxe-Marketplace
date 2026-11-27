@@ -109,6 +109,18 @@ test("verified buyer can create five per day; rejected attempts and renewals do 
   f.as("other"); await assert.rejects(f.mutate(wanted.close, { id: ids[0] }), /unavailable/);
 });
 
+test("older active requests do not impose an accumulated count cap", async () => {
+  const f = fixture();
+  for (let i = 0; i < 8; i++) f.rows("wantedRequests").push({
+    _id: `older-${i}`, userId: "buyer", status: "active", expiresAt: Date.now() + 86_400_000,
+    title: `Older request ${i}`, maxBudget: 20_000, zip: "27601", area: "Raleigh, NC",
+  });
+  const id = await f.mutate(wanted.create, request);
+  assert.equal(f.rows("wantedRequests").length, 9);
+  assert.ok(f.rows("wantedRequests").some(row => row._id === id && row.status === "active"));
+  assert.equal(f.rows("trustRateLimits")[0].count, 1);
+});
+
 test("only owner can edit; edits preserve expiry and do not consume creation quota", async () => {
   const f = fixture();
   const id = await f.mutate(wanted.create, request);
@@ -161,6 +173,7 @@ test("expired and closed requests remain private Past until deleted; renewal sta
   assert.equal(f.rows("wantedRequests")[0].status, "expired");
   await f.mutate(wanted.stillLooking, { id });
   assert.equal((await wanted.mine._handler(f.ctx, {})).current.length, 1);
+  assert.deepEqual((await wanted.browse._handler(f.ctx, { paginationOpts: { numItems: 24, cursor: null } })).page.map(row => row._id), [id]);
   assert.ok(f.rows("wantedRequests")[0].expiresAt > Date.now() + 29 * 86_400_000);
   await f.mutate(wanted.close, { id });
   assert.equal((await wanted.mine._handler(f.ctx, {})).past.length, 1);

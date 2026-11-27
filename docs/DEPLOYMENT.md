@@ -26,6 +26,13 @@ should not auto-deploy `dev`.
 For the shared-dev Preview, set `NEXT_PUBLIC_APP_URL` to its stable protected
 origin; hosted builds preserve that origin for share links and metadata even
 when Vercel assigns a one-off deployment hostname.
+The stable share-origin fix merged in [PR #13](https://github.com/NineOneNineDigital/Gearboxe-Marketplace/pull/13)
+at `870e239d` on November 26. The protected `dev` Preview deployed successfully.
+As observed that day, its seller share post pointed to
+`gearboxe-marketplace-staging.vercel.app` because the configured Preview
+`NEXT_PUBLIC_APP_URL` had that value. Verify a `dev`-branch-only override for
+`https://dev-gearboxe-marketplace.vercel.app`, redeploy, and confirm the post
+link before signing off GBXMRKT-37; leave the Production value alone.
 Never treat a green build as proof that auth, notifications, or deployment wiring works.
 
 ## Environment isolation
@@ -80,9 +87,10 @@ this path. PR #9 was merged into `dev` at `0599e55c`.
    The earlier staging project's Production-scoped variables do not transfer
    automatically; verify their names and the new branch scope before deployment.
    Set Node 22, root directory `apps/web`, and workspace file access. The
-   backend's `APP_URL` currently names one allowed web origin for several upload
-   flows. The founder selected a build and browsing preview first; do not claim
-   full auth/upload journey coverage from this Preview.
+   backend uses exact `APP_URL` and `DEV_PREVIEW_APP_URL` origins for selected
+   uploads. The founder selected a build and browsing preview first; do not claim
+   full auth/upload journey coverage without disposable fixture ownership and
+   signed-in role checks.
 5. Before merging into `dev`, review backend compatibility with the currently
    serving development frontends and update the shared backend from the reviewed
    candidate with `pnpm --filter @gearboxe/web exec convex dev --once` only after
