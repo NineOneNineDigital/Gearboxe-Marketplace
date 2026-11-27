@@ -34,7 +34,7 @@ function fixture() {
       vin: `VIN${i}`, contactInfo: "private@example.com", location: { city: "Raleigh", state: "NC", postalCode: "27601" },
       serviceRecords: "partial", damageDisclosure: "", accidentDisclosure: "", mechanicalIssues: "",
     })),
-    comparisons: [], trustRateLimits: [],
+    comparisons: [], favorites: [], trustRateLimits: [],
   };
   const row = id => Object.values(tables).flat().find(item => item._id === id);
   const query = table => {
@@ -90,6 +90,30 @@ test("comparison membership is fixed, while public facts and availability remain
   assert.equal(await comparisons.getPublic._handler(f.ctx, { token }), null);
 });
 
+test("two to four cars stay fixed when the owner's favorites change", async () => {
+  const f = fixture();
+  f.tables.favorites.push(
+    { userId: "buyer", vehicleId: "vehicle-1" },
+    { userId: "buyer", vehicleId: "vehicle-2" },
+    { userId: "buyer", vehicleId: "vehicle-3" },
+    { userId: "buyer", vehicleId: "vehicle-4" },
+  );
+  const links = [];
+  for (const count of [2, 3, 4]) {
+    const vehicleIds = f.tables.favorites.slice(0, count).map(row => row.vehicleId);
+    links.push({ vehicleIds, ...await comparisons.create._handler(f.ctx, { vehicleIds }) });
+  }
+
+  f.tables.favorites.splice(0, f.tables.favorites.length, { userId: "buyer", vehicleId: "vehicle-5" });
+  f.as(null);
+  for (const { token, vehicleIds } of links) {
+    const view = await comparisons.getPublic._handler(f.ctx, { token });
+    assert.deepEqual(view.cars.map(car => car.id), vehicleIds);
+    assert.equal(view.unavailableCount, 0);
+    assert.equal(JSON.stringify(view).includes("vehicle-5"), false);
+  }
+});
+
 test("creation validates membership, current public visibility, auth and rate limit", async () => {
   const f = fixture();
   for (const vehicleIds of [["vehicle-1"], ["vehicle-1", "vehicle-2", "vehicle-3", "vehicle-4", "vehicle-5"], ["vehicle-1", "vehicle-1"]]) {
@@ -125,4 +149,31 @@ test("account deletion removes comparison links during bounded cleanup", async (
   assert.equal(await comparisons.getPublic._handler(f.ctx, { token }), null);
   await accountDeletion.cleanup._handler(f.ctx, { userId: "buyer", phase: "comparisons", cursor: null });
   assert.equal(f.tables.comparisons.length, 0);
+});
+
+test("public comparison hides every nonpublic or missing member without leaking private fields", async () => {
+  const f = fixture();
+  const { token } = await comparisons.create._handler(f.ctx, { vehicleIds: ["vehicle-1", "vehicle-2", "vehicle-3", "vehicle-4"] });
+  f.tables.vehicles[0].price = 14500;
+  f.tables.vehicles[0].status = "reserved";
+  f.tables.vehicles[1].status = "sold";
+  f.tables.vehicles[2].moderationRemovedAt = Date.now();
+  f.tables.vehicles.splice(f.tables.vehicles.findIndex(vehicle => vehicle._id === "vehicle-4"), 1);
+  f.tables.favorites.push({ userId: "buyer", vehicleId: "vehicle-5" });
+
+  f.as(null);
+  const view = await comparisons.getPublic._handler(f.ctx, { token });
+  assert.equal(view.unavailableCount, 3);
+  assert.deepEqual(view.cars.map(car => car.id), ["vehicle-1"]);
+  assert.equal(view.cars[0].price, 14500);
+  assert.equal(view.cars[0].status, "reserved");
+  assert.equal(view.cars[0].titleStatus, f.tables.vehicles[0].titleStatus);
+  assert.deepEqual(view.cars[0].location, { city: "Raleigh", state: "NC" });
+  assert.equal(view.cars[0].serviceRecords, "partial");
+  for (const privateValue of ["VIN0", "private@example.com", "27601", "vehicle-5", "clerk-buyer"]) {
+    assert.equal(JSON.stringify(view).includes(privateValue), false);
+  }
+
+  f.tables.vehicles[0].status = "withdrawn";
+  assert.deepEqual(await comparisons.getPublic._handler(f.ctx, { token }), { cars: [], unavailableCount: 4 });
 });
